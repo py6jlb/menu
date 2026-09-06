@@ -50,6 +50,13 @@ onMounted(load)
           <span v-if="recipe.calories !== null && recipe.calories !== undefined">
             Калории: {{ recipe.calories }} ккал/порция
           </span>
+          <span
+            v-if="recipe.repetitionCount > 0"
+            class="repetition"
+            :title="`Готовилось за последние недели`"
+          >
+            Готовилось ×{{ recipe.repetitionCount }}
+          </span>
         </div>
         <div v-if="recipe.tags.length" class="tags">
           <span v-for="tag in recipe.tags" :key="tag" class="tag">#{{ tag }}</span>
@@ -121,5 +128,14 @@ onMounted(load)
   padding: 0.1rem 0.6rem;
   font-size: 0.8rem;
   color: #444;
+}
+
+.repetition {
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 </style>

@@ -61,6 +61,9 @@ onMounted(load)
         <span v-if="recipe.calories !== null && recipe.calories !== undefined">
           Калории: {{ recipe.calories }} ккал/порция
         </span>
+        <span v-if="recipe.repetitionCount > 0" class="repetition">
+          Готовилось ×{{ recipe.repetitionCount }}
+        </span>
       </div>
 
       <p v-if="recipe.description" class="description">{{ recipe.description }}</p>
@@ -130,6 +133,15 @@ onMounted(load)
   gap: 1rem;
   color: #555;
   font-size: 0.9rem;
+}
+
+.repetition {
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .description {

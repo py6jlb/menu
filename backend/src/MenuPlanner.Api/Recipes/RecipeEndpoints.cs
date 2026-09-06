@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes.Repetition;
 
 namespace MenuPlanner.Api.Recipes;
 
@@ -17,6 +18,7 @@ public static class RecipeEndpoints
         group.MapPost("/", CreateAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapDelete("/{id:guid}", DeleteAsync);
+        group.MapGet("/repetition", RepetitionAsync);
 
         return app;
     }
@@ -27,15 +29,22 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.Json(Array.Empty<RecipeSummaryDto>());
 
+        var counts = await RepetitionCountsAsync(principal, db, familyId.Value);
+
         var recipes = await db.Recipes
             .AsNoTracking()
             .Where(r => r.FamilyId == familyId.Value)
             .OrderBy(r => r.Name)
-            .Select(r => new RecipeSummaryDto(
-                r.Id, r.Name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags))
+            .Select(r => new { r.Id, r.Name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags })
             .ToListAsync();
 
-        return Results.Json(recipes);
+        var result = recipes
+            .Select(r => new RecipeSummaryDto(
+                r.Id, r.Name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags,
+                counts.GetValueOrDefault(r.Id)))
+            .ToList();
+
+        return Results.Json(result);
     }
 
     private static async Task<IResult> GetAsync(
@@ -53,7 +62,9 @@ public static class RecipeEndpoints
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        return Results.Json(ToDto(recipe));
+        var counts = await RepetitionCountsAsync(principal, db, familyId.Value);
+
+        return Results.Json(ToDto(recipe, counts.GetValueOrDefault(recipe.Id)));
     }
 
     private static async Task<IResult> CreateAsync(
@@ -272,7 +283,7 @@ public static class RecipeEndpoints
         return null;
     }
 
-    private static RecipeDto ToDto(Recipe recipe) => new(
+    private static RecipeDto ToDto(Recipe recipe, int repetitionCount = 0) => new(
         recipe.Id,
         recipe.Name,
         recipe.Description,
@@ -288,7 +299,44 @@ public static class RecipeEndpoints
             .Select(i => new RecipeIngredientDto(i.Id, i.Name, i.Amount, i.Unit, i.Note))
             .ToList(),
         recipe.CreatedAt,
-        recipe.UpdatedAt);
+        recipe.UpdatedAt,
+        repetitionCount);
+
+    private static async Task<IResult> RepetitionAsync(ClaimsPrincipal principal, AppDbContext db)
+    {
+        var familyId = await CurrentFamilyIdAsync(principal, db);
+        if (familyId is null)
+            return Results.Json(Array.Empty<RecipeRepetitionDto>());
+
+        var counts = await RepetitionCountsAsync(principal, db, familyId.Value);
+
+        var result = counts
+            .OrderByDescending(x => x.Value)
+            .ThenBy(x => x.Key)
+            .Select(x => new RecipeRepetitionDto(x.Key, x.Value))
+            .ToList();
+
+        return Results.Json(result);
+    }
+
+    private static async Task<Dictionary<Guid, int>> RepetitionCountsAsync(
+        ClaimsPrincipal principal, AppDbContext db, Guid familyId)
+    {
+        var userId = UserIdFrom(principal);
+        var weeks = RepetitionService.DefaultWindowWeeks;
+
+        if (userId is { } id)
+        {
+            var settings = await db.UserSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.UserId == id);
+            if (settings is not null)
+                weeks = settings.RepetitionWindowWeeks;
+        }
+
+        var (windowStart, windowEnd) = RepetitionService.Window(RepetitionService.CurrentWeekStart(), weeks);
+        return await RepetitionService.CountForFamilyAsync(db, familyId, windowStart, windowEnd);
+    }
 
     private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
     {

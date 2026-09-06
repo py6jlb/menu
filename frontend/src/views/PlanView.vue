@@ -252,6 +252,9 @@ onMounted(async () => {
             @click="selectRecipe(recipe)"
           >
             {{ recipe.name }}
+            <span v-if="recipe.repetitionCount > 0" class="repetition" title="Сколько раз готовилось за последние недели">
+              ×{{ recipe.repetitionCount }}
+            </span>
           </li>
           <li v-if="filteredRecipes.length === 0" class="no-results">Ничего не найдено.</li>
         </ul>
@@ -438,6 +441,16 @@ onMounted(async () => {
 .recipe-options li.selected {
   background: #eef2ff;
   font-weight: 600;
+}
+
+.repetition {
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 0.4rem;
 }
 
 .recipe-options li.no-results {

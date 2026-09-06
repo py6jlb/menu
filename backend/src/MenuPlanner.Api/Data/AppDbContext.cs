@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
     public DbSet<WeekPlan> WeekPlans => Set<WeekPlan>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
+    public DbSet<UserSettings> UserSettings => Set<UserSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -115,6 +116,15 @@ public class AppDbContext : DbContext
         planEntry.HasOne(e => e.Recipe)
             .WithMany()
             .HasForeignKey(e => e.RecipeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var userSettings = modelBuilder.Entity<UserSettings>();
+
+        userSettings.HasKey(s => s.UserId);
+        userSettings.Property(s => s.RepetitionWindowWeeks);
+        userSettings.HasOne<User>()
+            .WithOne()
+            .HasForeignKey<UserSettings>(s => s.UserId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

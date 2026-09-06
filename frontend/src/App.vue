@@ -17,6 +17,7 @@ function logout() {
         <router-link to="/recipes">Рецепты</router-link>
         <router-link to="/plan">План</router-link>
         <router-link to="/family">Семья</router-link>
+        <router-link to="/settings">Настройки</router-link>
         <span class="email">{{ state.user?.email }}</span>
         <span class="role">{{ state.user?.role }}</span>
         <button type="button" @click="logout">Выйти</button>

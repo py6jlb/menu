@@ -24,7 +24,8 @@ public sealed record RecipeSummaryDto(
     int? Calories,
     int CookTimeMinutes,
     int Servings,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    int RepetitionCount = 0);
 
 public sealed record RecipeIngredientDto(
     Guid Id,
@@ -47,6 +48,7 @@ public sealed record RecipeDto(
     IReadOnlyList<string> Diet,
     IReadOnlyList<RecipeIngredientDto> Ingredients,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    int RepetitionCount = 0);
 
 public sealed record RecipeErrorDto(string Error);
