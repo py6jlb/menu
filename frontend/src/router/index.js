@@ -7,6 +7,7 @@ import FamilyView from '../views/FamilyView.vue'
 import RecipesView from '../views/RecipesView.vue'
 import RecipeFormView from '../views/RecipeFormView.vue'
 import RecipeDetailView from '../views/RecipeDetailView.vue'
+import PlanView from '../views/PlanView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -17,6 +18,7 @@ const router = createRouter({
     { path: '/recipes/new', name: 'recipe-new', component: RecipeFormView, meta: { requiresAuth: true } },
     { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetailView, meta: { requiresAuth: true } },
     { path: '/recipes/:id/edit', name: 'recipe-edit', component: RecipeFormView, meta: { requiresAuth: true } },
+    { path: '/plan', name: 'plan', component: PlanView, meta: { requiresAuth: true } },
     { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } }
   ]

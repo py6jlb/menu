@@ -8,7 +8,8 @@ using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Ingredients;
-using MenuPlanner.Api.Recipes;
+ using MenuPlanner.Api.Plans;
+ using MenuPlanner.Api.Recipes;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,6 +54,7 @@ app.MapAuthEndpoints();
 app.MapFamilyEndpoints();
 app.MapRecipeEndpoints();
 app.MapIngredientEndpoints();
+app.MapPlanEndpoints();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {

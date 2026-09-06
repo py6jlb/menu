@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved (commit `b41a5bd`)
 
-- [ ] Docker Compose поднимает Postgres, backend, frontend
-- [ ] .NET 8 solution с Minimal APIs и EF Core, миграции подключены
-- [ ] Vue 3 + Vite SPA, раздаётся nginx, проксирует API
-- [ ] Health-check endpoint и отображение «API connected» на фронте
-- [ ] README с инструкцией запуска
+- [x] Docker Compose поднимает Postgres, backend, frontend
+- [x] .NET 8 solution с Minimal APIs и EF Core, миграции подключены
+- [x] Vue 3 + Vite SPA, раздаётся nginx, проксирует API
+- [x] Health-check endpoint и отображение «API connected» на фронте
+- [x] README с инструкцией запуска
