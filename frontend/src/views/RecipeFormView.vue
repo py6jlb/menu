@@ -1,7 +1,8 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getRecipe, createRecipe, updateRecipe } from '../api/recipes'
+import { autocompleteIngredients } from '../api/ingredients'
 import { UNITS, SEASONS, parseList, joinList } from '../constants/recipe'
 
 const route = useRoute()
@@ -21,12 +22,18 @@ const form = reactive({
   seasonality: [],
   dietText: '',
   steps: [''],
-  ingredients: [{ name: '', amount: '', unit: 'g', note: '' }]
+  ingredients: [newIngredient()]
 })
 
 const loading = ref(isEdit.value)
 const saving = ref(false)
 const error = ref('')
+
+const debounceTimers = new Map()
+
+function newIngredient() {
+  return { name: '', amount: '', unit: 'g', note: '', suggestions: [], showSuggestions: false, activeIndex: -1, loadingSuggestions: false, noSuggestions: false }
+}
 
 function addStep() {
   form.steps.push('')
@@ -45,10 +52,11 @@ function moveStep(index, delta) {
 }
 
 function addIngredient() {
-  form.ingredients.push({ name: '', amount: '', unit: 'g', note: '' })
+  form.ingredients.push(newIngredient())
 }
 
 function removeIngredient(index) {
+  clearDebounce(index)
   form.ingredients.splice(index, 1)
 }
 
@@ -58,6 +66,78 @@ function moveIngredient(index, delta) {
   const tmp = form.ingredients[index]
   form.ingredients[index] = form.ingredients[target]
   form.ingredients[target] = tmp
+}
+
+function clearDebounce(index) {
+  const timer = debounceTimers.get(index)
+  if (timer) {
+    clearTimeout(timer)
+    debounceTimers.delete(index)
+  }
+}
+
+function closeSuggestions(index) {
+  clearDebounce(index)
+  form.ingredients[index].showSuggestions = false
+  form.ingredients[index].activeIndex = -1
+}
+
+function onIngredientInput(index) {
+  const ing = form.ingredients[index]
+  if (!ing.name.trim()) {
+    clearDebounce(index)
+    ing.suggestions = []
+    ing.showSuggestions = false
+    ing.noSuggestions = false
+    ing.activeIndex = -1
+    return
+  }
+  clearDebounce(index)
+  debounceTimers.set(index, setTimeout(() => fetchSuggestions(index), 150))
+}
+
+async function fetchSuggestions(index) {
+  const ing = form.ingredients[index]
+  const query = ing.name.trim()
+  if (!query) return
+  ing.loadingSuggestions = true
+  ing.noSuggestions = false
+  const { response, data } = await autocompleteIngredients(query)
+  if (response.status === 200 && data) {
+    ing.suggestions = data.items || []
+    ing.showSuggestions = true
+    ing.activeIndex = -1
+    ing.noSuggestions = ing.suggestions.length === 0
+  } else {
+    ing.suggestions = []
+    ing.showSuggestions = false
+    ing.noSuggestions = false
+  }
+  ing.loadingSuggestions = false
+}
+
+function selectSuggestion(index, suggestion) {
+  const ing = form.ingredients[index]
+  ing.name = suggestion
+  closeSuggestions(index)
+}
+
+function onSuggestionKeydown(index, event) {
+  const ing = form.ingredients[index]
+  if (!ing.showSuggestions || ing.suggestions.length === 0) return
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    ing.activeIndex = Math.min(ing.activeIndex + 1, ing.suggestions.length - 1)
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    ing.activeIndex = Math.max(ing.activeIndex - 1, 0)
+  } else if (event.key === 'Enter' && ing.activeIndex >= 0) {
+    event.preventDefault()
+    selectSuggestion(index, ing.suggestions[ing.activeIndex])
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSuggestions(index)
+  }
 }
 
 function toggleSeason(code) {
@@ -119,7 +199,7 @@ async function loadRecipe() {
         unit: i.unit,
         note: i.note || ''
       }))
-    : [{ name: '', amount: '', unit: 'g', note: '' }]
+    : [newIngredient()]
 
   loading.value = false
 }
@@ -150,6 +230,11 @@ async function submit() {
 
 onMounted(() => {
   if (isEdit.value) loadRecipe()
+})
+
+onBeforeUnmount(() => {
+  debounceTimers.forEach((timer) => clearTimeout(timer))
+  debounceTimers.clear()
 })
 </script>
 
@@ -221,7 +306,28 @@ onMounted(() => {
         <legend>Ингредиенты</legend>
         <p class="hint">Количество и единица измерения указываются вместе. Примечание (например, «по вкусу») не влияет на расчёт.</p>
         <div v-for="(ing, index) in form.ingredients" :key="index" class="ingredient-row">
-          <input v-model="ing.name" type="text" placeholder="Название" class="ing-name" />
+          <div class="ing-name-wrap">
+            <input
+              v-model="ing.name"
+              type="text"
+              placeholder="Название"
+              class="ing-name"
+              @input="onIngredientInput(index)"
+              @keydown="onSuggestionKeydown(index, $event)"
+              @blur="closeSuggestions(index)"
+            />
+            <ul v-if="ing.showSuggestions" class="suggestions">
+              <li
+                v-for="(suggestion, sIndex) in ing.suggestions"
+                :key="suggestion"
+                :class="{ active: sIndex === ing.activeIndex }"
+                @mousedown.prevent="selectSuggestion(index, suggestion)"
+              >
+                {{ suggestion }}
+              </li>
+              <li v-if="ing.noSuggestions" class="no-suggestions">Нет подсказок</li>
+            </ul>
+          </div>
           <input v-model.number="ing.amount" type="number" min="0" step="0.01" placeholder="Кол-во" class="ing-amount" />
           <select v-model="ing.unit" class="ing-unit">
             <option v-for="unit in UNITS" :key="unit.code" :value="unit.code">{{ unit.label }}</option>
@@ -334,7 +440,45 @@ legend {
 }
 
 .ing-name {
+  width: 100%;
+}
+
+.ing-name-wrap {
+  position: relative;
   flex: 2;
+}
+
+.suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 12rem;
+  overflow-y: auto;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+}
+
+.suggestions li {
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.suggestions li.active {
+  background: #eef2ff;
+}
+
+.suggestions li.no-suggestions {
+  cursor: default;
+  color: #666;
 }
 
 .ing-amount {

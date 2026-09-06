@@ -7,6 +7,7 @@ using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Families;
+using MenuPlanner.Api.Ingredients;
 using MenuPlanner.Api.Recipes;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -51,6 +52,7 @@ app.MapGet("/health", () => Results.Json(
 app.MapAuthEndpoints();
 app.MapFamilyEndpoints();
 app.MapRecipeEndpoints();
+app.MapIngredientEndpoints();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
