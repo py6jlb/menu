@@ -49,4 +49,19 @@ public sealed record RecipeDto(
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
+public sealed record RecipeMatchItemDto(
+    Guid RecipeId,
+    string Name,
+    int Difficulty,
+    int? Calories,
+    int CookTimeMinutes,
+    int Servings,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> Seasonality,
+    IReadOnlyList<string> Diet,
+    string? PhotoUrl,
+    int MatchScore);
+
+public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items);
+
 public sealed record RecipeErrorDto(string Error);

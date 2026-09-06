@@ -4,6 +4,13 @@ export async function listRecipes() {
   return apiJson('/api/recipes')
 }
 
+export async function matchRecipes(body) {
+  return apiJson('/api/recipes/match', {
+    method: 'POST',
+    body: JSON.stringify(body)
+  })
+}
+
 export async function getRecipe(id) {
   return apiJson(`/api/recipes/${id}`)
 }

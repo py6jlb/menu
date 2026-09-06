@@ -17,6 +17,13 @@ export const SEASONS = [
   { code: 'autumn', label: 'Осень' }
 ]
 
+export const DIETS = [
+  { code: 'vegetarian', label: 'Вегетарианское' },
+  { code: 'gluten_free', label: 'Безглютеновое' },
+  { code: 'lean', label: 'Постное' },
+  { code: 'keto', label: 'Кетогенное' }
+]
+
 export function unitLabel(code) {
   return UNITS.find((u) => u.code === code)?.label || code
 }

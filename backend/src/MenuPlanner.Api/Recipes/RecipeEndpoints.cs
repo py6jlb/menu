@@ -15,6 +15,7 @@ public static class RecipeEndpoints
         group.MapGet("/", ListAsync);
         group.MapGet("/{id:guid}", GetAsync);
         group.MapPost("/", CreateAsync);
+        group.MapPost("/match", MatchAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapDelete("/{id:guid}", DeleteAsync);
 
@@ -128,6 +129,70 @@ public static class RecipeEndpoints
         await db.SaveChangesAsync();
 
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> MatchAsync(
+        RecipeMatchRequest request, ClaimsPrincipal principal, AppDbContext db)
+    {
+        var familyId = await CurrentFamilyIdAsync(principal, db);
+        if (familyId is null)
+            return Results.NotFound(new RecipeErrorDto("Вы не состоите в семье."));
+
+        var error = ValidateMatch(request);
+        if (error is not null)
+            return Results.BadRequest(new RecipeErrorDto(error));
+
+        var recipes = await db.Recipes
+            .AsNoTracking()
+            .Include(r => r.Ingredients)
+            .Where(r => r.FamilyId == familyId.Value)
+            .ToListAsync();
+
+        var items = RecipeMatcher.Apply(recipes, request.Filters, request.Preferences)
+            .Select(m => new RecipeMatchItemDto(
+                m.Recipe.Id,
+                m.Recipe.Name,
+                m.Recipe.Difficulty,
+                m.Recipe.Calories,
+                m.Recipe.CookTimeMinutes,
+                m.Recipe.Servings,
+                m.Recipe.Tags,
+                m.Recipe.Seasonality,
+                m.Recipe.Diet,
+                null,
+                m.MatchScore))
+            .ToList();
+
+        return Results.Json(new RecipeMatchResponse(items));
+    }
+
+    private static string? ValidateMatch(RecipeMatchRequest request)
+    {
+        var filters = request.Filters;
+        if (filters is null)
+            return null;
+
+        if (filters.MaxDifficulty is { } maxDifficulty &&
+            maxDifficulty is < RecipeCatalog.DifficultyMin or > RecipeCatalog.DifficultyMax)
+            return $"Максимальная сложность должна быть от {RecipeCatalog.DifficultyMin} до {RecipeCatalog.DifficultyMax}.";
+
+        if (filters.MaxCalories is { } maxCalories && maxCalories < 0)
+            return "Максимальная калорийность не может быть отрицательной.";
+
+        if (filters.MaxCookTimeMinutes is { } maxCookTime && maxCookTime < 0)
+            return "Максимальное время приготовления не может быть отрицательным.";
+
+        if (filters.Seasons is { Count: > 0 })
+        {
+            foreach (var season in filters.Seasons)
+            {
+                var normalized = season.Trim().ToLowerInvariant();
+                if (!RecipeCatalog.Seasons.Contains(normalized))
+                    return $"Недопустимое значение сезона: «{season}».";
+            }
+        }
+
+        return null;
     }
 
     private static void Apply(Recipe recipe, RecipeRequest request)

@@ -1,8 +1,9 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { listRecipes } from '../api/recipes'
+import { matchRecipes } from '../api/recipes'
 import { getWeekPlan, saveWeekPlan } from '../api/plans'
 import { DAYS, MEALS, mondayOf, addDays, weekDays, toIso, weekRangeLabel } from '../constants/plan'
+import { SEASONS, DIETS } from '../constants/recipe'
 
 const monday = ref(mondayOf(new Date()))
 const recipes = ref([])
@@ -18,9 +19,41 @@ const editing = ref(null)
 const search = ref('')
 const pickerRecipeId = ref(null)
 const pickerPortions = ref(1)
+const pickerLoading = ref(false)
+
+const filter = ref({
+  maxDifficulty: null,
+  maxCalories: '',
+  seasons: [],
+  diets: [],
+  maxCookTime: '',
+  ingredient: '',
+  tag: '',
+  preferSeasons: [],
+  preferDiets: [],
+  preferLowCalories: false,
+  preferLowComplexity: false
+})
 
 const weekLabel = computed(() => weekRangeLabel(monday.value))
 const days = computed(() => weekDays(monday.value))
+
+const hasFilters = computed(() => {
+  const f = filter.value
+  return Boolean(
+    f.maxDifficulty ||
+      f.maxCalories ||
+      f.seasons.length ||
+      f.diets.length ||
+      f.maxCookTime ||
+      f.ingredient ||
+      f.tag ||
+      f.preferSeasons.length ||
+      f.preferDiets.length ||
+      f.preferLowCalories ||
+      f.preferLowComplexity
+  )
+})
 
 const filteredRecipes = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -88,10 +121,74 @@ async function load() {
 }
 
 async function loadRecipes() {
-  const { response, data } = await listRecipes()
+  const { response, data } = await matchRecipes({})
   if (response.status === 200) {
-    recipes.value = data || []
+    recipes.value = (data?.items || []).map(toPickerItem)
   }
+}
+
+function toPickerItem(item) {
+  return {
+    id: item.recipeId,
+    name: item.name,
+    difficulty: item.difficulty,
+    calories: item.calories,
+    cookTimeMinutes: item.cookTimeMinutes,
+    servings: item.servings,
+    tags: item.tags,
+    seasonality: item.seasonality,
+    diet: item.diet,
+    matchScore: item.matchScore
+  }
+}
+
+function toggleInList(list, value) {
+  const index = list.indexOf(value)
+  if (index >= 0) list.splice(index, 1)
+  else list.push(value)
+}
+
+function resetFilters() {
+  filter.value = {
+    maxDifficulty: null,
+    maxCalories: '',
+    seasons: [],
+    diets: [],
+    maxCookTime: '',
+    ingredient: '',
+    tag: '',
+    preferSeasons: [],
+    preferDiets: [],
+    preferLowCalories: false,
+    preferLowComplexity: false
+  }
+}
+
+async function applyFilters() {
+  const f = filter.value
+  const body = {
+    filters: {
+      maxDifficulty: f.maxDifficulty || null,
+      maxCalories: f.maxCalories === '' ? null : Number(f.maxCalories),
+      seasons: f.seasons,
+      diets: f.diets,
+      maxCookTimeMinutes: f.maxCookTime === '' ? null : Number(f.maxCookTime),
+      includeIngredients: f.ingredient ? [f.ingredient] : null,
+      tags: f.tag ? [f.tag] : null
+    },
+    preferences: {
+      preferSeasons: f.preferSeasons,
+      preferDiets: f.preferDiets,
+      preferLowCalories: f.preferLowCalories,
+      preferLowComplexity: f.preferLowComplexity
+    }
+  }
+  pickerLoading.value = true
+  const { response, data } = await matchRecipes(body)
+  if (response.status === 200) {
+    recipes.value = (data?.items || []).map(toPickerItem)
+  }
+  pickerLoading.value = false
 }
 
 async function changeWeek(offset) {
@@ -103,6 +200,8 @@ async function changeWeek(offset) {
 function openPicker(day, mealType) {
   editing.value = { day, mealType }
   search.value = ''
+  resetFilters()
+  loadRecipes()
   const current = slotEntry(day, mealType)
   pickerRecipeId.value = current ? current.recipeId : null
   pickerPortions.value = current ? current.portions : 1
@@ -244,6 +343,90 @@ onMounted(async () => {
 
         <input v-model="search" type="text" placeholder="Поиск рецепта…" />
 
+        <details class="filter-panel">
+          <summary>Фильтры и предпочтения</summary>
+
+          <div class="filter-row">
+            <label>
+              Макс. сложность
+              <select v-model.number="filter.maxDifficulty">
+                <option :value="null">Любая</option>
+                <option v-for="level in 5" :key="level" :value="level">{{ level }}</option>
+              </select>
+            </label>
+            <label>
+              Макс. калории
+              <input v-model.number="filter.maxCalories" type="number" min="0" placeholder="ккал" />
+            </label>
+            <label>
+              Макс. время (мин)
+              <input v-model.number="filter.maxCookTime" type="number" min="1" placeholder="мин" />
+            </label>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">Сезон (жёсткий):</span>
+            <label v-for="season in SEASONS" :key="season.code" class="chip">
+              <input type="checkbox" :value="season.code" :checked="filter.seasons.includes(season.code)" @change="toggleInList(filter.seasons, season.code)" />
+              {{ season.label }}
+            </label>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">Диета (жёсткий):</span>
+            <label v-for="diet in DIETS" :key="diet.code" class="chip">
+              <input type="checkbox" :value="diet.code" :checked="filter.diets.includes(diet.code)" @change="toggleInList(filter.diets, diet.code)" />
+              {{ diet.label }}
+            </label>
+          </div>
+
+          <div class="filter-row">
+            <label>
+              Ингредиент
+              <input v-model="filter.ingredient" type="text" placeholder="напр. лук" />
+            </label>
+            <label>
+              Тег
+              <input v-model="filter.tag" type="text" placeholder="напр. быстро" />
+            </label>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">Предпочтения (сорт.):</span>
+            <label class="chip">
+              <input type="checkbox" v-model="filter.preferLowCalories" />
+              Низкокалорийные
+            </label>
+            <label class="chip">
+              <input type="checkbox" v-model="filter.preferLowComplexity" />
+              Простые
+            </label>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">Предпочт. сезоны:</span>
+            <label v-for="season in SEASONS" :key="season.code" class="chip">
+              <input type="checkbox" :value="season.code" :checked="filter.preferSeasons.includes(season.code)" @change="toggleInList(filter.preferSeasons, season.code)" />
+              {{ season.label }}
+            </label>
+          </div>
+
+          <div class="filter-group">
+            <span class="filter-label">Предпочт. диеты:</span>
+            <label v-for="diet in DIETS" :key="diet.code" class="chip">
+              <input type="checkbox" :value="diet.code" :checked="filter.preferDiets.includes(diet.code)" @change="toggleInList(filter.preferDiets, diet.code)" />
+              {{ diet.label }}
+            </label>
+          </div>
+
+          <div class="filter-actions">
+            <button type="button" class="primary" @click="applyFilters">Применить</button>
+            <button type="button" @click="resetFilters">Сбросить</button>
+          </div>
+        </details>
+
+        <p v-if="pickerLoading" class="picker-loading">Загрузка…</p>
+
         <ul class="recipe-options">
           <li
             v-for="recipe in filteredRecipes"
@@ -251,7 +434,12 @@ onMounted(async () => {
             :class="{ selected: recipe.id === pickerRecipeId }"
             @click="selectRecipe(recipe)"
           >
-            {{ recipe.name }}
+            <span class="recipe-name">{{ recipe.name }}</span>
+            <span class="recipe-meta">
+              <template v-if="recipe.difficulty">Сл.: {{ recipe.difficulty }}</template>
+              <template v-if="recipe.calories !== null && recipe.calories !== undefined"> · {{ recipe.calories }} ккал</template>
+              <template v-if="recipe.cookTimeMinutes"> · {{ recipe.cookTimeMinutes }} мин</template>
+            </span>
           </li>
           <li v-if="filteredRecipes.length === 0" class="no-results">Ничего не найдено.</li>
         </ul>
@@ -484,6 +672,102 @@ onMounted(async () => {
 .picker-actions button.danger {
   color: #b91c1c;
   border-color: #b91c1c;
+}
+
+.filter-panel {
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.filter-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.filter-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.filter-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+}
+
+.filter-row input,
+.filter-row select {
+  width: 110px;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 0.9rem;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.filter-label {
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.filter-group .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-actions button {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.85rem;
+}
+
+.filter-actions button.primary {
+  background: #3730a3;
+  border-color: #3730a3;
+  color: #fff;
+}
+
+.picker-loading {
+  color: #555;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.recipe-options li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.recipe-name {
+  font-weight: 500;
+}
+
+.recipe-meta {
+  font-size: 0.78rem;
+  color: #666;
 }
 
 .primary-link {
