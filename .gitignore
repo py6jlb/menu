@@ -1,0 +1,16 @@
+# .NET
+bin/
+obj/
+
+# Node
+node_modules/
+dist/
+
+# Env
+.env
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
