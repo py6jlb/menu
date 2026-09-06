@@ -19,14 +19,11 @@ public static class RecipeEndpoints
         group.MapPost("/match", MatchAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapDelete("/{id:guid}", DeleteAsync);
-<<<<<<< HEAD
         group.MapGet("/repetition", RepetitionAsync);
-=======
         group.MapPut("/{id:guid}/photo", UploadPhotoAsync).DisableAntiforgery();
         group.MapDelete("/{id:guid}/photo", DeletePhotoAsync);
 
         app.MapGet("/api/photos/{fileName}", GetPhotoFileAsync);
->>>>>>> ticket/10-photos
 
         return app;
     }
@@ -43,18 +40,6 @@ public static class RecipeEndpoints
             .AsNoTracking()
             .Where(r => r.FamilyId == familyId.Value)
             .OrderBy(r => r.Name)
-<<<<<<< HEAD
-            .Select(r => new { r.Id, r.Name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags })
-            .ToListAsync();
-
-        var result = recipes
-            .Select(r => new RecipeSummaryDto(
-                r.Id, r.Name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags,
-                counts.GetValueOrDefault(r.Id)))
-            .ToList();
-
-        return Results.Json(result);
-=======
             .Select(r => new
             {
                 r.Id,
@@ -68,16 +53,14 @@ public static class RecipeEndpoints
             })
             .ToListAsync();
 
-        return Results.Json(recipes.Select(r => new RecipeSummaryDto(
-            r.Id,
-            r.Name,
-            r.Difficulty,
-            r.Calories,
-            r.CookTimeMinutes,
-            r.Servings,
-            r.Tags,
-            PhotoUrl(r.PhotoPath))));
->>>>>>> ticket/10-photos
+        var result = recipes
+            .Select(r => new RecipeSummaryDto(
+                r.Id, r.Name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags,
+                counts.GetValueOrDefault(r.Id),
+                PhotoUrl(r.PhotoPath)))
+            .ToList();
+
+        return Results.Json(result);
     }
 
     private static async Task<IResult> GetAsync(
@@ -176,7 +159,6 @@ public static class RecipeEndpoints
         return Results.NoContent();
     }
 
-<<<<<<< HEAD
     private static async Task<IResult> MatchAsync(
         RecipeMatchRequest request, ClaimsPrincipal principal, AppDbContext db)
     {
@@ -205,7 +187,7 @@ public static class RecipeEndpoints
                 m.Recipe.Tags,
                 m.Recipe.Seasonality,
                 m.Recipe.Diet,
-                null,
+                PhotoUrl(m.Recipe.PhotoPath),
                 m.MatchScore))
             .ToList();
 
@@ -239,7 +221,8 @@ public static class RecipeEndpoints
         }
 
         return null;
-=======
+    }
+
     private static async Task<IResult> UploadPhotoAsync(
         Guid id,
         IFormFile? file,
@@ -309,7 +292,6 @@ public static class RecipeEndpoints
             return Results.NotFound();
 
         return Results.File(path, contentType);
->>>>>>> ticket/10-photos
     }
 
     private static void Apply(Recipe recipe, RecipeRequest request)
@@ -471,8 +453,20 @@ public static class RecipeEndpoints
             .ToList(),
         recipe.CreatedAt,
         recipe.UpdatedAt,
-<<<<<<< HEAD
-        repetitionCount);
+        repetitionCount,
+        PhotoUrl(recipe.PhotoPath));
+
+    private static string? PhotoUrl(string? photoPath) =>
+        photoPath is null ? null : $"/api/photos/{Path.GetFileName(photoPath)}";
+
+    private static string? ContentTypeForExtension(string? extension) => extension?.ToLowerInvariant() switch
+    {
+        ".jpg" => "image/jpeg",
+        ".png" => "image/png",
+        ".webp" => "image/webp",
+        ".gif" => "image/gif",
+        _ => null
+    };
 
     private static async Task<IResult> RepetitionAsync(ClaimsPrincipal principal, AppDbContext db)
     {
@@ -509,21 +503,6 @@ public static class RecipeEndpoints
         var (windowStart, windowEnd) = RepetitionService.Window(RepetitionService.CurrentWeekStart(), weeks);
         return await RepetitionService.CountForFamilyAsync(db, familyId, windowStart, windowEnd);
     }
-=======
-        PhotoUrl(recipe.PhotoPath));
-
-    private static string? PhotoUrl(string? photoPath) =>
-        photoPath is null ? null : $"/api/photos/{Path.GetFileName(photoPath)}";
-
-    private static string? ContentTypeForExtension(string? extension) => extension?.ToLowerInvariant() switch
-    {
-        ".jpg" => "image/jpeg",
-        ".png" => "image/png",
-        ".webp" => "image/webp",
-        ".gif" => "image/gif",
-        _ => null
-    };
->>>>>>> ticket/10-photos
 
     private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
     {

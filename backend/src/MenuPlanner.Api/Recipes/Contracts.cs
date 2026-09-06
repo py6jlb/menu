@@ -25,11 +25,8 @@ public sealed record RecipeSummaryDto(
     int CookTimeMinutes,
     int Servings,
     IReadOnlyList<string> Tags,
-<<<<<<< HEAD
-    int RepetitionCount = 0);
-=======
-    string? PhotoUrl);
->>>>>>> ticket/10-photos
+    int RepetitionCount = 0,
+    string? PhotoUrl = null);
 
 public sealed record RecipeIngredientDto(
     Guid Id,
@@ -53,8 +50,8 @@ public sealed record RecipeDto(
     IReadOnlyList<RecipeIngredientDto> Ingredients,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-<<<<<<< HEAD
-    int RepetitionCount = 0);
+    int RepetitionCount = 0,
+    string? PhotoUrl = null);
 
 public sealed record RecipeMatchItemDto(
     Guid RecipeId,
@@ -70,8 +67,5 @@ public sealed record RecipeMatchItemDto(
     int MatchScore);
 
 public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items);
-=======
-    string? PhotoUrl);
->>>>>>> ticket/10-photos
 
 public sealed record RecipeErrorDto(string Error);
