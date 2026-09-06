@@ -14,6 +14,7 @@ function logout() {
     <header>
       <router-link to="/" class="brand">Меню для домохозяек</router-link>
       <nav v-if="isAuthenticated" class="user-area">
+        <router-link to="/family">Семья</router-link>
         <span class="email">{{ state.user?.email }}</span>
         <span class="role">{{ state.user?.role }}</span>
         <button type="button" @click="logout">Выйти</button>

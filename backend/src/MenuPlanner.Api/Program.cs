@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Families;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +48,7 @@ app.MapGet("/health", () => Results.Json(
     new { status = "ok", service = "menu-planner-api" }));
 
 app.MapAuthEndpoints();
+app.MapFamilyEndpoints();
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
