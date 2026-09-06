@@ -13,6 +13,9 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Family> Families => Set<Family>();
     public DbSet<FamilyMember> FamilyMembers => Set<FamilyMember>();
+    public DbSet<Recipe> Recipes => Set<Recipe>();
+    public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
+    public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -49,5 +52,39 @@ public class AppDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         member.HasIndex(m => m.UserId).IsUnique();
+
+        var recipe = modelBuilder.Entity<Recipe>();
+
+        recipe.Property(r => r.Name).HasMaxLength(200).IsRequired();
+        recipe.Property(r => r.Description).HasMaxLength(2000);
+        recipe.Property(r => r.Calories);
+        recipe.Property(r => r.CreatedAt).HasColumnType("timestamp with time zone");
+        recipe.Property(r => r.UpdatedAt).HasColumnType("timestamp with time zone");
+        recipe.HasIndex(r => r.FamilyId);
+        recipe.HasOne(r => r.Family)
+            .WithMany(f => f.Recipes)
+            .HasForeignKey(r => r.FamilyId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var step = modelBuilder.Entity<RecipeStep>();
+
+        step.Property(s => s.Text).HasMaxLength(2000).IsRequired();
+        step.HasIndex(s => new { s.RecipeId, s.Order });
+        step.HasOne(s => s.Recipe)
+            .WithMany(r => r.Steps)
+            .HasForeignKey(s => s.RecipeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var ingredient = modelBuilder.Entity<RecipeIngredient>();
+
+        ingredient.Property(i => i.Name).HasMaxLength(200).IsRequired();
+        ingredient.Property(i => i.Amount).HasPrecision(10, 2);
+        ingredient.Property(i => i.Unit).HasMaxLength(32).IsRequired();
+        ingredient.Property(i => i.Note).HasMaxLength(500);
+        ingredient.HasIndex(i => new { i.RecipeId, i.Order });
+        ingredient.HasOne(i => i.Recipe)
+            .WithMany(r => r.Ingredients)
+            .HasForeignKey(i => i.RecipeId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

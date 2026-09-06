@@ -4,12 +4,19 @@ import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import FamilyView from '../views/FamilyView.vue'
+import RecipesView from '../views/RecipesView.vue'
+import RecipeFormView from '../views/RecipeFormView.vue'
+import RecipeDetailView from '../views/RecipeDetailView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
     { path: '/family', name: 'family', component: FamilyView, meta: { requiresAuth: true } },
+    { path: '/recipes', name: 'recipes', component: RecipesView, meta: { requiresAuth: true } },
+    { path: '/recipes/new', name: 'recipe-new', component: RecipeFormView, meta: { requiresAuth: true } },
+    { path: '/recipes/:id', name: 'recipe-detail', component: RecipeDetailView, meta: { requiresAuth: true } },
+    { path: '/recipes/:id/edit', name: 'recipe-edit', component: RecipeFormView, meta: { requiresAuth: true } },
     { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } }
   ]
