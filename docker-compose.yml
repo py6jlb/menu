@@ -24,6 +24,9 @@ services:
       JWT_SECRET: "${JWT_SECRET:-dev-only-secret-change-me-in-production-0123456789abcdef}"
       JWT_ISSUER: "${JWT_ISSUER:-menu-planner}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:-menu-planner-client}"
+      PHOTOS_DIR: /app/photos
+    volumes:
+      - photos_data:/app/photos
     ports:
       - "8080:8080"
     depends_on:
@@ -42,3 +45,4 @@ services:
 
 volumes:
   db_data:
+  photos_data:

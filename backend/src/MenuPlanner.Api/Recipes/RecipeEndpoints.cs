@@ -17,6 +17,10 @@ public static class RecipeEndpoints
         group.MapPost("/", CreateAsync);
         group.MapPut("/{id:guid}", UpdateAsync);
         group.MapDelete("/{id:guid}", DeleteAsync);
+        group.MapPut("/{id:guid}/photo", UploadPhotoAsync).DisableAntiforgery();
+        group.MapDelete("/{id:guid}/photo", DeletePhotoAsync);
+
+        app.MapGet("/api/photos/{fileName}", GetPhotoFileAsync);
 
         return app;
     }
@@ -31,11 +35,28 @@ public static class RecipeEndpoints
             .AsNoTracking()
             .Where(r => r.FamilyId == familyId.Value)
             .OrderBy(r => r.Name)
-            .Select(r => new RecipeSummaryDto(
-                r.Id, r.Name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags))
+            .Select(r => new
+            {
+                r.Id,
+                r.Name,
+                r.Difficulty,
+                r.Calories,
+                r.CookTimeMinutes,
+                r.Servings,
+                r.Tags,
+                r.PhotoPath
+            })
             .ToListAsync();
 
-        return Results.Json(recipes);
+        return Results.Json(recipes.Select(r => new RecipeSummaryDto(
+            r.Id,
+            r.Name,
+            r.Difficulty,
+            r.Calories,
+            r.CookTimeMinutes,
+            r.Servings,
+            r.Tags,
+            PhotoUrl(r.PhotoPath))));
     }
 
     private static async Task<IResult> GetAsync(
@@ -113,7 +134,7 @@ public static class RecipeEndpoints
     }
 
     private static async Task<IResult> DeleteAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db)
+        Guid id, ClaimsPrincipal principal, AppDbContext db, PhotoStorage storage)
     {
         var familyId = await CurrentFamilyIdAsync(principal, db);
         if (familyId is null)
@@ -124,10 +145,83 @@ public static class RecipeEndpoints
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
+        var photoPath = recipe.PhotoPath;
         db.Recipes.Remove(recipe);
         await db.SaveChangesAsync();
+        storage.Delete(photoPath);
 
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> UploadPhotoAsync(
+        Guid id,
+        IFormFile? file,
+        ClaimsPrincipal principal,
+        AppDbContext db,
+        PhotoStorage storage)
+    {
+        var familyId = await CurrentFamilyIdAsync(principal, db);
+        if (familyId is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+        var recipe = await db.Recipes
+            .Include(r => r.Steps)
+            .Include(r => r.Ingredients)
+            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
+        if (recipe is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new RecipeErrorDto("Выберите файл изображения."));
+
+        if (!RecipeCatalog.PhotoContentTypes.TryGetValue(file.ContentType, out var extension))
+            return Results.BadRequest(new RecipeErrorDto("Файл должен быть изображением (JPEG, PNG, WebP или GIF)."));
+
+        if (file.Length > RecipeCatalog.PhotoMaxBytes)
+            return Results.BadRequest(new RecipeErrorDto(
+                $"Размер фото не должен превышать {RecipeCatalog.PhotoMaxBytes / (1024 * 1024)} МБ."));
+
+        var previous = recipe.PhotoPath;
+        recipe.PhotoPath = await storage.SaveAsync(recipe.Id, extension, file.OpenReadStream());
+        recipe.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        storage.Delete(previous);
+
+        return Results.Json(ToDto(recipe));
+    }
+
+    private static async Task<IResult> DeletePhotoAsync(
+        Guid id, ClaimsPrincipal principal, AppDbContext db, PhotoStorage storage)
+    {
+        var familyId = await CurrentFamilyIdAsync(principal, db);
+        if (familyId is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+        var recipe = await db.Recipes
+            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
+        if (recipe is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+        var previous = recipe.PhotoPath;
+        recipe.PhotoPath = null;
+        recipe.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        storage.Delete(previous);
+
+        return Results.NoContent();
+    }
+
+    private static IResult GetPhotoFileAsync(string fileName, PhotoStorage storage)
+    {
+        var path = storage.ResolveReadPath(fileName);
+        if (path is null)
+            return Results.NotFound();
+
+        var contentType = ContentTypeForExtension(Path.GetExtension(path));
+        if (contentType is null)
+            return Results.NotFound();
+
+        return Results.File(path, contentType);
     }
 
     private static void Apply(Recipe recipe, RecipeRequest request)
@@ -288,7 +382,20 @@ public static class RecipeEndpoints
             .Select(i => new RecipeIngredientDto(i.Id, i.Name, i.Amount, i.Unit, i.Note))
             .ToList(),
         recipe.CreatedAt,
-        recipe.UpdatedAt);
+        recipe.UpdatedAt,
+        PhotoUrl(recipe.PhotoPath));
+
+    private static string? PhotoUrl(string? photoPath) =>
+        photoPath is null ? null : $"/api/photos/{Path.GetFileName(photoPath)}";
+
+    private static string? ContentTypeForExtension(string? extension) => extension?.ToLowerInvariant() switch
+    {
+        ".jpg" => "image/jpeg",
+        ".png" => "image/png",
+        ".webp" => "image/webp",
+        ".gif" => "image/gif",
+        _ => null
+    };
 
     private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
     {

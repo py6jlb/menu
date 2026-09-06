@@ -6,6 +6,7 @@ public sealed class Recipe
     public Guid FamilyId { get; set; }
     public required string Name { get; set; }
     public string? Description { get; set; }
+    public string? PhotoPath { get; set; }
     public int CookTimeMinutes { get; set; }
     public int Servings { get; set; }
     public int Difficulty { get; set; }
