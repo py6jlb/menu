@@ -11,4 +11,5 @@ public sealed class Family
     public User? Owner { get; set; }
     public List<FamilyMember> Members { get; set; } = new();
     public List<Recipe> Recipes { get; set; } = new();
+    public List<WeekPlan> WeekPlans { get; set; } = new();
 }

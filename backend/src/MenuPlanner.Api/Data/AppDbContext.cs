@@ -16,6 +16,8 @@ public class AppDbContext : DbContext
     public DbSet<Recipe> Recipes => Set<Recipe>();
     public DbSet<RecipeStep> RecipeSteps => Set<RecipeStep>();
     public DbSet<RecipeIngredient> RecipeIngredients => Set<RecipeIngredient>();
+    public DbSet<WeekPlan> WeekPlans => Set<WeekPlan>();
+    public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -85,6 +87,34 @@ public class AppDbContext : DbContext
         ingredient.HasOne(i => i.Recipe)
             .WithMany(r => r.Ingredients)
             .HasForeignKey(i => i.RecipeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var weekPlan = modelBuilder.Entity<WeekPlan>();
+
+        weekPlan.Property(w => w.WeekStart);
+        weekPlan.Property(w => w.CreatedAt).HasColumnType("timestamp with time zone");
+        weekPlan.Property(w => w.UpdatedAt).HasColumnType("timestamp with time zone");
+        weekPlan.HasIndex(w => new { w.FamilyId, w.WeekStart }).IsUnique();
+        weekPlan.HasOne(w => w.Family)
+            .WithMany(f => f.WeekPlans)
+            .HasForeignKey(w => w.FamilyId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var planEntry = modelBuilder.Entity<PlanEntry>();
+
+        planEntry.Property(e => e.Day);
+        planEntry.Property(e => e.MealType).HasMaxLength(16)
+            .HasConversion(
+                meal => PlanningCatalog.CodeOf(meal),
+                code => PlanningCatalog.MealTypeFromCode(code));
+        planEntry.HasIndex(e => new { e.WeekPlanId, e.Day, e.MealType }).IsUnique();
+        planEntry.HasOne(e => e.WeekPlan)
+            .WithMany(w => w.Entries)
+            .HasForeignKey(e => e.WeekPlanId)
+            .OnDelete(DeleteBehavior.Cascade);
+        planEntry.HasOne(e => e.Recipe)
+            .WithMany()
+            .HasForeignKey(e => e.RecipeId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
