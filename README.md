@@ -6,9 +6,10 @@
 
 ## Структура
 
-- `backend/` — .NET 8 solution (`MenuPlanner.sln`), приложение `src/MenuPlanner.Api` (Minimal APIs + EF Core + Postgres).
+- `backend/` — приложение `src/MenuPlanner.Api` (Minimal APIs + EF Core + Postgres) и тесты `tests/MenuPlanner.Api.Tests` (xUnit, WebApplicationFactory).
 - `frontend/` — Vue 3 + Vite SPA, собирается в статику и раздаётся nginx.
 - `docker-compose.yml` — оркестрация: `db`, `backend`, `frontend`.
+- `MenuPlanner.sln` — решение .NET в корне репозитория.
 
 ## Быстрый старт
 
@@ -62,3 +63,32 @@ npm run dev
 - Строка подключения: env `ConnectionStrings__Default` (или `DB_CONNECTION_STRING`), при отсутствии — дефолт `Host=localhost;...` в `appsettings.json`.
 - При старте применяется `EnsureCreated` (создание схемы БД, миграции появятся в следующих тикетах).
 - Endpoint `GET /health` возвращает `200 {"status":"ok"}`.
+
+## Аутентификация (JWT)
+
+Пользователи регистрируются по email и паролю, входят по JWT. Роли: `User` и `Admin`. **Первый зарегистрированный пользователь становится Admin**, остальные — `User`.
+
+Endpoints:
+
+| Метод | Путь             | Описание                                            |
+|-------|------------------|-----------------------------------------------------|
+| POST  | `/api/auth/register` | `{ email, password }` → `201 { token, user }`; дубликат email → `409` |
+| POST  | `/api/auth/login`    | `{ email, password }` → `200 { token, user }`; неверный пароль → `401` |
+| GET   | `/api/auth/me`       | `[Authorize]` — текущий пользователь (`Authorization: Bearer <token>`) |
+
+Пароли хранятся как хэш (`PasswordHasher<User>`, ASP.NET Identity), не в открытом виде. Секрет JWT задаётся в секции `Jwt` в `appsettings.json` (значение для разработки только!) и переопределяется env-переменными:
+
+- `JWT_SECRET` — секрет подписи токена (минимум 32 символа, обязателен к смене в production).
+- `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRY_MINUTES`.
+
+В `docker-compose.yml` для сервиса `backend` секрет подставляется из `JWT_SECRET` окружения хоста, иначе используется dev-значение.
+
+## Тесты backend
+
+Тесты (xUnit + `WebApplicationFactory`, база заменена на EF InMemory) запускаются в контейнере — на хосте .NET SDK не требуется:
+
+```bash
+docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:8.0 dotnet test
+```
+
+Покрытие: регистрация → вход → доступ к `/api/auth/me`; дубликат email → 409; первый пользователь Admin, остальные User; неверный пароль → 401; `/me` без токена → 401.

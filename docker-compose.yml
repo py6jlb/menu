@@ -21,6 +21,9 @@ services:
       context: ./backend
     environment:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=menu_planner;Username=menu;Password=menu"
+      JWT_SECRET: "${JWT_SECRET:-dev-only-secret-change-me-in-production-0123456789abcdef}"
+      JWT_ISSUER: "${JWT_ISSUER:-menu-planner}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:-menu-planner-client}"
     ports:
       - "8080:8080"
     depends_on:

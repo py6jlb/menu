@@ -1,9 +1,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY MenuPlanner.sln ./
 COPY src/MenuPlanner.Api/MenuPlanner.Api.csproj src/MenuPlanner.Api/
-RUN dotnet restore MenuPlanner.sln
+RUN dotnet restore src/MenuPlanner.Api/MenuPlanner.Api.csproj
 
 COPY src/ src/
 WORKDIR /src/src/MenuPlanner.Api
