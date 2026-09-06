@@ -111,53 +111,67 @@ onMounted(load)
 
 <template>
   <section>
-    <h2>Семья</h2>
-
-    <p v-if="loading">Загрузка…</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
-
-    <div v-else-if="!family" class="card">
-      <h3>Создать семью</h3>
-      <form @submit.prevent="onCreate">
-        <label>
-          Название семьи
-          <input v-model="newFamilyName" type="text" required />
-        </label>
-        <button type="submit" :disabled="pending">Создать семью</button>
-      </form>
-
-      <hr />
-
-      <h3>Присоединиться по коду</h3>
-      <form @submit.prevent="onJoin">
-        <label>
-          Инвайт-код
-          <input v-model="joinCode" type="text" autocomplete="off" required />
-        </label>
-        <button type="submit" :disabled="pending">Присоединиться</button>
-      </form>
+    <div class="page-heading">
+      <h2>Семья</h2>
     </div>
 
-    <div v-else class="card">
-      <h3>{{ family.name }}</h3>
+    <p v-if="loading" class="loading">Загрузка…</p>
+    <p v-else-if="error" class="error">{{ error }}</p>
 
-      <div class="invite">
-        <strong>Инвайт-код:</strong>
-        <code>{{ family.inviteCode }}</code>
-        <button type="button" @click="onCopyCode">{{ copied ? 'Скопировано!' : 'Копировать' }}</button>
+    <div v-else-if="!family" class="no-family-grid">
+      <div class="card option-card">
+        <div class="option-icon">👨‍👩‍👧</div>
+        <h3>Создать семью</h3>
+        <p class="option-desc">Создайте новую семью и делитесь меню с близкими.</p>
+        <form @submit.prevent="onCreate" class="option-form">
+          <label class="field">
+            <span>Название семьи</span>
+            <input v-model="newFamilyName" type="text" required />
+          </label>
+          <button type="submit" class="btn btn--primary btn--block" :disabled="pending">Создать семью</button>
+        </form>
       </div>
 
-      <button v-if="isOwner()" type="button" @click="onRegenerate">Обновить код</button>
+      <div class="card option-card">
+        <div class="option-icon">🔑</div>
+        <h3>Присоединиться по коду</h3>
+        <p class="option-desc">Есть код от семьи? Введите его, чтобы присоединиться.</p>
+        <form @submit.prevent="onJoin" class="option-form">
+          <label class="field">
+            <span>Инвайт-код</span>
+            <input v-model="joinCode" type="text" autocomplete="off" required placeholder="Например, ABC123" />
+          </label>
+          <button type="submit" class="btn btn--primary btn--block" :disabled="pending">Присоединиться</button>
+        </form>
+      </div>
+    </div>
 
-      <h4>Участники</h4>
+    <div v-else class="card family-card">
+      <div class="family-header">
+        <h3 class="family-name">{{ family.name }}</h3>
+        <span v-if="isOwner()" class="badge badge--owner">Вы владелец</span>
+      </div>
+
+      <div class="invite-block">
+        <span class="invite-label">Инвайт-код для приглашения</span>
+        <div class="invite-code">«{{ family.inviteCode }}»</div>
+        <button type="button" class="btn btn--primary" @click="onCopyCode">
+          {{ copied ? 'Скопировано!' : 'Копировать' }}
+        </button>
+        <button v-if="isOwner()" type="button" class="btn btn--ghost" @click="onRegenerate">Обновить код</button>
+      </div>
+
+      <h4 class="members-title">Участники</h4>
       <ul class="members">
         <li v-for="member in family.members" :key="member.id" class="member">
-          <span>{{ member.email }}</span>
-          <span class="role-badge">{{ member.role === 'Owner' ? 'Владелец' : 'Участник' }}</span>
+          <span class="member-email">{{ member.email }}</span>
+          <span class="badge" :class="member.role === 'Owner' ? 'badge--owner' : 'badge--member'">
+            {{ member.role === 'Owner' ? 'Владелец' : 'Участник' }}
+          </span>
           <button
             v-if="isOwner() && member.id !== family.ownerId"
             type="button"
-            class="danger"
+            class="btn btn--ghost btn--small"
             @click="onRemoveMember(member)"
           >
             Удалить
@@ -169,47 +183,125 @@ onMounted(load)
 </template>
 
 <style scoped>
-.invite {
+.no-family-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  max-width: 760px;
+}
+
+@media (min-width: 700px) {
+  .no-family-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.option-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.option-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.option-card h3 {
+  margin: 0.5rem 0 0.25rem;
+}
+
+.option-desc {
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.option-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: auto;
+}
+
+.family-card {
+  max-width: 640px;
+}
+
+.family-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin: 1rem 0;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.family-name {
+  margin: 0;
+}
+
+.badge--owner {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.badge--member {
+  background: var(--surface-2);
+  color: var(--text-soft);
+}
+
+.invite-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 1.25rem;
+  border: 1px dashed var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+  margin-bottom: 1.5rem;
+}
+
+.invite-label {
+  font-size: 0.85rem;
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.invite-code {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--primary);
+  word-break: break-all;
+}
+
+.members-title {
+  margin: 0 0 0.5rem;
 }
 
 .members {
   list-style: none;
   padding: 0;
-  margin: 0.5rem 0 0;
+  margin: 0;
 }
 
 .member {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid #eee;
+  flex-wrap: wrap;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.role-badge {
-  background: #eef2ff;
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.8rem;
-  color: #3730a3;
+.member:last-child {
+  border-bottom: none;
 }
 
-.danger {
-  margin-left: auto;
-  color: #b91c1c;
-  background: none;
-  border: 1px solid #b91c1c;
-  border-radius: 6px;
-  padding: 0.25rem 0.6rem;
-}
-
-hr {
-  border: none;
-  border-top: 1px solid #e5e5e5;
-  margin: 1.25rem 0;
+.member-email {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
 }
 </style>

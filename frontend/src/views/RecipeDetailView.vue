@@ -42,177 +42,207 @@ onMounted(load)
 
 <template>
   <section>
-    <p v-if="loading">Загрузка…</p>
+    <p v-if="loading" class="loading">Загрузка…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
 
     <div v-else-if="recipe">
-      <div class="heading">
+      <div class="page-heading">
         <h2>{{ recipe.name }}</h2>
-        <div class="heading-actions">
-          <router-link :to="`/recipes/${recipe.id}/edit`" class="primary-link">Редактировать</router-link>
-          <button type="button" class="danger" :disabled="deleting" @click="onDelete">Удалить</button>
+        <div class="page-heading-actions">
+          <router-link :to="`/recipes/${recipe.id}/edit`" class="btn btn--primary">Редактировать</router-link>
+          <button type="button" class="btn btn--danger" :disabled="deleting" @click="onDelete">Удалить</button>
         </div>
       </div>
 
-      <div class="meta">
-        <span>Сложность: {{ recipe.difficulty }}/5</span>
-        <span>Время: {{ recipe.cookTimeMinutes }} мин</span>
-        <span>Порции: {{ recipe.servings }}</span>
-        <span v-if="recipe.calories !== null && recipe.calories !== undefined">
-          Калории: {{ recipe.calories }} ккал/порция
-        </span>
-        <span v-if="recipe.repetitionCount > 0" class="repetition">
-          Готовилось ×{{ recipe.repetitionCount }}
-        </span>
+      <div class="hero-photo">
+        <img v-if="recipe.photoUrl" :src="recipe.photoUrl" alt="Фото рецепта" class="photo" />
+        <div v-else class="photo-placeholder">🍲</div>
       </div>
 
       <p v-if="recipe.description" class="description">{{ recipe.description }}</p>
 
-      <img v-if="recipe.photoUrl" :src="recipe.photoUrl" alt="Фото рецепта" class="photo" />
+      <div class="meta">
+        <span class="chip">⭐ Сложность {{ recipe.difficulty }}/5</span>
+        <span class="chip">⏱ {{ recipe.cookTimeMinutes }} мин</span>
+        <span class="chip">👥 {{ recipe.servings }} порц.</span>
+        <span v-if="recipe.calories !== null && recipe.calories !== undefined" class="chip">
+          🔥 {{ recipe.calories }} ккал/порция
+        </span>
+        <span v-if="recipe.repetitionCount > 0" class="chip chip--repetition">
+          🔁 Готовилось ×{{ recipe.repetitionCount }}
+        </span>
+      </div>
 
       <div v-if="recipe.tags.length || recipe.seasonality.length || recipe.diet.length" class="badges">
-        <span v-for="tag in recipe.tags" :key="`tag-${tag}`" class="badge">#{{ tag }}</span>
-        <span v-for="season in recipe.seasonality" :key="`season-${season}`" class="badge badge-season">
-          {{ seasonLabel(season) }}
+        <span v-for="tag in recipe.tags" :key="`tag-${tag}`" class="tag">#{{ tag }}</span>
+        <span v-for="season in recipe.seasonality" :key="`season-${season}`" class="badge badge--season">
+          🍂 {{ seasonLabel(season) }}
         </span>
-        <span v-for="diet in recipe.diet" :key="`diet-${diet}`" class="badge badge-diet">
+        <span v-for="diet in recipe.diet" :key="`diet-${diet}`" class="badge badge--diet">
           {{ diet }}
         </span>
       </div>
 
-      <h3>Ингредиенты</h3>
-      <ul class="ingredients">
-        <li v-for="ingredient in recipe.ingredients" :key="ingredient.id" class="ingredient">
-          <span class="amount">{{ ingredient.amount }} {{ unitLabel(ingredient.unit) }}</span>
-          <span class="name">{{ ingredient.name }}</span>
-          <span v-if="ingredient.note" class="note">{{ ingredient.note }}</span>
-        </li>
-      </ul>
+      <div class="detail-columns">
+        <div class="card column">
+          <h3>Ингредиенты</h3>
+          <ul class="ingredients">
+            <li v-for="ingredient in recipe.ingredients" :key="ingredient.id" class="ingredient">
+              <span class="amount">{{ ingredient.amount }} {{ unitLabel(ingredient.unit) }}</span>
+              <span class="name">{{ ingredient.name }}</span>
+              <span v-if="ingredient.note" class="note">{{ ingredient.note }}</span>
+            </li>
+          </ul>
+        </div>
 
-      <h3>Шаги приготовления</h3>
-      <ol class="steps">
-        <li v-for="(step, index) in recipe.steps" :key="index">{{ step }}</li>
-      </ol>
+        <div class="card column">
+          <h3>Шаги приготовления</h3>
+          <ol class="steps">
+            <li v-for="(step, index) in recipe.steps" :key="index" class="step">
+              <span class="step-num">{{ index + 1 }}</span>
+              <span class="step-text">{{ step }}</span>
+            </li>
+          </ol>
+        </div>
+      </div>
     </div>
   </section>
 </template>
 
 <style scoped>
-.heading {
+.hero-photo {
+  margin-bottom: 1rem;
+}
+
+.photo {
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius);
+  display: block;
+}
+
+.photo-placeholder {
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #f9ead9, #faf6f0);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: center;
+  font-size: 4rem;
 }
 
-.heading-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.primary-link {
-  display: inline-block;
-  padding: 0.55rem 0.9rem;
-  background: #3730a3;
-  color: #fff;
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 0.95rem;
-}
-
-.danger {
-  color: #b91c1c;
-  background: none;
-  border: 1px solid #b91c1c;
-  border-radius: 6px;
-  padding: 0.5rem 0.9rem;
+.description {
+  margin: 0 0 1rem;
+  color: var(--text-soft);
+  font-size: 1.05rem;
 }
 
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  color: #555;
-  font-size: 0.9rem;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
 }
 
-.repetition {
-  background: #fef3c7;
-  color: #92400e;
+.chip {
+  background: var(--surface-2);
+  color: var(--text-soft);
   border-radius: 999px;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.description {
-  margin: 1rem 0 0;
-}
-
-.photo {
-  max-width: 320px;
-  max-height: 260px;
-  border-radius: 10px;
-  border: 1px solid #e5e5e5;
-  margin: 0.75rem 0;
-  display: block;
+.chip--repetition {
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .badges {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 1rem 0;
+  gap: 0.45rem;
+  margin-bottom: 1.5rem;
 }
 
-.badge {
-  background: #f3f4f6;
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.8rem;
-  color: #444;
+.detail-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
 }
 
-.badge-season {
-  background: #ecfdf5;
-  color: #047857;
-}
-
-.badge-diet {
-  background: #fef3c7;
-  color: #92400e;
+@media (min-width: 800px) {
+  .detail-columns {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
 }
 
 .ingredients {
   list-style: none;
-  padding: 0;
   margin: 0;
+  padding: 0;
 }
 
 .ingredient {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid #eee;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.ingredient:last-child {
+  border-bottom: none;
 }
 
 .amount {
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
 }
 
 .note {
-  color: #777;
-  font-size: 0.9rem;
+  color: var(--text-faint);
+  font-size: 0.85rem;
 }
 
 .steps {
   margin: 0;
-  padding-left: 1.25rem;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
-.steps li {
-  margin: 0.35rem 0;
+.step {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.step-num {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-text {
+  font-size: 0.95rem;
 }
 </style>

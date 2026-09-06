@@ -4,10 +4,10 @@ import { getShoppingList } from '../api/shopping'
 import { mondayOf, addDays, toIso, weekRangeLabel } from '../constants/plan'
 
 const GROUPS = [
-  { key: 'weight', label: 'Вес', units: ['g', 'kg'] },
-  { key: 'volume', label: 'Объём', units: ['ml', 'l'] },
-  { key: 'pieces', label: 'Штуки', units: ['pcs'] },
-  { key: 'household', label: 'Бытовые меры', units: ['glass', 'tbsp', 'tsp', 'pinch'] }
+  { key: 'weight', label: 'Вес', icon: '⚖️', units: ['g', 'kg'] },
+  { key: 'volume', label: 'Объём', icon: '🧴', units: ['ml', 'l'] },
+  { key: 'pieces', label: 'Штуки', icon: '🔢', units: ['pcs'] },
+  { key: 'household', label: 'Бытовые меры', icon: '🥄', units: ['glass', 'tbsp', 'tsp', 'pinch'] }
 ]
 
 function groupOf(unit) {
@@ -63,11 +63,11 @@ onMounted(load)
 
 <template>
   <section>
-    <div class="heading">
+    <div class="page-heading">
       <h2>Список покупок</h2>
       <button
         type="button"
-        class="refresh-btn"
+        class="btn btn--ghost"
         :disabled="loading || refreshing"
         @click="refresh"
       >
@@ -75,26 +75,28 @@ onMounted(load)
       </button>
     </div>
 
-    <div class="nav">
-      <button type="button" @click="changeWeek(-1)">← Предыдущая</button>
+    <div class="week-nav">
+      <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(-1)">←</button>
       <span class="week-label">{{ weekLabel }}</span>
-      <button type="button" @click="changeWeek(1)">Следующая →</button>
+      <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(1)">→</button>
     </div>
 
-    <p v-if="loading">Загрузка…</p>
+    <p v-if="loading" class="loading">Загрузка…</p>
     <p v-else-if="loadingError" class="error">
       {{ loadingError }}
       <router-link to="/family">Перейти на страницу «Семья»</router-link>
     </p>
 
     <template v-else>
-      <div v-if="empty" class="card">
-        <p>На эту неделю пока нет списка покупок — заполните план, чтобы его сформировать.</p>
-        <router-link to="/plan" class="primary-link">Перейти к плану</router-link>
+      <div v-if="empty" class="card empty-state">
+        <div class="empty-icon">🛒</div>
+        <div class="empty-title">Список покупок пуст</div>
+        <p class="empty-desc">Заполните план на неделю, чтобы сформировать список покупок.</p>
+        <router-link to="/plan" class="btn btn--primary">Перейти к плану</router-link>
       </div>
 
-      <div v-for="group in groups" :key="group.key" class="group card">
-        <h3>{{ group.label }}</h3>
+      <div v-for="group in groups" :key="group.key" class="card group">
+        <h3 class="group-title"><span class="group-icon">{{ group.icon }}</span> {{ group.label }}</h3>
         <ul class="item-list">
           <li v-for="item in group.items" :key="`${item.name}-${item.unit}`" class="item">
             <span class="item-name">{{ item.name }}</span>
@@ -107,37 +109,27 @@ onMounted(load)
 </template>
 
 <style scoped>
-.heading {
+.week-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0 0 1.25rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3rem;
 }
 
-.refresh-btn {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 6px;
-  background: #3730a3;
-  color: #fff;
-  font-size: 1rem;
-}
-
-.refresh-btn:disabled {
-  background: #d1d5db;
-  cursor: not-allowed;
-}
-
-.nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin: 0.75rem 0 1rem;
+.week-nav .btn {
+  min-height: 40px;
 }
 
 .week-label {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 0.95rem;
+  flex: 1;
+  text-align: center;
 }
 
 .group {
@@ -145,9 +137,16 @@ onMounted(load)
   margin-bottom: 1rem;
 }
 
-.group h3 {
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   margin: 0 0 0.5rem;
-  font-size: 1rem;
+  font-size: 1.05rem;
+}
+
+.group-icon {
+  font-size: 1.25rem;
 }
 
 .item-list {
@@ -161,8 +160,8 @@ onMounted(load)
   justify-content: space-between;
   align-items: baseline;
   gap: 1rem;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .item:last-child {
@@ -170,21 +169,12 @@ onMounted(load)
 }
 
 .item-name {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .item-amount {
-  color: #555;
+  color: var(--text-soft);
   white-space: nowrap;
-}
-
-.primary-link {
-  display: inline-block;
-  padding: 0.55rem 0.9rem;
-  background: #3730a3;
-  color: #fff;
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 0.95rem;
+  font-weight: 600;
 }
 </style>

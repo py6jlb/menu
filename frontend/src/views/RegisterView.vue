@@ -37,37 +37,79 @@ async function submit() {
 </script>
 
 <template>
-  <section class="card">
-    <h2>Регистрация</h2>
-    <form @submit.prevent="submit">
-      <label>
-        Email
-        <input v-model="email" type="email" autocomplete="email" required />
-      </label>
-      <label>
-        Пароль
-        <input
-          v-model="password"
-          type="password"
-          autocomplete="new-password"
-          minlength="6"
-          required
-        />
-      </label>
-      <p v-if="error" class="error">{{ error }}</p>
-      <button type="submit" :disabled="pending">
-        {{ pending ? 'Регистрация…' : 'Зарегистрироваться' }}
-      </button>
-    </form>
-    <p>Уже есть аккаунт? <router-link to="/login">Войдите</router-link></p>
+  <section class="auth-wrap">
+    <div class="card auth-card">
+      <div class="auth-logo">🍳</div>
+      <h2 class="auth-title">Создать аккаунт</h2>
+      <p class="auth-sub">Начните планировать семейное меню</p>
+
+      <form @submit.prevent="submit" class="auth-form">
+        <label class="field">
+          <label>Email</label>
+          <input v-model="email" type="email" autocomplete="email" required />
+        </label>
+        <label class="field">
+          <label>Пароль</label>
+          <input
+            v-model="password"
+            type="password"
+            autocomplete="new-password"
+            minlength="6"
+            required
+          />
+        </label>
+        <p v-if="error" class="error">{{ error }}</p>
+        <button type="submit" class="btn btn--primary btn--block" :disabled="pending">
+          {{ pending ? 'Регистрация…' : 'Зарегистрироваться' }}
+        </button>
+      </form>
+
+      <p class="auth-alt">
+        Уже есть аккаунт? <router-link to="/login">Войдите</router-link>
+      </p>
+    </div>
   </section>
 </template>
 
 <style scoped>
-label {
+.auth-wrap {
+  display: flex;
+  justify-content: center;
+  padding-top: 2rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.auth-logo {
+  font-size: 2.75rem;
+  line-height: 1;
+}
+
+.auth-title {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+.auth-sub {
+  color: var(--text-soft);
+  margin: 0 0 1.5rem;
+  font-size: 0.95rem;
+}
+
+.auth-form {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 1rem;
+  text-align: left;
+}
+
+.auth-alt {
+  margin: 1.25rem 0 0;
   font-size: 0.9rem;
+  color: var(--text-soft);
 }
 </style>

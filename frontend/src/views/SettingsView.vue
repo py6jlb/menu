@@ -40,12 +40,14 @@ onMounted(load)
 
 <template>
   <section>
-    <h2>Личные настройки</h2>
+    <div class="page-heading">
+      <h2>Личные настройки</h2>
+    </div>
 
-    <p v-if="loading">Загрузка…</p>
+    <p v-if="loading" class="loading">Загрузка…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
 
-    <div v-else class="card">
+    <div v-else class="card settings-card">
       <p v-if="savedMessage" class="success">{{ savedMessage }}</p>
       <p v-else-if="saveError" class="error">{{ saveError }}</p>
 
@@ -61,12 +63,23 @@ onMounted(load)
           min="1"
           max="52"
           required
+          class="weeks-input"
         />
       </label>
 
+      <div class="explain-block">
+        <span class="explain-title">Как это работает</span>
+        <p class="explain-text">
+          Значение «Готовилось ×N» на рецепте показывает, сколько раз это блюдо было в плане
+          за последние указанные недели. Большой «окно» = дольше помнить блюда и реже
+          повторять их слишком часто; маленькое окно = быстрее забывать и чаще готовить
+          любимое. Мы стараемся предлагать блюда, которые давно не готовились.
+        </p>
+      </div>
+
       <button
         type="button"
-        class="save-btn"
+        class="btn btn--primary"
         :disabled="saving || windowWeeks < 1 || windowWeeks > 52"
         @click="save"
       >
@@ -77,47 +90,34 @@ onMounted(load)
 </template>
 
 <style scoped>
-.card {
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
-  padding: 1.5rem;
+.settings-card {
   max-width: 480px;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.hint {
-  color: #777;
-  font-size: 0.85rem;
-}
-
-.field input {
+.weeks-input {
   max-width: 120px;
 }
 
-.success {
-  color: #047857;
+.explain-block {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
 }
 
-.save-btn {
-  padding: 0.55rem;
-  border: none;
-  border-radius: 6px;
-  background: #3730a3;
-  color: #fff;
-  font-size: 1rem;
+.explain-title {
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: block;
+  margin-bottom: 0.35rem;
 }
 
-.save-btn:disabled {
-  background: #d1d5db;
-  cursor: not-allowed;
+.explain-text {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.88rem;
 }
 </style>

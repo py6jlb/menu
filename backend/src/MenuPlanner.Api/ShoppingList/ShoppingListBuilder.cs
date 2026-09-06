@@ -87,8 +87,11 @@ public static class ShoppingListBuilder
     private static ShoppingListItem Item(Bucket bucket, decimal amount, string unit, string display) =>
         new(bucket.Name, amount, unit, display);
 
-    private static string Format(decimal value) =>
-        value.ToString("0.##########", CultureInfo.InvariantCulture);
+    private static string Format(decimal value)
+    {
+        var rounded = Math.Round(value, 2, MidpointRounding.AwayFromZero);
+        return rounded.ToString("0.##", CultureInfo.InvariantCulture);
+    }
 
     private static string RussianLabel(string unit, decimal amount) => unit switch
     {

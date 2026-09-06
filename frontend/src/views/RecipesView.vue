@@ -23,137 +23,140 @@ onMounted(load)
 
 <template>
   <section>
-    <div class="heading">
+    <div class="page-heading">
       <h2>Рецепты</h2>
-      <router-link to="/recipes/new" class="primary-link">Создать рецепт</router-link>
+      <router-link to="/recipes/new" class="btn btn--primary">Создать рецепт</router-link>
     </div>
 
-    <p v-if="loading">Загрузка…</p>
+    <p v-if="loading" class="loading">Загрузка…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
 
-    <div v-else-if="recipes.length === 0" class="card">
-      <p>Пока нет ни одного рецепта.</p>
-      <p>
+    <div v-else-if="recipes.length === 0" class="card empty-state">
+      <div class="empty-icon">🍲</div>
+      <div class="empty-title">Пока нет ни одного рецепта</div>
+      <p class="empty-desc">
         Если вы ещё не в семье — создайте или вступите в неё на странице
         <router-link to="/family">Семья</router-link>.
       </p>
-      <router-link to="/recipes/new" class="primary-link">Добавить первый рецепт</router-link>
+      <router-link to="/recipes/new" class="btn btn--primary">Добавить первый рецепт</router-link>
     </div>
 
-    <ul v-else class="recipe-list">
-      <li v-for="recipe in recipes" :key="recipe.id" class="recipe-item">
-        <div class="item-top">
-          <router-link :to="`/recipes/${recipe.id}`" class="recipe-name">{{ recipe.name }}</router-link>
-          <img v-if="recipe.photoUrl" :src="recipe.photoUrl" alt="" class="thumb" />
+    <div v-else class="recipe-grid">
+      <router-link
+        v-for="recipe in recipes"
+        :key="recipe.id"
+        :to="`/recipes/${recipe.id}`"
+        class="card recipe-card"
+      >
+        <div class="cover">
+          <img v-if="recipe.photoUrl" :src="recipe.photoUrl" alt="" class="cover-img" />
+          <div v-else class="cover-placeholder">🍲</div>
         </div>
-        <div class="meta">
-          <span>Сложность: {{ recipe.difficulty }}/5</span>
-          <span>Время: {{ recipe.cookTimeMinutes }} мин</span>
-          <span>Порции: {{ recipe.servings }}</span>
-          <span v-if="recipe.calories !== null && recipe.calories !== undefined">
-            Калории: {{ recipe.calories }} ккал/порция
-          </span>
-          <span
-            v-if="recipe.repetitionCount > 0"
-            class="repetition"
-            :title="`Готовилось за последние недели`"
-          >
-            Готовилось ×{{ recipe.repetitionCount }}
-          </span>
+        <div class="card-body">
+          <h3 class="recipe-name">{{ recipe.name }}</h3>
+          <div class="meta">
+            <span class="chip">⭐ {{ recipe.difficulty }}/5</span>
+            <span class="chip">⏱ {{ recipe.cookTimeMinutes }} мин</span>
+            <span class="chip">👥 {{ recipe.servings }}</span>
+            <span v-if="recipe.calories !== null && recipe.calories !== undefined" class="chip">
+              🔥 {{ recipe.calories }} ккал
+            </span>
+            <span
+              v-if="recipe.repetitionCount > 0"
+              class="chip chip--repetition"
+              title="Готовилось за последние недели"
+            >
+              🔁 ×{{ recipe.repetitionCount }}
+            </span>
+          </div>
+          <div v-if="recipe.tags.length" class="tags">
+            <span v-for="tag in recipe.tags" :key="tag" class="tag">#{{ tag }}</span>
+          </div>
         </div>
-        <div v-if="recipe.tags.length" class="tags">
-          <span v-for="tag in recipe.tags" :key="tag" class="tag">#{{ tag }}</span>
-        </div>
-      </li>
-    </ul>
+      </router-link>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 1rem;
 }
 
-.primary-link {
-  display: inline-block;
-  padding: 0.55rem 0.9rem;
-  background: #3730a3;
-  color: #fff;
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 0.95rem;
-}
-
-.recipe-list {
-  list-style: none;
-  padding: 0;
-  margin: 1rem 0 0;
+.recipe-card {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  padding: 0;
+  overflow: hidden;
+  text-decoration: none;
+  color: var(--text);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.recipe-item {
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 10px;
-  padding: 1rem 1.25rem;
+.recipe-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.cover {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+
+.card-body {
+  padding: 1rem 1.1rem 1.1rem;
 }
 
 .recipe-name {
+  margin: 0 0 0.5rem;
   font-size: 1.1rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.item-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.thumb {
-  width: 96px;
-  height: 72px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid #e5e5e5;
 }
 
 .meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  margin-top: 0.4rem;
-  color: #555;
-  font-size: 0.9rem;
+  gap: 0.35rem;
+}
+
+.chip {
+  background: var(--surface-2);
+  color: var(--text-soft);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chip--repetition {
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .tags {
-  margin-top: 0.5rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
-}
-
-.tag {
-  background: #f3f4f6;
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.8rem;
-  color: #444;
-}
-
-.repetition {
-  background: #fef3c7;
-  color: #92400e;
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
 }
 </style>

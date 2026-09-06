@@ -198,6 +198,19 @@ public sealed class ShoppingListBuilderTests
     }
 
     [Fact]
+    public void Display_RoundsLongFractions_ToAtMostTwoDecimalPlaces()
+    {
+        var items = ShoppingListBuilder.Build(new[]
+        {
+            new IngredientLine("масло", decimal.Parse("1.1666666666666667", CultureInfo.InvariantCulture), "glass")
+        });
+
+        var item = Assert.Single(items);
+        Assert.Equal(decimal.Parse("1.1666666666666667", CultureInfo.InvariantCulture), item.Amount);
+        Assert.Equal("1.17 стакана", item.Display);
+    }
+
+    [Fact]
     public void HouseholdPluralization_UsesRussianForms()
     {
         var items = ShoppingListBuilder.Build(new[]

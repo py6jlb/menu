@@ -38,6 +38,8 @@ const filter = ref({
 const weekLabel = computed(() => weekRangeLabel(monday.value))
 const days = computed(() => weekDays(monday.value))
 
+const mobileDay = ref((new Date().getDay() + 6) % 7)
+
 const hasFilters = computed(() => {
   const f = filter.value
   return Boolean(
@@ -266,6 +268,10 @@ function dayHeader(index) {
   return `${DAYS[index].label} ${String(days.value[index].getDate()).padStart(2, '0')}`
 }
 
+function mealLabel(code) {
+  return MEALS.find((m) => m.code === code)?.label || code
+}
+
 onMounted(async () => {
   await loadRecipes()
   await load()
@@ -274,11 +280,14 @@ onMounted(async () => {
 
 <template>
   <section>
-    <div class="heading">
-      <h2>План на неделю</h2>
+    <div class="page-heading plan-heading">
+      <div>
+        <h2>План на неделю</h2>
+        <span v-if="dirty" class="dirty-badge">● есть изменения</span>
+      </div>
       <button
         type="button"
-        class="save-btn"
+        class="btn btn--primary"
         :disabled="saving || loading || !dirty"
         @click="save"
       >
@@ -287,57 +296,98 @@ onMounted(async () => {
     </div>
 
     <div class="nav">
-      <button type="button" @click="changeWeek(-1)">← Предыдущая</button>
+      <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(-1)">←</button>
       <span class="week-label">{{ weekLabel }}</span>
-      <button type="button" @click="changeWeek(1)">Следующая →</button>
+      <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(1)">→</button>
     </div>
 
     <p v-if="savedMessage" class="success">{{ savedMessage }}</p>
     <p v-else-if="saveError" class="error">{{ saveError }}</p>
 
-    <p v-if="loading">Загрузка…</p>
+    <p v-if="loading" class="loading">Загрузка…</p>
     <p v-else-if="loadingError" class="error">
       {{ loadingError }}
       <router-link to="/family">Перейти на страницу «Семья»</router-link>
     </p>
 
     <template v-else>
-      <div v-if="recipes.length === 0" class="card">
-        <p>В семье пока нет рецептов — добавьте их, чтобы планировать неделю.</p>
-        <router-link to="/recipes/new" class="primary-link">Добавить рецепт</router-link>
+      <div v-if="recipes.length === 0" class="card empty-state">
+        <div class="empty-icon">🍽️</div>
+        <div class="empty-title">В семье пока нет рецептов</div>
+        <p class="empty-desc">Добавьте рецепты, чтобы планировать неделю.</p>
+        <router-link to="/recipes/new" class="btn btn--primary">Добавить рецепт</router-link>
       </div>
 
-      <div v-else class="grid">
-        <div class="corner">Приём пищи</div>
-        <div v-for="(day, index) in days" :key="`head-${day.getTime()}`" class="day-head">
-          {{ dayHeader(index) }}
+      <template v-else>
+        <div class="desktop-grid">
+          <div class="corner">Приём пищи</div>
+          <div v-for="(day, index) in days" :key="`head-${day.getTime()}`" class="day-head">
+            {{ dayHeader(index) }}
+          </div>
+
+          <template v-for="meal in MEALS" :key="meal.code">
+            <div class="meal-label">{{ meal.label }}</div>
+            <button
+              v-for="(day, index) in days"
+              :key="`${meal.code}-${day.getTime()}`"
+              type="button"
+              class="slot"
+              :class="{ filled: slotEntry(index, meal.code) }"
+              @click="openPicker(index, meal.code)"
+            >
+              <template v-if="slotEntry(index, meal.code)">
+                <span class="slot-recipe">{{ slotEntry(index, meal.code).recipeName }}</span>
+                <span class="slot-portions">{{ slotEntry(index, meal.code).portions }} порц.</span>
+                <span class="slot-remove" @click.stop="removeSlot(index, meal.code)">✕</span>
+              </template>
+              <span v-else class="slot-empty">+</span>
+            </button>
+          </template>
         </div>
 
-        <template v-for="meal in MEALS" :key="meal.code">
-          <div class="meal-label">{{ meal.label }}</div>
-          <button
-            v-for="(day, index) in days"
-            :key="`${meal.code}-${day.getTime()}`"
-            type="button"
-            class="slot"
-            :class="{ filled: slotEntry(index, meal.code) }"
-            @click="openPicker(index, meal.code)"
-          >
-            <template v-if="slotEntry(index, meal.code)">
-              <span class="slot-recipe">{{ slotEntry(index, meal.code).recipeName }}</span>
-              <span class="slot-portions">{{ slotEntry(index, meal.code).portions }} порц.</span>
-              <span class="slot-remove" @click.stop="removeSlot(index, meal.code)">✕</span>
-            </template>
-            <span v-else class="slot-empty">+</span>
-          </button>
-        </template>
-      </div>
+        <div class="mobile-view">
+          <div class="day-tabs">
+            <button
+              v-for="(day, index) in days"
+              :key="`tab-${day.getTime()}`"
+              type="button"
+              class="day-tab"
+              :class="{ active: mobileDay === index }"
+              @click="mobileDay = index"
+            >
+              {{ DAYS[index].label }}
+              <span class="day-tab-date">{{ String(day.getDate()).padStart(2, '0') }}</span>
+            </button>
+          </div>
+
+          <div class="mobile-day-list">
+            <button
+              v-for="meal in MEALS"
+              :key="`${mobileDay}-${meal.code}`"
+              type="button"
+              class="mobile-slot"
+              :class="{ filled: slotEntry(mobileDay, meal.code) }"
+              @click="openPicker(mobileDay, meal.code)"
+            >
+              <span class="mobile-meal">{{ meal.label }}</span>
+              <template v-if="slotEntry(mobileDay, meal.code)">
+                <span class="mobile-recipe">{{ slotEntry(mobileDay, meal.code).recipeName }}</span>
+                <span class="mobile-meta">
+                  {{ slotEntry(mobileDay, meal.code).portions }} порц.
+                  <span class="mobile-remove" @click.stop="removeSlot(mobileDay, meal.code)">✕</span>
+                </span>
+              </template>
+              <span v-else class="mobile-empty">+ Добавить</span>
+            </button>
+          </div>
+        </div>
+      </template>
     </template>
 
     <div v-if="editing" class="overlay" @click.self="closePicker">
       <div class="picker">
         <h3>
-          {{ MEALS.find((m) => m.code === editing.mealType)?.label }} ·
+          {{ mealLabel(editing.mealType) }} ·
           {{ DAYS.find((d) => d.code === editing.day)?.label }}
         </h3>
 
@@ -347,19 +397,19 @@ onMounted(async () => {
           <summary>Фильтры и предпочтения</summary>
 
           <div class="filter-row">
-            <label>
-              Макс. сложность
+            <label class="field">
+              <span>Макс. сложность</span>
               <select v-model.number="filter.maxDifficulty">
                 <option :value="null">Любая</option>
                 <option v-for="level in 5" :key="level" :value="level">{{ level }}</option>
               </select>
             </label>
-            <label>
-              Макс. калории
+            <label class="field">
+              <span>Макс. калории</span>
               <input v-model.number="filter.maxCalories" type="number" min="0" placeholder="ккал" />
             </label>
-            <label>
-              Макс. время (мин)
+            <label class="field">
+              <span>Макс. время (мин)</span>
               <input v-model.number="filter.maxCookTime" type="number" min="1" placeholder="мин" />
             </label>
           </div>
@@ -381,12 +431,12 @@ onMounted(async () => {
           </div>
 
           <div class="filter-row">
-            <label>
-              Ингредиент
+            <label class="field">
+              <span>Ингредиент</span>
               <input v-model="filter.ingredient" type="text" placeholder="напр. лук" />
             </label>
-            <label>
-              Тег
+            <label class="field">
+              <span>Тег</span>
               <input v-model="filter.tag" type="text" placeholder="напр. быстро" />
             </label>
           </div>
@@ -420,8 +470,8 @@ onMounted(async () => {
           </div>
 
           <div class="filter-actions">
-            <button type="button" class="primary" @click="applyFilters">Применить</button>
-            <button type="button" @click="resetFilters">Сбросить</button>
+            <button type="button" class="btn btn--primary" @click="applyFilters">Применить</button>
+            <button type="button" class="btn btn--ghost" @click="resetFilters">Сбросить</button>
           </div>
         </details>
 
@@ -434,7 +484,7 @@ onMounted(async () => {
             :class="{ selected: recipe.id === pickerRecipeId }"
             @click="selectRecipe(recipe)"
           >
-<span class="recipe-name">{{ recipe.name }}</span>
+            <span class="recipe-name">{{ recipe.name }}</span>
             <span class="recipe-meta">
               <template v-if="recipe.difficulty">Сл.: {{ recipe.difficulty }}</template>
               <template v-if="recipe.calories !== null && recipe.calories !== undefined"> · {{ recipe.calories }} ккал</template>
@@ -447,24 +497,24 @@ onMounted(async () => {
           <li v-if="filteredRecipes.length === 0" class="no-results">Ничего не найдено.</li>
         </ul>
 
-        <label class="portions">
-          Порции
+        <label class="portions field">
+          <span>Порции</span>
           <input v-model.number="pickerPortions" type="number" min="1" max="100" />
         </label>
 
         <div class="picker-actions">
-          <button type="button" class="primary" :disabled="!pickerRecipeId || pickerPortions < 1" @click="confirmSlot">
+          <button type="button" class="btn btn--primary" :disabled="!pickerRecipeId || pickerPortions < 1" @click="confirmSlot">
             Назначить
           </button>
           <button
             v-if="slotEntry(editing.day, editing.mealType)"
             type="button"
-            class="danger"
+            class="btn btn--danger"
             @click="removeSlot(editing.day, editing.mealType)"
           >
             Убрать из плана
           </button>
-          <button type="button" @click="closePicker">Отмена</button>
+          <button type="button" class="btn btn--ghost" @click="closePicker">Отмена</button>
         </div>
       </div>
     </div>
@@ -472,56 +522,74 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.heading {
-  display: flex;
+.plan-heading {
+  align-items: flex-end;
+}
+
+@media (max-width: 899px) {
+  .plan-heading {
+    position: sticky;
+    top: 56px;
+    z-index: 30;
+    background: var(--bg);
+    padding: 0.75rem 0.5rem;
+    margin: -0.75rem -0.5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .plan-heading h2 {
+    font-size: 1.25rem;
+  }
+}
+
+.dirty-badge {
+  font-size: 0.8rem;
+  color: var(--warning);
+  font-weight: 700;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.save-btn {
-  padding: 0.55rem 1rem;
-  border: none;
-  border-radius: 6px;
-  background: #047857;
-  color: #fff;
-  font-size: 1rem;
-}
-
-.save-btn:disabled {
-  background: #d1d5db;
-  cursor: not-allowed;
 }
 
 .nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin: 0.75rem 0 1rem;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
 }
 
 .week-label {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  flex: 1;
 }
 
-.success {
-  color: #047857;
+.desktop-grid {
+  display: none;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: 110px repeat(7, minmax(92px, 1fr));
-  gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
+.mobile-view {
+  display: block;
+}
+
+@media (min-width: 900px) {
+  .desktop-grid {
+    display: grid;
+    grid-template-columns: 110px repeat(7, minmax(92px, 1fr));
+    gap: 6px;
+  }
+
+  .mobile-view {
+    display: none;
+  }
 }
 
 .corner,
 .day-head {
   font-size: 0.85rem;
-  font-weight: 600;
-  color: #444;
+  font-weight: 700;
+  color: var(--text-soft);
   padding: 0.35rem 0.2rem;
   text-align: center;
 }
@@ -530,8 +598,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   font-size: 0.9rem;
-  font-weight: 600;
-  color: #444;
+  font-weight: 700;
+  color: var(--text-soft);
 }
 
 .slot {
@@ -541,85 +609,236 @@ onMounted(async () => {
   align-items: flex-start;
   min-height: 64px;
   padding: 0.45rem;
-  border: 1px dashed #ccc;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   font-size: 0.85rem;
   text-align: left;
   position: relative;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .slot:hover {
-  border-color: #3730a3;
+  border-color: var(--primary);
 }
 
 .slot.filled {
   border-style: solid;
-  border-color: #c7d2fe;
-  background: #f5f7ff;
+  border-color: var(--success);
+  background: var(--success-bg);
 }
 
 .slot-empty {
   margin: auto;
-  color: #9ca3af;
+  color: var(--text-faint);
   font-size: 1.1rem;
 }
 
 .slot-recipe {
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--text);
   padding-right: 1.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .slot-portions {
-  color: #555;
+  color: var(--success);
+  font-size: 0.8rem;
 }
 
 .slot-remove {
   position: absolute;
   top: 0.2rem;
   right: 0.35rem;
-  color: #b91c1c;
+  color: var(--danger);
   font-weight: 700;
   cursor: pointer;
 }
 
+/* mobile day tabs */
+.day-tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.day-tab {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  min-height: 52px;
+  min-width: 56px;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-soft);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.day-tab .day-tab-date {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.day-tab.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+
+.day-tab.active .day-tab-date {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mobile-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.mobile-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.8rem 0.9rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.95rem;
+  min-height: 64px;
+  width: 100%;
+}
+
+.mobile-slot.filled {
+  border-style: solid;
+  border-color: var(--success);
+  background: var(--success-bg);
+}
+
+.mobile-meal {
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-faint);
+}
+
+.mobile-slot.filled .mobile-meal {
+  color: var(--success);
+}
+
+.mobile-recipe {
+  font-weight: 800;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.mobile-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--success);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.mobile-remove {
+  color: var(--danger);
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 0.45rem 0.7rem;
+  margin: -0.45rem -0.7rem -0.45rem 0;
+}
+
+.mobile-empty {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+/* picker overlay */
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(59, 51, 43, 0.45);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
   z-index: 50;
 }
 
+@media (min-width: 900px) {
+  .overlay {
+    align-items: center;
+  }
+}
+
 .picker {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--surface);
+  border-radius: var(--radius) var(--radius) 0 0;
   padding: 1.25rem;
-  width: 420px;
+  width: 100%;
   max-width: 92vw;
-  max-height: 85vh;
+  max-height: 88vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  box-shadow: var(--shadow-md);
+  animation: sheetUp 0.2s ease;
+}
+
+@keyframes sheetUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (min-width: 900px) {
+  .picker {
+    width: 480px;
+    border-radius: var(--radius);
+  }
 }
 
 .recipe-options {
   list-style: none;
   margin: 0;
   padding: 0;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   max-height: 260px;
   overflow-y: auto;
+  background: var(--surface);
 }
 
 .recipe-options li {
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
 .recipe-options li:last-child {
@@ -627,101 +846,77 @@ onMounted(async () => {
 }
 
 .recipe-options li.selected {
-  background: #eef2ff;
-  font-weight: 600;
+  background: var(--primary-soft);
+}
+
+.recipe-name {
+  font-weight: 700;
+}
+
+.recipe-meta {
+  font-size: 0.8rem;
+  color: var(--text-soft);
 }
 
 .repetition {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--warning-bg);
+  color: var(--warning);
   border-radius: 999px;
   padding: 0.05rem 0.5rem;
   font-size: 0.8rem;
-  font-weight: 600;
+  font-weight: 700;
   margin-left: 0.4rem;
 }
 
 .recipe-options li.no-results {
   cursor: default;
-  color: #777;
-}
-
-.portions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  color: var(--text-soft);
 }
 
 .portions input {
-  width: 90px;
+  max-width: 110px;
 }
 
 .picker-actions {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
-}
-
-.picker-actions button {
-  padding: 0.5rem 0.9rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #fff;
-  font-size: 0.95rem;
-}
-
-.picker-actions button.primary {
-  background: #3730a3;
-  border-color: #3730a3;
-  color: #fff;
-}
-
-.picker-actions button.primary:disabled {
-  background: #d1d5db;
-  border-color: #d1d5db;
-  cursor: not-allowed;
-}
-
-.picker-actions button.danger {
-  color: #b91c1c;
-  border-color: #b91c1c;
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  padding-top: 0.5rem;
 }
 
 .filter-panel {
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 0.5rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 
 .filter-panel summary {
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.9rem;
 }
 
 .filter-row {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
 }
 
-.filter-row label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.8rem;
+@media (min-width: 480px) {
+  .filter-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
-.filter-row input,
-.filter-row select {
-  width: 110px;
-  padding: 0.3rem 0.4rem;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  font-size: 0.9rem;
+.filter-row .field input,
+.filter-row .field select {
+  width: 100%;
 }
 
 .filter-group {
@@ -734,13 +929,19 @@ onMounted(async () => {
 
 .filter-label {
   font-size: 0.8rem;
-  color: #555;
+  color: var(--text-soft);
+  font-weight: 600;
 }
 
 .filter-group .chip {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  font-weight: 600;
+}
+
+.filter-group .chip input {
+  display: none;
 }
 
 .filter-actions {
@@ -748,48 +949,9 @@ onMounted(async () => {
   gap: 0.5rem;
 }
 
-.filter-actions button {
-  padding: 0.35rem 0.7rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #fff;
-  font-size: 0.85rem;
-}
-
-.filter-actions button.primary {
-  background: #3730a3;
-  border-color: #3730a3;
-  color: #fff;
-}
-
 .picker-loading {
-  color: #555;
+  color: var(--text-soft);
   font-size: 0.9rem;
   margin: 0;
-}
-
-.recipe-options li {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.recipe-name {
-  font-weight: 500;
-}
-
-.recipe-meta {
-  font-size: 0.78rem;
-  color: #666;
-}
-
-.primary-link {
-  display: inline-block;
-  padding: 0.55rem 0.9rem;
-  background: #3730a3;
-  color: #fff;
-  border-radius: 6px;
-  text-decoration: none;
-  font-size: 0.95rem;
 }
 </style>
