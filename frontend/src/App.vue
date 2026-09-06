@@ -16,6 +16,7 @@ function logout() {
       <nav v-if="isAuthenticated" class="user-area">
         <router-link to="/recipes">Рецепты</router-link>
         <router-link to="/plan">План</router-link>
+        <router-link to="/shopping">Покупки</router-link>
         <router-link to="/family">Семья</router-link>
         <router-link to="/settings">Настройки</router-link>
         <span class="email">{{ state.user?.email }}</span>

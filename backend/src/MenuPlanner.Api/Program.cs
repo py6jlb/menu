@@ -10,7 +10,11 @@ using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Ingredients;
  using MenuPlanner.Api.Plans;
  using MenuPlanner.Api.Recipes;
+<<<<<<< HEAD
 using MenuPlanner.Api.Settings;
+=======
+ using MenuPlanner.Api.ShoppingList;
+>>>>>>> ticket/09-shopping
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,7 +60,11 @@ app.MapFamilyEndpoints();
 app.MapRecipeEndpoints();
 app.MapIngredientEndpoints();
 app.MapPlanEndpoints();
+<<<<<<< HEAD
 app.MapSettingsEndpoints();
+=======
+app.MapShoppingListEndpoints();
+>>>>>>> ticket/09-shopping
 
 await using (var scope = app.Services.CreateAsyncScope())
 {
