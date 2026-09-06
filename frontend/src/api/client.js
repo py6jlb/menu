@@ -4,7 +4,7 @@ export async function apiFetch(path, options = {}) {
   const { state, clearSession } = useAuth()
 
   const headers = { ...(options.headers || {}) }
-  if (options.body !== undefined && !headers['Content-Type']) {
+  if (options.body !== undefined && !(options.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json'
   }
   if (state.token) {

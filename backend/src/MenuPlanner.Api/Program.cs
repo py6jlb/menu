@@ -23,6 +23,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddSingleton<PhotoStorage>();
 
 var jwtOptions = ReadJwtOptions(builder.Configuration);
 builder.Services.AddSingleton(jwtOptions);
@@ -48,6 +49,8 @@ builder.Services
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+app.Services.GetRequiredService<PhotoStorage>();
 
 app.MapGet("/health", () => Results.Json(
     new { status = "ok", service = "menu-planner-api" }));

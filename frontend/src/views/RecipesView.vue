@@ -42,7 +42,10 @@ onMounted(load)
 
     <ul v-else class="recipe-list">
       <li v-for="recipe in recipes" :key="recipe.id" class="recipe-item">
-        <router-link :to="`/recipes/${recipe.id}`" class="recipe-name">{{ recipe.name }}</router-link>
+        <div class="item-top">
+          <router-link :to="`/recipes/${recipe.id}`" class="recipe-name">{{ recipe.name }}</router-link>
+          <img v-if="recipe.photoUrl" :src="recipe.photoUrl" alt="" class="thumb" />
+        </div>
         <div class="meta">
           <span>Сложность: {{ recipe.difficulty }}/5</span>
           <span>Время: {{ recipe.cookTimeMinutes }} мин</span>
@@ -104,6 +107,21 @@ onMounted(load)
   font-size: 1.1rem;
   font-weight: 600;
   text-decoration: none;
+}
+
+.item-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.thumb {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
 }
 
 .meta {

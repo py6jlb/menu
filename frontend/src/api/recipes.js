@@ -34,3 +34,18 @@ export async function deleteRecipe(id) {
     method: 'DELETE'
   })
 }
+
+export async function uploadRecipePhoto(id, file) {
+  const form = new FormData()
+  form.append('file', file)
+  return apiJson(`/api/recipes/${id}/photo`, {
+    method: 'PUT',
+    body: form
+  })
+}
+
+export async function deleteRecipePhoto(id) {
+  return apiJson(`/api/recipes/${id}/photo`, {
+    method: 'DELETE'
+  })
+}

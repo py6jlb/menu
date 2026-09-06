@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getRecipe, createRecipe, updateRecipe } from '../api/recipes'
+import { getRecipe, createRecipe, updateRecipe, uploadRecipePhoto, deleteRecipePhoto } from '../api/recipes'
 import { autocompleteIngredients } from '../api/ingredients'
 import { UNITS, SEASONS, parseList, joinList } from '../constants/recipe'
 
@@ -34,6 +34,44 @@ const debounceTimers = new Map()
 function newIngredient() {
   return { name: '', amount: '', unit: 'g', note: '', suggestions: [], showSuggestions: false, activeIndex: -1, loadingSuggestions: false, noSuggestions: false }
 }
+
+const existingPhotoUrl = ref(null)
+const selectedPhoto = ref(null)
+const selectedPhotoPreview = ref('')
+const photoRemoved = ref(false)
+
+const photoActionLabel = computed(() =>
+  selectedPhoto.value || (existingPhotoUrl.value && !photoRemoved.value) ? 'Заменить фото' : 'Выбрать фото'
+)
+
+function onPhotoSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  selectedPhoto.value = file
+  if (selectedPhotoPreview.value) URL.revokeObjectURL(selectedPhotoPreview.value)
+  selectedPhotoPreview.value = URL.createObjectURL(file)
+  event.target.value = ''
+}
+
+function clearSelectedPhoto() {
+  selectedPhoto.value = null
+  if (selectedPhotoPreview.value) {
+    URL.revokeObjectURL(selectedPhotoPreview.value)
+    selectedPhotoPreview.value = ''
+  }
+}
+
+function removeExistingPhoto() {
+  photoRemoved.value = true
+}
+
+function undoPhotoRemoval() {
+  photoRemoved.value = false
+}
+
+onBeforeUnmount(() => {
+  if (selectedPhotoPreview.value) URL.revokeObjectURL(selectedPhotoPreview.value)
+})
 
 function addStep() {
   form.steps.push('')
@@ -157,7 +195,7 @@ function buildPayload() {
     tags: parseList(form.tagsText),
     seasonality: form.seasonality,
     diet: parseList(form.dietText),
-    steps: form.steps.map((s) => s.trim()).filter((s) => s.length > 0),
+    steps: form.steps.map((s) => s.trim()).filter((s) => s.length > 0).map((text) => ({ text })),
     ingredients: form.ingredients
       .filter((i) => i.name.trim() || i.amount || i.unit || i.note)
       .map((i) => ({
@@ -184,6 +222,7 @@ async function loadRecipe() {
 
   form.name = data.name
   form.description = data.description || ''
+  existingPhotoUrl.value = data.photoUrl || null
   form.cookTimeMinutes = data.cookTimeMinutes
   form.servings = data.servings
   form.difficulty = data.difficulty
@@ -217,7 +256,23 @@ async function submit() {
       ? await updateRecipe(editingId.value, payload)
       : await createRecipe(payload)
     if (response.status === 200 || response.status === 201) {
-      router.push(`/recipes/${data.id}`)
+      const id = data.id
+      try {
+        if (photoRemoved.value && !selectedPhoto.value && existingPhotoUrl.value) {
+          const removed = await deleteRecipePhoto(id)
+          if (removed.response.status !== 204) {
+            console.error('Не удалось удалить фото:', removed.data)
+          }
+        } else if (selectedPhoto.value) {
+          const uploaded = await uploadRecipePhoto(id, selectedPhoto.value)
+          if (uploaded.response.status !== 200) {
+            console.error('Не удалось загрузить фото:', uploaded.data)
+          }
+        }
+      } catch (err) {
+        console.error('Ошибка при работе с фото:', err)
+      }
+      router.push(`/recipes/${id}`)
     } else {
       error.value = data?.error || 'Не удалось сохранить рецепт.'
     }
@@ -276,6 +331,27 @@ onBeforeUnmount(() => {
         Калорийность на порцию (ккал)
         <input v-model.number="form.calories" type="number" min="0" max="10000" />
       </label>
+
+      <fieldset>
+        <legend>Фото</legend>
+        <div v-if="selectedPhoto" class="photo-preview">
+          <img :src="selectedPhotoPreview" alt="Предпросмотр фото" class="photo-thumb" />
+          <span class="hint">Новое фото будет загружено после сохранения.</span>
+          <button type="button" class="ghost" @click="clearSelectedPhoto">Убрать</button>
+        </div>
+        <div v-else-if="existingPhotoUrl && !photoRemoved" class="photo-preview">
+          <img :src="existingPhotoUrl" alt="Фото рецепта" class="photo-thumb" />
+          <button type="button" class="ghost danger-text" @click="removeExistingPhoto">Удалить фото</button>
+        </div>
+        <p v-else-if="photoRemoved" class="hint">
+          Фото будет удалено после сохранения.
+          <button type="button" class="ghost" @click="undoPhotoRemoval">Отменить удаление</button>
+        </p>
+        <label class="file-label">
+          {{ photoActionLabel }}
+          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="file-input" @change="onPhotoSelected" />
+        </label>
+      </fieldset>
 
       <label>
         Теги (через запятую)
@@ -520,6 +596,30 @@ legend {
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+.photo-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.photo-thumb {
+  max-width: 240px;
+  max-height: 180px;
+  border-radius: 8px;
+  border: 1px solid #e5e5e5;
+}
+
+.file-label {
+  display: inline-flex;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
+.file-input {
+  max-width: 100%;
 }
 
 .cancel {

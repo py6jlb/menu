@@ -16,6 +16,16 @@ public static class RecipeCatalog
     public const int DifficultyMax = 5;
     public const int CaloriesMax = 10000;
 
+    public const int PhotoMaxBytes = 5 * 1024 * 1024;
+    public static readonly IReadOnlyDictionary<string, string> PhotoContentTypes =
+        new Dictionary<string, string>
+        {
+            ["image/jpeg"] = ".jpg",
+            ["image/png"] = ".png",
+            ["image/webp"] = ".webp",
+            ["image/gif"] = ".gif"
+        };
+
     public static readonly IReadOnlyList<string> Units =
         new[] { "g", "kg", "ml", "l", "pcs", "glass", "tbsp", "tsp", "pinch" };
 

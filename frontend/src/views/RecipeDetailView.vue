@@ -68,6 +68,8 @@ onMounted(load)
 
       <p v-if="recipe.description" class="description">{{ recipe.description }}</p>
 
+      <img v-if="recipe.photoUrl" :src="recipe.photoUrl" alt="Фото рецепта" class="photo" />
+
       <div v-if="recipe.tags.length || recipe.seasonality.length || recipe.diet.length" class="badges">
         <span v-for="tag in recipe.tags" :key="`tag-${tag}`" class="badge">#{{ tag }}</span>
         <span v-for="season in recipe.seasonality" :key="`season-${season}`" class="badge badge-season">
@@ -146,6 +148,15 @@ onMounted(load)
 
 .description {
   margin: 1rem 0 0;
+}
+
+.photo {
+  max-width: 320px;
+  max-height: 260px;
+  border-radius: 10px;
+  border: 1px solid #e5e5e5;
+  margin: 0.75rem 0;
+  display: block;
 }
 
 .badges {
