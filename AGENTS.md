@@ -1,17 +1,29 @@
-
 # AGENTS.md
 
-Репозиторий пустой: кода, README и системы сборки пока нет. Сейчас здесь только инфраструктура навыков OpenCode.
+Веб-приложение «Меню для домохозяек» — семейное планирование меню: рецепты, недельный план, список покупок, семья. MVP реализован на ветке `main`. Язык интерфейса, данных и общения — русский.
 
-## Структура
+## Стек и структура
 
-- `skills-lock.json` — источник истины по установленным навыкам (кто, откуда, hash).
-- `.agents/skills/` — материализованные копии навыков. Это управляемые файлы: не редактировать вручную, изменения делаются через механизм установки навыков (см. `skills-lock.json`).
+- **Backend**: .NET 8 Minimal APIs + EF Core (Npgsql), `backend/`; solution `MenuPlanner.sln` в корне. Код — в feature-папках (`Auth`, `Families`, `Recipes`, `Plans`, `Settings`, `ShoppingList`, `Ingredients`, `Data`, `Domain`).
+- **Frontend**: Vue 3 + Vite, `frontend/`; экраны в `src/views/`, API-клиенты в `src/api/`, роутер в `src/router/`.
+- **Инфраструктура**: Docker Compose (`db` Postgres :5432, `backend` :8080, `frontend` :8081), nginx раздаёт SPA и проксирует `/api`. Карта API и запуск — в `README.md`.
 
-## Навыки
+## Проверка изменений
 
-- `grill-me` — доступен через Skill tool. Установлен из `mattpocock/skills` (`skills/productivity/grill-me`). Управляется через `skills-lock.json`.
-- Обновление/добавление навыков меняет `skills-lock.json`, а не файлы в `.agents/`.
+- **Backend**: .NET SDK на хосте **не установлен** — тесты и сборка только в контейнере, из корня репозитория:
+
+  ```bash
+  docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:8.0 dotnet test
+  ```
+
+- **Frontend**: `cd frontend && npm run build` (зависимости уже в `node_modules`).
+- **Живой стек**: `docker compose up --build`; фронт http://localhost:8081, health http://localhost:8080/health.
+- Схема БД создаётся `EnsureCreated`, миграций нет: при изменении модели — `docker compose down -v` и поднять заново.
+
+## Конвенции
+
+- Фичи ведутся через тикеты: спека `.scratch/menu-planner/spec.md`, граф задач `.scratch/menu-planner/issues/`. Тикет реализуется субагентом в git-worktree на ветке `ticket/*`, мержится в `main` после проверки тестов.
+- Не редактировать `.agents/skills/` вручную: навыки управляются через `skills-lock.json`.
 
 ## Agent skills
 
@@ -26,8 +38,3 @@
 ### Domain docs
 
 Single-context: один `CONTEXT.md` + `docs/adr/` в корне. См. `docs/agents/domain.md`.
-
-## Прочее
-
-- Git-репозитория пока нет (`git init` ещё не выполнялся).
-- Язык общения с пользователем — русский.
