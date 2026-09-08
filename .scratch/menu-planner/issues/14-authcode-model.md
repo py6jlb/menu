@@ -4,10 +4,10 @@
 
 **Blocked by:** 12 (Миграция на .NET 10), 13 (SMTP-инфраструктура и письма)
 
-**Status:** ready-for-agent
+**Status:** resolved (commit `e0d3a6a`)
 
-- [ ] Таблица `AuthCode`: UserId, тип (`verify`/`reset`), код, `expires`, `used`
-- [ ] Поля на `User`: `IsEmailVerified`/`EmailVerifiedAt`, `VerificationAttempts`, `LockedUntil`, `TokenVersion`
-- [ ] Генерация 6-значного кода, хэширование (PasswordHasher)
-- [ ] Общая логика: создание, проверка, одноразовость (сгорание), срок жизни
-- [ ] Юнит-тесты сервиса кодов
+- [x] Таблица `AuthCode`: UserId, тип (`verify`/`reset`), код, `expires`, `used`
+- [x] Поля на `User`: `IsEmailVerified`/`EmailVerifiedAt`, `VerificationAttempts`, `LockedUntil`, `TokenVersion`
+- [x] Генерация 6-значного кода, хэширование (PasswordHasher)
+- [x] Общая логика: создание, проверка, одноразовость (сгорание), срок жизни
+- [x] Юнит-тесты сервиса кодов
