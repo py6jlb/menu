@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Emails;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Ingredients;
 using MenuPlanner.Api.Plans;
@@ -28,6 +29,14 @@ builder.Services.AddSingleton<PhotoStorage>();
 var jwtOptions = ReadJwtOptions(builder.Configuration);
 builder.Services.AddSingleton(jwtOptions);
 builder.Services.AddSingleton<JwtTokenService>();
+
+var emailOptions = ReadEmailOptions(builder.Configuration);
+builder.Services.AddSingleton(emailOptions);
+builder.Services.AddSingleton<IEmailTransport>(services =>
+    string.IsNullOrWhiteSpace(emailOptions.Host)
+        ? new LoggingEmailTransport(services.GetRequiredService<ILogger<LoggingEmailTransport>>())
+        : new SmtpEmailTransport(emailOptions));
+builder.Services.AddSingleton<EmailSender>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -84,6 +93,29 @@ static JwtOptions ReadJwtOptions(ConfigurationManager configuration)
     if (options.Secret.Length < 32)
         throw new InvalidOperationException(
             "Jwt:Secret (или env JWT_SECRET) должен быть не короче 32 символов.");
+
+    return options;
+}
+
+static EmailOptions ReadEmailOptions(ConfigurationManager configuration)
+{
+    var options = configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()
+        ?? new EmailOptions();
+
+    if (configuration["SMTP_HOST"] is { Length: > 0 } host) options.Host = host;
+    if (configuration["SMTP_PORT"] is { Length: > 0 } port && int.TryParse(port, out var portValue))
+        options.Port = portValue;
+    if (configuration["SMTP_USER"] is { Length: > 0 } user) options.User = user;
+    if (configuration["SMTP_PASSWORD"] is { Length: > 0 } password) options.Password = password;
+    if (configuration["SMTP_FROM"] is { Length: > 0 } from) options.From = from;
+    if (configuration["SMTP_FROM_NAME"] is { Length: > 0 } fromName) options.FromName = fromName;
+    if (configuration["SMTP_ENABLE_STARTTLS"] is { Length: > 0 } startTls &&
+        bool.TryParse(startTls, out var enableStartTls))
+        options.EnableStartTls = enableStartTls;
+
+    if (!string.IsNullOrWhiteSpace(options.Host) && string.IsNullOrWhiteSpace(options.From))
+        throw new InvalidOperationException(
+            "SMTP_FROM обязателен, когда задан SMTP_HOST.");
 
     return options;
 }

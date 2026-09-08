@@ -22,7 +22,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["PHOTOS_DIR"] = PhotosDir
+                ["PHOTOS_DIR"] = PhotosDir,
+                ["SMTP_HOST"] = ""
             }));
 
         builder.ConfigureServices(services =>
