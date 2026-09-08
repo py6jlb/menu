@@ -99,8 +99,7 @@ static JwtOptions ReadJwtOptions(ConfigurationManager configuration)
 
 static EmailOptions ReadEmailOptions(ConfigurationManager configuration)
 {
-    var options = configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()
-        ?? new EmailOptions();
+    var options = new EmailOptions();
 
     if (configuration["SMTP_HOST"] is { Length: > 0 } host) options.Host = host;
     if (configuration["SMTP_PORT"] is { Length: > 0 } port && int.TryParse(port, out var portValue))

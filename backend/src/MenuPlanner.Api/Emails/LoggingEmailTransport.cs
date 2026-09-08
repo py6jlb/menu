@@ -14,9 +14,8 @@ public sealed class LoggingEmailTransport : IEmailTransport
     public Task SendAsync(EmailMessage message)
     {
         _logger.LogInformation(
-            "[Email] SMTP не настроен — письмо записано в лог. Кому: {To}; От: {From} ({FromName}); Тема: {Subject}",
-            message.To, message.From, message.FromName, message.Subject);
-        _logger.LogDebug("Тело письма: {HtmlBody}", message.HtmlBody);
+            "[Email] SMTP не настроен — письмо записано в лог.\nКому: {To}\nОт: {From} ({FromName})\nТема: {Subject}\n\n{HtmlBody}",
+            message.To, message.From, message.FromName, message.Subject, message.HtmlBody);
         return Task.CompletedTask;
     }
 }

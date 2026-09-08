@@ -39,5 +39,6 @@ public sealed class LoggingEmailTransportTests
         Assert.Contains("user@example.com", info);
         Assert.Contains("Код подтверждения почты", info);
         Assert.Contains("SMTP не настроен", info);
+        Assert.Contains("<p>123456</p>", info);
     }
 }

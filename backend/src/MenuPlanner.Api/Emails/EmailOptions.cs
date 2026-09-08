@@ -2,8 +2,6 @@ namespace MenuPlanner.Api.Emails;
 
 public sealed class EmailOptions
 {
-    public const string SectionName = "Smtp";
-
     public string Host { get; set; } = "";
     public int Port { get; set; } = 587;
     public string User { get; set; } = "";
