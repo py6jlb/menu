@@ -4,10 +4,10 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved (commit `eb7ec7f`)
 
-- [ ] `TargetFramework` net10.0 в `MenuPlanner.Api.csproj` и `MenuPlanner.Api.Tests.csproj`
-- [ ] Пакеты подняты до актуальных версий для .NET 10 (EF Core, Npgsql, JwtBearer, Mvc.Testing, InMemory)
-- [ ] `backend/Dockerfile`: `sdk:10.0` и `aspnet:10.0`
-- [ ] Код совместим с .NET 10 (breaking changes исправлены)
-- [ ] Все тесты зелёные в контейнере на `sdk:10.0`
+- [x] `TargetFramework` net10.0 в `MenuPlanner.Api.csproj` и `MenuPlanner.Api.Tests.csproj`
+- [x] Пакеты подняты до актуальных версий для .NET 10 (EF Core 10.0.11, Npgsql 10.0.3, JwtBearer 10.0.11, Mvc.Testing 10.0.11, InMemory 10.0.11)
+- [x] `backend/Dockerfile`: `sdk:10.0` и `aspnet:10.0`
+- [x] Код совместим с .NET 10 (breaking change EF Core 10: два провайдера БД — исправлено в ApiFactory)
+- [x] Все тесты зелёные в контейнере на `sdk:10.0` (109/109)
