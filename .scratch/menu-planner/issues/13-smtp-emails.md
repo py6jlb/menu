@@ -1,8 +1,8 @@
-# 12: SMTP-инфраструктура и письма
+# 13: SMTP-инфраструктура и письма
 
 **What to build:** Backend умеет «отправлять» письма. Конфигурация SMTP через env, сервис отправки, в dev без SMTP письма пишутся в лог backend. Два простых HTML-шаблона писем на русском: подтверждение почты и сброс пароля. Без вложений.
 
-**Blocked by:** None (can start immediately)
+**Blocked by:** 12 (Миграция на .NET 10)
 
 **Status:** ready-for-agent
 
