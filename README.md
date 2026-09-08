@@ -2,7 +2,7 @@
 
 Веб-приложение для семейного планирования меню: рецепты, недельное планирование, список покупок.
 
-Стек: .NET 8 Minimal APIs (backend), Vue 3 + Vite (SPA), Postgres, nginx. Всё поднимается Docker Compose.
+Стек: .NET 10 Minimal APIs (backend), Vue 3 + Vite (SPA), Postgres, nginx. Всё поднимается Docker Compose.
 
 ## Структура
 
@@ -44,10 +44,10 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/
 
 ## Разработка
 
-Backend запускается в контейнере (`mcr.microsoft.com/dotnet/sdk:8.0`) — на хосте .NET SDK не требуется. Для команд `dotnet` используйте, например:
+Backend запускается в контейнере (`mcr.microsoft.com/dotnet/sdk:10.0`) — на хосте .NET SDK не требуется. Для команд `dotnet` используйте, например:
 
 ```bash
-docker run --rm -v "$(pwd)":/work -w /work/backend mcr.microsoft.com/dotnet/sdk:8.0 dotnet --version
+docker run --rm -v "$(pwd)":/work -w /work/backend mcr.microsoft.com/dotnet/sdk:10.0 dotnet --version
 ```
 
 Frontend в dev-режиме (Vite dev-сервер, проксирует `/api` и `/health` на backend на `localhost:8080`):
@@ -173,7 +173,7 @@ Endpoints:
 Тесты (xUnit + `WebApplicationFactory`, база заменена на EF InMemory) запускаются в контейнере — на хосте .NET SDK не требуется:
 
 ```bash
-docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:8.0 dotnet test
+docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 dotnet test
 ```
 
 <<<<<<< HEAD

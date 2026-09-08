@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MenuPlanner.Api.Data;
@@ -30,6 +31,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 d => d.ServiceType == typeof(DbContextOptions<AppDbContext>));
             if (descriptor is not null)
                 services.Remove(descriptor);
+
+            var configDescriptor = services.SingleOrDefault(
+                d => d.ServiceType == typeof(IDbContextOptionsConfiguration<AppDbContext>));
+            if (configDescriptor is not null)
+                services.Remove(configDescriptor);
 
             services.AddDbContext<AppDbContext>(options =>
                 options.UseInMemoryDatabase(_databaseName));
