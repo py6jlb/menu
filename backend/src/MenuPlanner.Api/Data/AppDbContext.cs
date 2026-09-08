@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<WeekPlan> WeekPlans => Set<WeekPlan>();
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+    public DbSet<AuthCode> AuthCodes => Set<AuthCode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -126,6 +127,18 @@ public class AppDbContext : DbContext
         userSettings.HasOne<User>()
             .WithOne()
             .HasForeignKey<UserSettings>(s => s.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var authCode = modelBuilder.Entity<AuthCode>();
+
+        authCode.Property(c => c.CodeHash).HasMaxLength(1024).IsRequired();
+        authCode.Property(c => c.Type).HasConversion<string>().HasMaxLength(16);
+        authCode.Property(c => c.CreatedAt).HasColumnType("timestamp with time zone");
+        authCode.Property(c => c.ExpiresAt).HasColumnType("timestamp with time zone");
+        authCode.HasIndex(c => c.UserId);
+        authCode.HasOne(c => c.User)
+            .WithMany()
+            .HasForeignKey(c => c.UserId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
