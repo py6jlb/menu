@@ -83,14 +83,14 @@ public static class AuthCodeService
         }
     }
 
-    public static void RecordFailedAttempt(User user, DateTime now)
+    public static void RecordFailedAttempt(User user, DateTime now, int maxAttempts = MaxAttempts, TimeSpan? lockDuration = null)
     {
         if (IsLocked(user, now))
             return;
 
         user.VerificationAttempts++;
-        if (user.VerificationAttempts >= MaxAttempts)
-            user.LockedUntil = now.Add(LockDuration);
+        if (user.VerificationAttempts >= maxAttempts)
+            user.LockedUntil = now.Add(lockDuration ?? LockDuration);
     }
 
     public static void ResetAttempts(User user)

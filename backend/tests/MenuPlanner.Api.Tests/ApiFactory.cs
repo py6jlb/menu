@@ -8,7 +8,7 @@ using MenuPlanner.Api.Data;
 
 namespace MenuPlanner.Api.Tests;
 
-public sealed class ApiFactory : WebApplicationFactory<Program>
+public class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = "menu_planner_test_" + Guid.NewGuid().ToString("N");
 
