@@ -38,6 +38,10 @@ builder.Services.AddSingleton<IEmailTransport>(services =>
         : new SmtpEmailTransport(emailOptions));
 builder.Services.AddSingleton<EmailSender>();
 
+var authCodeOptions = ReadAuthCodeOptions(builder.Configuration);
+builder.Services.AddSingleton(authCodeOptions);
+builder.Services.AddSingleton<FixedWindowRateLimiter>();
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -65,6 +69,7 @@ app.MapGet("/health", () => Results.Json(
     new { status = "ok", service = "menu-planner-api" }));
 
 app.MapAuthEndpoints();
+app.MapEmailVerificationEndpoints();
 app.MapFamilyEndpoints();
 app.MapRecipeEndpoints();
 app.MapIngredientEndpoints();
@@ -115,6 +120,23 @@ static EmailOptions ReadEmailOptions(ConfigurationManager configuration)
     if (!string.IsNullOrWhiteSpace(options.Host) && string.IsNullOrWhiteSpace(options.From))
         throw new InvalidOperationException(
             "SMTP_FROM обязателен, когда задан SMTP_HOST.");
+
+    return options;
+}
+
+static AuthCodeOptions ReadAuthCodeOptions(ConfigurationManager configuration)
+{
+    var options = configuration.GetSection(AuthCodeOptions.SectionName).Get<AuthCodeOptions>()
+        ?? new AuthCodeOptions();
+
+    if (int.TryParse(configuration["AUTH_CODE_MAX_ATTEMPTS"], out var maxAttempts))
+        options.MaxAttempts = maxAttempts;
+    if (int.TryParse(configuration["AUTH_CODE_LOCK_DAYS"], out var lockDays))
+        options.LockDurationDays = lockDays;
+    if (int.TryParse(configuration["AUTH_CODE_RESEND_COOLDOWN_MINUTES"], out var cooldownMinutes))
+        options.ResendCooldownMinutes = cooldownMinutes;
+    if (int.TryParse(configuration["AUTH_CODE_RESEND_RATE_LIMIT_PER_HOUR"], out var rateLimit))
+        options.ResendRateLimitPerHour = rateLimit;
 
     return options;
 }

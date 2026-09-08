@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Emails;
 
 namespace MenuPlanner.Api.Auth;
 
@@ -30,7 +31,8 @@ public static class AuthEndpoints
         RegisterRequest request,
         AppDbContext db,
         IPasswordHasher<User> passwordHasher,
-        JwtTokenService tokenService)
+        JwtTokenService tokenService,
+        EmailSender emailSender)
     {
         var email = request.Email?.Trim().ToLowerInvariant() ?? "";
         if (!EmailRegex.IsMatch(email))
@@ -54,6 +56,9 @@ public static class AuthEndpoints
 
         db.Users.Add(user);
         await db.SaveChangesAsync();
+
+        var code = await EmailVerificationService.IssueCodeAsync(db, passwordHasher, user.Id, DateTime.UtcNow);
+        await emailSender.SendVerificationCodeAsync(email, code);
 
         return Results.Json(
             new AuthResponse(tokenService.CreateToken(user), UserDto.From(user)),
