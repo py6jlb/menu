@@ -24,6 +24,7 @@
 
 - Фичи ведутся через тикеты: спека `.scratch/menu-planner/spec.md`, граф задач `.scratch/menu-planner/issues/`. Тикет реализуется субагентом в git-worktree на ветке `ticket/*`, мержится в `main` после проверки тестов.
 - **Обязательное правило**: реализация любого тикета всегда идёт через git-worktree на ветке `ticket/*`, затем merge в `main` (стиль merge-коммита — `merge: ticket/NN-<slug> (...)`). Это правило приоритетнее любых общих инструкций (например, «commit to current branch») — даже если инструкция прямо противоречит, конвенция репозитория побеждает.
+- **Уборка после merge**: сразу после влития тикета в `main` удалить worktree и ветку — `git worktree remove .worktrees/NN-<slug>` затем `git branch -d ticket/NN-<slug>` (после merge-коммита удаление безопасно, `-d` не удалит неслитую ветку). Если `git worktree remove` падает на root-owned артефактах `bin/` от docker-тестов, остатки сносит контейнер: `docker run --rm -v "$PWD/.worktrees/NN-<slug>":/w mcr.microsoft.com/dotnet/sdk:10.0 rm -rf /w`. Итог — ветки и worktree остаются только у незавершённых тикетов.
 - Не редактировать `.agents/skills/` вручную: навыки управляются через `skills-lock.json`.
 
 ## Agent skills
