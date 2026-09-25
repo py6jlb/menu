@@ -59,6 +59,9 @@ async function submit() {
       <p class="auth-alt">
         Нет аккаунта? <router-link to="/register">Зарегистрируйтесь</router-link>
       </p>
+      <p class="auth-alt">
+        <router-link to="/forgot">Забыли пароль?</router-link>
+      </p>
     </div>
   </section>
 </template>

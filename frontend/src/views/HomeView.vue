@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useAuth } from '../stores/auth'
 
-const { state } = useAuth()
+const { state, isEmailVerified } = useAuth()
 
 const health = ref({ state: 'checking', message: '' })
 
@@ -28,7 +28,8 @@ onMounted(checkApi)
         <h2>Добро пожаловать, {{ state.user?.email }}! 👋</h2>
         <p>Планируйте меню, покупайте продукты и готовьте с удовольствием — всё для вашей семьи в одном месте.</p>
         <div class="hero-actions">
-          <router-link to="/recipes/new" class="btn btn--primary">Создать рецепт</router-link>
+          <router-link v-if="isEmailVerified" to="/recipes/new" class="btn btn--primary">Создать рецепт</router-link>
+          <router-link v-else to="/verify" class="btn btn--primary">Подтвердить почту</router-link>
           <router-link to="/plan" class="btn btn--ghost">Перейти к плану</router-link>
           <router-link to="/shopping" class="btn btn--ghost">Список покупок</router-link>
         </div>

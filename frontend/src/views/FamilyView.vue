@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { getMyFamily, createFamily, joinFamily, regenerateInviteCode, removeMember } from '../api/families'
 import { useAuth } from '../stores/auth'
 
-const { state } = useAuth()
+const { state, isEmailVerified } = useAuth()
 
 const family = ref(null)
 const loading = ref(true)
@@ -115,6 +115,11 @@ onMounted(load)
       <h2>Семья</h2>
     </div>
 
+    <p v-if="!isEmailVerified" class="notice">
+      Подтвердите почту, чтобы создавать семью, присоединяться по коду и управлять участниками.
+      <router-link to="/verify">Ввести код</router-link>
+    </p>
+
     <p v-if="loading" class="loading">Загрузка…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
 
@@ -128,7 +133,7 @@ onMounted(load)
             <span>Название семьи</span>
             <input v-model="newFamilyName" type="text" required />
           </label>
-          <button type="submit" class="btn btn--primary btn--block" :disabled="pending">Создать семью</button>
+          <button type="submit" class="btn btn--primary btn--block" :disabled="pending || !isEmailVerified">Создать семью</button>
         </form>
       </div>
 
@@ -141,7 +146,7 @@ onMounted(load)
             <span>Инвайт-код</span>
             <input v-model="joinCode" type="text" autocomplete="off" required placeholder="Например, ABC123" />
           </label>
-          <button type="submit" class="btn btn--primary btn--block" :disabled="pending">Присоединиться</button>
+          <button type="submit" class="btn btn--primary btn--block" :disabled="pending || !isEmailVerified">Присоединиться</button>
         </form>
       </div>
     </div>
@@ -158,7 +163,7 @@ onMounted(load)
         <button type="button" class="btn btn--primary" @click="onCopyCode">
           {{ copied ? 'Скопировано!' : 'Копировать' }}
         </button>
-        <button v-if="isOwner()" type="button" class="btn btn--ghost" @click="onRegenerate">Обновить код</button>
+        <button v-if="isOwner() && isEmailVerified" type="button" class="btn btn--ghost" @click="onRegenerate">Обновить код</button>
       </div>
 
       <h4 class="members-title">Участники</h4>
@@ -169,7 +174,7 @@ onMounted(load)
             {{ member.role === 'Owner' ? 'Владелец' : 'Участник' }}
           </span>
           <button
-            v-if="isOwner() && member.id !== family.ownerId"
+            v-if="isOwner() && isEmailVerified && member.id !== family.ownerId"
             type="button"
             class="btn btn--ghost btn--small"
             @click="onRemoveMember(member)"

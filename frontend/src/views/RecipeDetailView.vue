@@ -3,9 +3,11 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getRecipe, deleteRecipe } from '../api/recipes'
 import { unitLabel, seasonLabel } from '../constants/recipe'
+import { useAuth } from '../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const { isEmailVerified } = useAuth()
 
 const recipe = ref(null)
 const loading = ref(true)
@@ -48,11 +50,16 @@ onMounted(load)
     <div v-else-if="recipe">
       <div class="page-heading">
         <h2>{{ recipe.name }}</h2>
-        <div class="page-heading-actions">
+        <div v-if="isEmailVerified" class="page-heading-actions">
           <router-link :to="`/recipes/${recipe.id}/edit`" class="btn btn--primary">Редактировать</router-link>
           <button type="button" class="btn btn--danger" :disabled="deleting" @click="onDelete">Удалить</button>
         </div>
       </div>
+
+      <p v-if="!isEmailVerified" class="notice">
+        Подтвердите почту, чтобы редактировать рецепт.
+        <router-link to="/verify">Ввести код</router-link>
+      </p>
 
       <div class="hero-photo">
         <img v-if="recipe.photoUrl" :src="recipe.photoUrl" alt="Фото рецепта" class="photo" />

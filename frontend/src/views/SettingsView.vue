@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getSettings, updateSettings } from '../api/settings'
+import { useAuth } from '../stores/auth'
+
+const { isEmailVerified } = useAuth()
 
 const windowWeeks = ref(3)
 const loading = ref(true)
@@ -51,6 +54,11 @@ onMounted(load)
       <p v-if="savedMessage" class="success">{{ savedMessage }}</p>
       <p v-else-if="saveError" class="error">{{ saveError }}</p>
 
+      <p v-if="!isEmailVerified" class="notice">
+        Подтвердите почту, чтобы менять настройки.
+        <router-link to="/verify">Ввести код</router-link>
+      </p>
+
       <label class="field">
         <span>Окно повторяемости блюд (недель)</span>
         <span class="hint">
@@ -63,6 +71,7 @@ onMounted(load)
           min="1"
           max="52"
           required
+          :disabled="!isEmailVerified"
           class="weeks-input"
         />
       </label>
@@ -80,7 +89,7 @@ onMounted(load)
       <button
         type="button"
         class="btn btn--primary"
-        :disabled="saving || windowWeeks < 1 || windowWeeks > 52"
+        :disabled="saving || !isEmailVerified || windowWeeks < 1 || windowWeeks > 52"
         @click="save"
       >
         {{ saving ? 'Сохранение…' : 'Сохранить' }}

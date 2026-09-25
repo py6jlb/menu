@@ -4,6 +4,9 @@ import { matchRecipes } from '../api/recipes'
 import { getWeekPlan, saveWeekPlan } from '../api/plans'
 import { DAYS, MEALS, mondayOf, addDays, weekDays, toIso, weekRangeLabel } from '../constants/plan'
 import { SEASONS, DIETS } from '../constants/recipe'
+import { useAuth } from '../stores/auth'
+
+const { isEmailVerified } = useAuth()
 
 const monday = ref(mondayOf(new Date()))
 const recipes = ref([])
@@ -286,6 +289,7 @@ onMounted(async () => {
         <span v-if="dirty" class="dirty-badge">● есть изменения</span>
       </div>
       <button
+        v-if="isEmailVerified"
         type="button"
         class="btn btn--primary"
         :disabled="saving || loading || !dirty"
@@ -294,6 +298,11 @@ onMounted(async () => {
         {{ saving ? 'Сохранение…' : 'Сохранить' }}
       </button>
     </div>
+
+    <p v-if="!isEmailVerified" class="notice">
+      Подтвердите почту, чтобы менять план недели.
+      <router-link to="/verify">Ввести код</router-link>
+    </p>
 
     <div class="nav">
       <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(-1)">←</button>
@@ -315,7 +324,7 @@ onMounted(async () => {
         <div class="empty-icon">🍽️</div>
         <div class="empty-title">В семье пока нет рецептов</div>
         <p class="empty-desc">Добавьте рецепты, чтобы планировать неделю.</p>
-        <router-link to="/recipes/new" class="btn btn--primary">Добавить рецепт</router-link>
+        <router-link v-if="isEmailVerified" to="/recipes/new" class="btn btn--primary">Добавить рецепт</router-link>
       </div>
 
       <template v-else>
@@ -332,13 +341,14 @@ onMounted(async () => {
               :key="`${meal.code}-${day.getTime()}`"
               type="button"
               class="slot"
-              :class="{ filled: slotEntry(index, meal.code) }"
+              :class="{ filled: slotEntry(index, meal.code), readonly: !isEmailVerified }"
+              :disabled="!isEmailVerified"
               @click="openPicker(index, meal.code)"
             >
               <template v-if="slotEntry(index, meal.code)">
                 <span class="slot-recipe">{{ slotEntry(index, meal.code).recipeName }}</span>
                 <span class="slot-portions">{{ slotEntry(index, meal.code).portions }} порц.</span>
-                <span class="slot-remove" @click.stop="removeSlot(index, meal.code)">✕</span>
+                <span v-if="isEmailVerified" class="slot-remove" @click.stop="removeSlot(index, meal.code)">✕</span>
               </template>
               <span v-else class="slot-empty">+</span>
             </button>
@@ -366,7 +376,8 @@ onMounted(async () => {
               :key="`${mobileDay}-${meal.code}`"
               type="button"
               class="mobile-slot"
-              :class="{ filled: slotEntry(mobileDay, meal.code) }"
+              :class="{ filled: slotEntry(mobileDay, meal.code), readonly: !isEmailVerified }"
+              :disabled="!isEmailVerified"
               @click="openPicker(mobileDay, meal.code)"
             >
               <span class="mobile-meal">{{ meal.label }}</span>
@@ -374,7 +385,7 @@ onMounted(async () => {
                 <span class="mobile-recipe">{{ slotEntry(mobileDay, meal.code).recipeName }}</span>
                 <span class="mobile-meta">
                   {{ slotEntry(mobileDay, meal.code).portions }} порц.
-                  <span class="mobile-remove" @click.stop="removeSlot(mobileDay, meal.code)">✕</span>
+                  <span v-if="isEmailVerified" class="mobile-remove" @click.stop="removeSlot(mobileDay, meal.code)">✕</span>
                 </span>
               </template>
               <span v-else class="mobile-empty">+ Добавить</span>
@@ -620,6 +631,19 @@ onMounted(async () => {
 
 .slot:hover {
   border-color: var(--primary);
+}
+
+.slot.readonly,
+.mobile-slot.readonly {
+  cursor: default;
+}
+
+.slot.readonly:hover {
+  border-color: var(--border);
+}
+
+.slot.readonly.filled:hover {
+  border-color: var(--success);
 }
 
 .slot.filled {

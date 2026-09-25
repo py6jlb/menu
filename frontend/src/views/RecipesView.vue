@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { listRecipes } from '../api/recipes'
+import { useAuth } from '../stores/auth'
+
+const { isEmailVerified } = useAuth()
 
 const recipes = ref([])
 const loading = ref(true)
@@ -25,8 +28,13 @@ onMounted(load)
   <section>
     <div class="page-heading">
       <h2>Рецепты</h2>
-      <router-link to="/recipes/new" class="btn btn--primary">Создать рецепт</router-link>
+      <router-link v-if="isEmailVerified" to="/recipes/new" class="btn btn--primary">Создать рецепт</router-link>
     </div>
+
+    <p v-if="!isEmailVerified" class="notice">
+      Подтвердите почту, чтобы создавать и редактировать рецепты.
+      <router-link to="/verify">Ввести код</router-link>
+    </p>
 
     <p v-if="loading" class="loading">Загрузка…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
@@ -38,7 +46,7 @@ onMounted(load)
         Если вы ещё не в семье — создайте или вступите в неё на странице
         <router-link to="/family">Семья</router-link>.
       </p>
-      <router-link to="/recipes/new" class="btn btn--primary">Добавить первый рецепт</router-link>
+      <router-link v-if="isEmailVerified" to="/recipes/new" class="btn btn--primary">Добавить первый рецепт</router-link>
     </div>
 
     <div v-else class="recipe-grid">
