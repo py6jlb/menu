@@ -1,12 +1,21 @@
 <script setup>
+import { onMounted } from 'vue'
 import { useAuth } from './stores/auth'
+import { getMe } from './api/auth'
+import EmailVerifyBanner from './components/EmailVerifyBanner.vue'
 
-const { state, isAuthenticated, clearSession } = useAuth()
+const { state, isAuthenticated, isAdmin, clearSession, updateUser } = useAuth()
 
 function logout() {
   clearSession()
   window.location.href = '/login'
 }
+
+onMounted(async () => {
+  if (!isAuthenticated.value) return
+  const { response, data } = await getMe()
+  if (response.status === 200) updateUser(data)
+})
 </script>
 
 <template>
@@ -20,6 +29,7 @@ function logout() {
         <router-link to="/shopping" class="topbar-link">Покупки</router-link>
         <router-link to="/family" class="topbar-link">Семья</router-link>
         <router-link to="/settings" class="topbar-link">Настройки</router-link>
+        <router-link v-if="isAdmin" to="/admin" class="topbar-link">Админ</router-link>
       </nav>
 
       <div v-if="isAuthenticated" class="user-area">
@@ -40,6 +50,7 @@ function logout() {
     </header>
 
     <main class="page">
+      <EmailVerifyBanner />
       <router-view />
     </main>
 
@@ -528,6 +539,19 @@ input::placeholder, textarea::placeholder {
 .loading {
   color: var(--text-soft);
   font-size: 0.95rem;
+}
+
+.notice {
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.notice a {
+  color: var(--warning);
+  font-weight: 700;
 }
 
 /* ---- badges & tags ---- */

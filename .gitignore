@@ -3,7 +3,7 @@ bin/
 obj/
 
 # Node
-node_modules/
+node_modules
 dist/
 
 # Env

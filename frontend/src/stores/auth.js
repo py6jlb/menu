@@ -19,11 +19,19 @@ const state = reactive({
 
 export function useAuth() {
   const isAuthenticated = computed(() => Boolean(state.token))
+  const isEmailVerified = computed(() => state.user?.isEmailVerified === true)
+  const isAdmin = computed(() => state.user?.role === 'Admin')
 
   function setSession(token, user) {
     state.token = token
     state.user = user
     localStorage.setItem(TOKEN_KEY, token)
+    localStorage.setItem(USER_KEY, JSON.stringify(user))
+  }
+
+  function updateUser(user) {
+    if (!user) return
+    state.user = user
     localStorage.setItem(USER_KEY, JSON.stringify(user))
   }
 
@@ -34,5 +42,5 @@ export function useAuth() {
     localStorage.removeItem(USER_KEY)
   }
 
-  return { state, isAuthenticated, setSession, clearSession }
+  return { state, isAuthenticated, isEmailVerified, isAdmin, setSession, updateUser, clearSession }
 }

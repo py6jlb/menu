@@ -22,7 +22,7 @@ async function submit() {
     })
     if (response.status === 201) {
       setSession(data.token, data.user)
-      router.push({ name: 'home' })
+      router.push({ name: 'verify' })
     } else if (response.status === 409) {
       error.value = data?.error || 'Этот email уже зарегистрирован.'
     } else {
