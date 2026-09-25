@@ -188,6 +188,8 @@ internal sealed class VerificationApiFactory : ApiFactory
 {
     private readonly Dictionary<string, string?> _config = new();
 
+    public VerificationApiFactory() => AutoVerifyEmailsOnRegistration = false;
+
     public RecordingEmailTransport Transport { get; } = new();
 
     public IReadOnlyList<EmailMessage> Emails => Transport.Emails;

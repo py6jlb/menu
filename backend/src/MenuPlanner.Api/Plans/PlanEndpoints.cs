@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
@@ -16,8 +17,8 @@ public static class PlanEndpoints
         var group = app.MapGroup("/api/plans").RequireAuthorization();
 
         group.MapGet("/week/{weekStart}", GetWeekAsync);
-        group.MapPut("/week/{weekStart}", SaveWeekAsync);
-        group.MapDelete("/week/{weekStart}", DeleteWeekAsync);
+        group.MapPut("/week/{weekStart}", SaveWeekAsync).RequireVerifiedEmail();
+        group.MapDelete("/week/{weekStart}", DeleteWeekAsync).RequireVerifiedEmail();
 
         return app;
     }

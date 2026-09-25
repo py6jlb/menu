@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
@@ -12,11 +13,11 @@ public static class FamilyEndpoints
     {
         var group = app.MapGroup("/api/families").RequireAuthorization();
 
-        group.MapPost("/", CreateAsync);
+        group.MapPost("/", CreateAsync).RequireVerifiedEmail();
         group.MapGet("/my", GetMyAsync);
-        group.MapPost("/join", JoinAsync);
-        group.MapPost("/{id:guid}/invite-code/regenerate", RegenerateInviteCodeAsync);
-        group.MapDelete("/{id:guid}/members/{userId:guid}", RemoveMemberAsync);
+        group.MapPost("/join", JoinAsync).RequireVerifiedEmail();
+        group.MapPost("/{id:guid}/invite-code/regenerate", RegenerateInviteCodeAsync).RequireVerifiedEmail();
+        group.MapDelete("/{id:guid}/members/{userId:guid}", RemoveMemberAsync).RequireVerifiedEmail();
 
         return app;
     }
