@@ -51,6 +51,12 @@ public static class ShoppingListEndpoints
                     e.Recipe!.Id, e.Recipe.SourceRecipeId!.Value, e.Recipe.SourceToken))
                 .ToList());
 
+        var liveSources = await ExternalRecipeContentResolver.LoadSourcesAsync(
+            db,
+            plan.Entries
+                .Where(e => e.Recipe?.SourceRecipeId is not null)
+                .Select(e => e.Recipe!.SourceRecipeId!.Value));
+
         var lines = new List<IngredientLine>();
         foreach (var entry in plan.Entries)
         {
@@ -62,11 +68,14 @@ public static class ShoppingListEndpoints
             if (states.TryGetValue(recipe.Id, out var state) && state == ExternalRecipeState.Broken)
                 continue;
 
-            foreach (var ingredient in recipe.Ingredients)
+            // Живые ингредиенты и текущие порции источника для внешнего рецепта.
+            var content = ExternalRecipeContentResolver.Resolve(recipe, liveSources);
+
+            foreach (var ingredient in content.Ingredients)
             {
                 lines.Add(new IngredientLine(
                     ingredient.Name,
-                    ShoppingListBuilder.Scale(ingredient.Amount, entry.Portions, recipe.Servings),
+                    ShoppingListBuilder.Scale(ingredient.Amount, entry.Portions, content.Servings),
                     ingredient.Unit));
             }
         }
