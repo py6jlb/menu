@@ -95,6 +95,10 @@ onMounted(load)
               из семьи {{ recipe.sourceFamilyName }}
             </span>
           </div>
+          <div v-else-if="recipe.copiedFromFamilyName" class="origin">
+            <span class="badge badge--external">Скопировано</span>
+            <span class="origin-family">из семьи {{ recipe.copiedFromFamilyName }}</span>
+          </div>
           <div class="meta">
             <span class="chip">⭐ {{ recipe.difficulty }}/5</span>
             <span class="chip">⏱ {{ recipe.cookTimeMinutes }} мин</span>

@@ -22,6 +22,15 @@ public sealed class PhotoStorage
         return fileName;
     }
 
+    public async Task<string?> CopyAsync(Guid recipeId, string? sourceStoredName)
+    {
+        var sourcePath = ResolveReadPath(sourceStoredName);
+        if (sourcePath is null) return null;
+        var extension = Path.GetExtension(sourcePath);
+        await using var stream = File.OpenRead(sourcePath);
+        return await SaveAsync(recipeId, extension, stream);
+    }
+
     public void Delete(string? storedName)
     {
         var fullPath = SafePath(storedName);
@@ -29,7 +38,7 @@ public sealed class PhotoStorage
         File.Delete(fullPath);
     }
 
-    public string? ResolveReadPath(string fileName)
+    public string? ResolveReadPath(string? fileName)
     {
         var fullPath = SafePath(fileName);
         return fullPath is not null && File.Exists(fullPath) ? fullPath : null;

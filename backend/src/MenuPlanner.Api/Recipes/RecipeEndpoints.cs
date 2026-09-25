@@ -22,6 +22,7 @@ public static class RecipeEndpoints
         group.MapPut("/{id:guid}", UpdateAsync).RequireVerifiedEmail();
         group.MapDelete("/{id:guid}", DeleteAsync).RequireVerifiedEmail();
         group.MapDelete("/{id:guid}/external", RemoveExternalAsync).RequireVerifiedEmail();
+        group.MapPost("/{id:guid}/copy", CopyAsync).RequireVerifiedEmail();
         group.MapGet("/repetition", RepetitionAsync);
         group.MapPut("/{id:guid}/photo", UploadPhotoAsync).DisableAntiforgery().RequireVerifiedEmail();
         group.MapDelete("/{id:guid}/photo", DeletePhotoAsync).RequireVerifiedEmail();
@@ -65,7 +66,8 @@ public static class RecipeEndpoints
                 r.PhotoPath,
                 r.SourceRecipeId,
                 r.SourceFamilyId,
-                r.SourceToken
+                r.SourceToken,
+                r.CopiedFromFamilyName
             })
             .ToListAsync();
 
@@ -105,7 +107,8 @@ public static class RecipeEndpoints
                     PhotoUrl(r.PhotoPath),
                     isExternal,
                     sourceFamilyName,
-                    state);
+                    state,
+                    r.CopiedFromFamilyName);
             })
             .ToList();
 
@@ -178,7 +181,7 @@ public static class RecipeEndpoints
             sourceFamilyId: recipe.SourceFamilyId,
             state: stateCode);
 
-        return Results.Json(live with { Id = recipe.Id });
+        return Results.Json(live with { Id = recipe.Id, CopiedFromFamilyName = recipe.CopiedFromFamilyName });
     }
 
     private static async Task<IResult> CreateAsync(
@@ -233,6 +236,8 @@ public static class RecipeEndpoints
 
         recipe.UpdatedAt = DateTime.UtcNow;
         Apply(recipe, request);
+        // Правка рецепта стирает метку происхождения «скопировано из семьи X».
+        recipe.CopiedFromFamilyName = null;
 
         await db.SaveChangesAsync();
 
@@ -283,6 +288,87 @@ public static class RecipeEndpoints
         await db.SaveChangesAsync();
 
         return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Промоушен внешнего рецепта в копию на месте: обёртка остаётся той же строкой Recipe
+    /// (id сохраняется — записи плана не рвутся), контент источника и файл фото копируются,
+    /// ссылка на источник снимается, а метка «скопировано из семьи X» сохраняется.
+    /// </summary>
+    private static async Task<IResult> CopyAsync(
+        Guid id, ClaimsPrincipal principal, AppDbContext db, PhotoStorage storage)
+    {
+        var familyId = await CurrentFamilyIdAsync(principal, db);
+        if (familyId is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+        var wrapper = await db.Recipes
+            .Include(r => r.Steps)
+            .Include(r => r.Ingredients)
+            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
+        if (wrapper is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+        if (wrapper.SourceRecipeId is not Guid sourceId)
+            return Results.BadRequest(new RecipeErrorDto("Это не внешний рецепт."));
+
+        var source = await db.Recipes
+            .AsNoTracking()
+            .Include(r => r.Steps)
+            .Include(r => r.Ingredients)
+            .FirstOrDefaultAsync(r => r.Id == sourceId);
+        if (source is null)
+        {
+            // Сломанная ссылка: контента нет, спасать нечего.
+            return Results.BadRequest(new RecipeErrorDto(
+                "Источник удалил рецепт — копию сделать нельзя."));
+        }
+
+        var sourceFamilyId = wrapper.SourceFamilyId ?? source.FamilyId;
+        var copiedFromFamilyName = await db.Families
+            .AsNoTracking()
+            .Where(f => f.Id == sourceFamilyId)
+            .Select(f => f.Name)
+            .FirstOrDefaultAsync();
+
+        var copiedPhoto = source.PhotoPath is null
+            ? null
+            : await storage.CopyAsync(wrapper.Id, source.PhotoPath);
+
+        wrapper.Name = source.Name;
+        wrapper.Description = source.Description;
+        wrapper.CookTimeMinutes = source.CookTimeMinutes;
+        wrapper.Servings = source.Servings;
+        wrapper.Difficulty = source.Difficulty;
+        wrapper.Calories = source.Calories;
+        wrapper.Tags = new List<string>(source.Tags);
+        wrapper.Seasonality = new List<string>(source.Seasonality);
+        wrapper.Diet = new List<string>(source.Diet);
+        wrapper.PhotoPath = copiedPhoto;
+        wrapper.Steps = source.Steps
+            .OrderBy(s => s.Order)
+            .Select(s => new RecipeStep { Order = s.Order, Text = s.Text })
+            .ToList();
+        wrapper.Ingredients = source.Ingredients
+            .OrderBy(i => i.Order)
+            .Select(i => new RecipeIngredient
+            {
+                Order = i.Order,
+                Name = i.Name,
+                Amount = i.Amount,
+                Unit = i.Unit,
+                Note = i.Note
+            })
+            .ToList();
+
+        wrapper.SourceRecipeId = null;
+        wrapper.SourceFamilyId = null;
+        wrapper.SourceToken = null;
+        wrapper.CopiedFromFamilyName = copiedFromFamilyName;
+        wrapper.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+
+        return Results.Json(ToDto(wrapper));
     }
 
     private static async Task<IResult> MatchAsync(
@@ -594,7 +680,8 @@ public static class RecipeEndpoints
         isExternal,
         sourceFamilyName,
         sourceFamilyId,
-        state);
+        state,
+        recipe.CopiedFromFamilyName);
 
     private static IResult ExternalReadOnly() =>
         Results.Json(

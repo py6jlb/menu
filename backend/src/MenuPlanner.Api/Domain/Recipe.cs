@@ -24,6 +24,10 @@ public sealed class Recipe
     public Guid? SourceFamilyId { get; set; }
     public string? SourceToken { get; set; }
 
+    // Origin label kept after promotion to a copy: «скопировано из семьи X». Null for ordinary
+    // recipes and for live external wrappers; cleared as soon as the user edits the copy.
+    public string? CopiedFromFamilyName { get; set; }
+
     public Family? Family { get; set; }
     public List<RecipeStep> Steps { get; set; } = new();
     public List<RecipeIngredient> Ingredients { get; set; } = new();
