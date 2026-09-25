@@ -437,7 +437,7 @@ public static class RecipeEndpoints
         return null;
     }
 
-    private static RecipeDto ToDto(Recipe recipe, int repetitionCount = 0) => new(
+    internal static RecipeDto ToDto(Recipe recipe, int repetitionCount = 0) => new(
         recipe.Id,
         recipe.Name,
         recipe.Description,

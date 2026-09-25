@@ -10,6 +10,7 @@ import FamilyView from '../views/FamilyView.vue'
 import RecipesView from '../views/RecipesView.vue'
 import RecipeFormView from '../views/RecipeFormView.vue'
 import RecipeDetailView from '../views/RecipeDetailView.vue'
+import SharedRecipeView from '../views/SharedRecipeView.vue'
 import PlanView from '../views/PlanView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import ShoppingView from '../views/ShoppingView.vue'
@@ -38,6 +39,7 @@ const router = createRouter({
     { path: '/settings', name: 'settings', component: SettingsView, meta: { requiresAuth: true } },
     { path: '/shopping', name: 'shopping', component: ShoppingView, meta: { requiresAuth: true } },
     { path: '/admin', name: 'admin', component: AdminView, meta: { requiresAuth: true, requiresAdmin: true } },
+    { path: '/r/:token', name: 'shared-recipe', component: SharedRecipeView },
     { path: '/forgot', name: 'forgot', component: ForgotPasswordView },
     { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
     { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } }

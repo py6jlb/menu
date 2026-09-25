@@ -50,6 +50,10 @@ export async function deleteRecipePhoto(id) {
   })
 }
 
+export async function getSharedRecipe(token) {
+  return apiJson(`/api/shared/${token}`)
+}
+
 export async function getRecipeShare(id) {
   return apiJson(`/api/recipes/${id}/share`)
 }
