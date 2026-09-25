@@ -115,6 +115,7 @@ app.MapAdminEndpoints();
 app.MapFamilyEndpoints();
 app.MapRecipeEndpoints();
 app.MapRecipeShareEndpoints();
+app.MapSharedRecipeEndpoints();
 app.MapIngredientEndpoints();
 app.MapPlanEndpoints();
 app.MapSettingsEndpoints();
