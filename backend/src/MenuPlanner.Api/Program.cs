@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
@@ -42,6 +45,25 @@ builder.Services.AddSingleton<EmailSender>();
 var authCodeOptions = ReadAuthCodeOptions(builder.Configuration);
 builder.Services.AddSingleton(authCodeOptions);
 builder.Services.AddSingleton<FixedWindowRateLimiter>();
+
+var otlpEnabled = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+var otelResource = ResourceBuilder.CreateDefault().AddService("menu-planner-api");
+
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService("menu-planner-api"))
+    .WithTracing(tracing =>
+    {
+        tracing.AddAspNetCoreInstrumentation();
+        if (otlpEnabled) tracing.AddOtlpExporter();
+    });
+
+builder.Logging.AddOpenTelemetry(options =>
+{
+    options.SetResourceBuilder(otelResource);
+    options.IncludeScopes = true;
+    options.IncludeFormattedMessage = true;
+    if (otlpEnabled) options.AddOtlpExporter();
+});
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

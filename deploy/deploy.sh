@@ -39,6 +39,7 @@ log() { printf '\033[1;32m[deploy]\033[0m %s\n' "$*"; }
 log "Доставка конфигов на $TARGET:$APP_DIR"
 scp -P "$VPS_SSH_PORT" docker-compose.prod.yml "$TARGET:$APP_DIR/docker-compose.prod.yml"
 scp -P "$VPS_SSH_PORT" deploy/Caddyfile "$TARGET:$APP_DIR/Caddyfile"
+scp -P "$VPS_SSH_PORT" deploy/otel-collector.yaml "$TARGET:$APP_DIR/otel-collector.yaml"
 
 log "Рестарт на теге $TAG"
 ssh -p "$VPS_SSH_PORT" "$TARGET" bash -s -- "$APP_DIR" "$TAG" <<'REMOTE'
