@@ -4,8 +4,8 @@
 
 **Blocked by:** 12 (Миграция на .NET 10), 15 (Подтверждение почты (бэкенд))
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] `POST /api/admin/unlock` (роль Admin), тело `{ email }` — сбрасывает `VerificationAttempts` и `LockedUntil`
-- [ ] Rate limit 10/мин на админа
-- [ ] Интеграционные тесты разблокировки (включая доступ только админа)
+- [x] `POST /api/admin/unlock` (роль Admin), тело `{ email }` — сбрасывает `VerificationAttempts` и `LockedUntil`
+- [x] Rate limit 10/мин на админа
+- [x] Интеграционные тесты разблокировки (включая доступ только админа)

@@ -106,6 +106,7 @@ app.MapGet("/health", () => Results.Json(
 app.MapAuthEndpoints();
 app.MapEmailVerificationEndpoints();
 app.MapPasswordResetEndpoints();
+app.MapAdminEndpoints();
 app.MapFamilyEndpoints();
 app.MapRecipeEndpoints();
 app.MapIngredientEndpoints();
