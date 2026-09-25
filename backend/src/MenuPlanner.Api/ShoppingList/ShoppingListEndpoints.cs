@@ -1,7 +1,7 @@
 using System.Globalization;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Recipes.External;
 
@@ -25,7 +25,7 @@ public static class ShoppingListEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new ShoppingListErrorDto("Вы не состоите в семье."));
 
@@ -44,18 +44,10 @@ public static class ShoppingListEndpoints
             return Results.Json(new ShoppingListDto(Format(monday), Array.Empty<ShoppingListItemDto>()));
 
         var states = await ExternalRecipeStateResolver.ResolveManyAsync(
-            db,
-            plan.Entries
-                .Where(e => e.Recipe?.SourceRecipeId is not null)
-                .Select(e => new ExternalSourceLink(
-                    e.Recipe!.Id, e.Recipe.SourceRecipeId!.Value, e.Recipe.SourceToken))
-                .ToList());
+            db, ExternalPlanContent.SourceLinks(plan.Entries));
 
         var liveSources = await ExternalRecipeContentResolver.LoadSourcesAsync(
-            db,
-            plan.Entries
-                .Where(e => e.Recipe?.SourceRecipeId is not null)
-                .Select(e => e.Recipe!.SourceRecipeId!.Value));
+            db, ExternalPlanContent.SourceRecipeIds(plan.Entries));
 
         var lines = new List<IngredientLine>();
         foreach (var entry in plan.Entries)
@@ -100,21 +92,4 @@ public static class ShoppingListEndpoints
     private static string Format(DateOnly date) =>
         date.ToString(WeekStartFormat, CultureInfo.InvariantCulture);
 
-    private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
-    {
-        var userId = UserIdFrom(principal);
-        if (userId is null)
-            return null;
-
-        var membership = await db.FamilyMembers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.UserId == userId.Value);
-        return membership?.FamilyId;
-    }
-
-    private static Guid? UserIdFrom(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(subject, out var userId) ? userId : null;
-    }
 }

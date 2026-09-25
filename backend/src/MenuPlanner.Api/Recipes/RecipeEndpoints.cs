@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
@@ -35,7 +34,7 @@ public static class RecipeEndpoints
     private static async Task<IResult> ListAsync(
         string? scope, ClaimsPrincipal principal, AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.Json(Array.Empty<RecipeSummaryDto>());
 
@@ -77,6 +76,30 @@ public static class RecipeEndpoints
                 .Where(r => r.SourceRecipeId is not null)
                 .Select(r => r.SourceRecipeId!.Value));
 
+        // Кэшируется только Name внешнего рецепта и обновляется при каждом чтении.
+        var staleIds = recipes
+            .Where(r => r.SourceRecipeId is Guid sourceId
+                && liveSources.TryGetValue(sourceId, out var live)
+                && !string.Equals(r.Name, live.Name, StringComparison.Ordinal))
+            .Select(r => r.Id)
+            .ToList();
+        if (staleIds.Count > 0)
+        {
+            var stale = await db.Recipes
+                .Where(r => staleIds.Contains(r.Id))
+                .ToListAsync();
+            foreach (var recipe in stale)
+            {
+                if (recipe.SourceRecipeId is Guid sourceId
+                    && liveSources.TryGetValue(sourceId, out var live))
+                {
+                    recipe.Name = live.Name;
+                }
+            }
+
+            await db.SaveChangesAsync();
+        }
+
         var states = await ExternalRecipeStateResolver.ResolveManyAsync(
             db,
             recipes
@@ -106,15 +129,17 @@ public static class RecipeEndpoints
                 var sourceFamilyName = isExternal && r.SourceFamilyId is Guid sourceFamilyId
                     ? sourceFamilyNames.GetValueOrDefault(sourceFamilyId)
                     : null;
-                var name = isExternal
-                    && liveSources.TryGetValue(r.SourceRecipeId!.Value, out var liveSource)
-                    ? liveSource.Name
-                    : r.Name;
+                // Внешний рецепт показывает живое имя и фото источника, а не свои (у него их нет).
+                Recipe? liveSource = null;
+                var hasLiveSource = isExternal
+                    && liveSources.TryGetValue(r.SourceRecipeId!.Value, out liveSource);
+                var name = hasLiveSource ? liveSource!.Name : r.Name;
+                var photoPath = hasLiveSource ? liveSource!.PhotoPath : r.PhotoPath;
 
                 return new RecipeSummaryDto(
                     r.Id, name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags,
                     counts.GetValueOrDefault(r.Id),
-                    PhotoUrl(r.PhotoPath),
+                    PhotoUrl(photoPath),
                     isExternal,
                     sourceFamilyName,
                     state,
@@ -128,7 +153,7 @@ public static class RecipeEndpoints
     private static async Task<IResult> GetAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -176,7 +201,7 @@ public static class RecipeEndpoints
                 state: stateCode));
         }
 
-        // Имя кэшируется в обёртке и обновляется при каждом чтении.
+        // Имя кэшируется во внешнем рецепте и обновляется при каждом чтении.
         if (!string.Equals(recipe.Name, source.Name, StringComparison.Ordinal))
         {
             recipe.Name = source.Name;
@@ -197,11 +222,11 @@ public static class RecipeEndpoints
     private static async Task<IResult> CreateAsync(
         RecipeRequest request, ClaimsPrincipal principal, AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Вы не состоите в семье."));
 
@@ -227,7 +252,7 @@ public static class RecipeEndpoints
     private static async Task<IResult> UpdateAsync(
         Guid id, RecipeRequest request, ClaimsPrincipal principal, AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -257,7 +282,7 @@ public static class RecipeEndpoints
     private static async Task<IResult> DeleteAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db, PhotoStorage storage)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -277,13 +302,13 @@ public static class RecipeEndpoints
     }
 
     /// <summary>
-    /// Локальное удаление внешнего рецепта-обёртки из своей семьи. Источник не затрагивается:
-    /// обычный DELETE внешнего рецепта запрещён (403), а этот путь убирает только обёртку.
+    /// Локальное удаление внешнего рецепта из своей семьи. Источник не затрагивается:
+    /// обычный DELETE внешнего рецепта запрещён (403), а этот путь убирает только внешний рецепт.
     /// </summary>
     private static async Task<IResult> RemoveExternalAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -301,14 +326,14 @@ public static class RecipeEndpoints
     }
 
     /// <summary>
-    /// Промоушен внешнего рецепта в копию на месте: обёртка остаётся той же строкой Recipe
+    /// Промоушен внешнего рецепта в копию на месте: внешний рецепт остаётся той же строкой Recipe
     /// (id сохраняется — записи плана не рвутся), контент источника и файл фото копируются,
     /// ссылка на источник снимается, а метка «скопировано из семьи X» сохраняется.
     /// </summary>
     private static async Task<IResult> CopyAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db, PhotoStorage storage)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -384,7 +409,7 @@ public static class RecipeEndpoints
     private static async Task<IResult> MatchAsync(
         RecipeMatchRequest request, ClaimsPrincipal principal, AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Вы не состоите в семье."));
 
@@ -462,7 +487,7 @@ public static class RecipeEndpoints
         AppDbContext db,
         PhotoStorage storage)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -497,7 +522,7 @@ public static class RecipeEndpoints
     private static async Task<IResult> DeletePhotoAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db, PhotoStorage storage)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -722,7 +747,7 @@ public static class RecipeEndpoints
 
     private static async Task<IResult> RepetitionAsync(ClaimsPrincipal principal, AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.Json(Array.Empty<RecipeRepetitionDto>());
 
@@ -740,7 +765,7 @@ public static class RecipeEndpoints
     private static async Task<Dictionary<Guid, int>> RepetitionCountsAsync(
         ClaimsPrincipal principal, AppDbContext db, Guid familyId)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         var weeks = RepetitionService.DefaultWindowWeeks;
 
         if (userId is { } id)
@@ -754,23 +779,5 @@ public static class RecipeEndpoints
 
         var (windowStart, windowEnd) = RepetitionService.Window(RepetitionService.CurrentWeekStart(), weeks);
         return await RepetitionService.CountForFamilyAsync(db, familyId, windowStart, windowEnd);
-    }
-
-    private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
-    {
-        var userId = UserIdFrom(principal);
-        if (userId is null)
-            return null;
-
-        var membership = await db.FamilyMembers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.UserId == userId.Value);
-        return membership?.FamilyId;
-    }
-
-    private static Guid? UserIdFrom(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(subject, out var userId) ? userId : null;
     }
 }

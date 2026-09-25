@@ -1,4 +1,3 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
@@ -21,7 +20,7 @@ public static class SettingsEndpoints
 
     private static async Task<IResult> GetAsync(ClaimsPrincipal principal, AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
@@ -47,7 +46,7 @@ public static class SettingsEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
@@ -83,10 +82,4 @@ public static class SettingsEndpoints
 
     private static UserSettingsDto ToDto(UserSettings settings) =>
         new(settings.RepetitionWindowWeeks);
-
-    private static Guid? UserIdFrom(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(subject, out var userId) ? userId : null;
-    }
 }

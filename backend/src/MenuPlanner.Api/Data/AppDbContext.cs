@@ -69,7 +69,11 @@ public class AppDbContext : DbContext
         recipe.Property(r => r.SourceToken).HasMaxLength(64);
         recipe.Property(r => r.CopiedFromFamilyName).HasMaxLength(200);
         recipe.HasIndex(r => r.FamilyId);
-        recipe.HasIndex(r => new { r.FamilyId, r.SourceRecipeId });
+        // В семье не может быть двух внешних рецептов на один источник;
+        // у обычных рецептов SourceRecipeId = null, поэтому индекс частичный.
+        recipe.HasIndex(r => new { r.FamilyId, r.SourceRecipeId })
+            .IsUnique()
+            .HasFilter("\"SourceRecipeId\" IS NOT NULL");
         recipe.HasOne(r => r.Family)
             .WithMany(f => f.Recipes)
             .HasForeignKey(r => r.FamilyId)

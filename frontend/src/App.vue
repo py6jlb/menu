@@ -576,6 +576,21 @@ input::placeholder, textarea::placeholder {
   color: var(--warning);
 }
 
+.badge--external {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.badge--broken {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.badge--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

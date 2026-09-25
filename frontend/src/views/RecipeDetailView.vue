@@ -12,6 +12,7 @@ import {
 } from '../api/recipes'
 import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
+import { externalState } from '../constants/external'
 import { unitLabel, seasonLabel } from '../constants/recipe'
 
 const route = useRoute()
@@ -175,8 +176,13 @@ onMounted(() => {
       <div v-if="isExternal" class="card external-banner">
         <div class="external-badges">
           <span class="badge badge--external">Внешний</span>
-          <span v-if="recipe.state === 'broken'" class="badge badge--broken">Недоступно</span>
-          <span v-else-if="recipe.state === 'warning'" class="badge badge--warning">Ссылка отозвана</span>
+          <span
+            v-if="externalState(recipe.state)"
+            class="badge"
+            :class="`badge--${externalState(recipe.state).variant}`"
+          >
+            {{ externalState(recipe.state).label }}
+          </span>
           <span v-if="recipe.sourceFamilyName" class="external-source">
             из семьи {{ recipe.sourceFamilyName }}
           </span>
@@ -378,11 +384,6 @@ onMounted(() => {
   margin-bottom: 0.5rem;
 }
 
-.badge--external {
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
 .external-source {
   color: var(--text-faint);
   font-size: 0.85rem;
@@ -422,16 +423,6 @@ onMounted(() => {
   color: var(--warning);
   font-size: 0.9rem;
   font-weight: 600;
-}
-
-.badge--broken {
-  background: var(--danger-bg);
-  color: var(--danger);
-}
-
-.badge--warning {
-  background: var(--warning-bg);
-  color: var(--warning);
 }
 
 .external-actions {

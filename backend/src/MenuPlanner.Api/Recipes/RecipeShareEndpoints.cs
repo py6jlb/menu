@@ -1,6 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
@@ -106,11 +106,11 @@ public static class RecipeShareEndpoints
     private static async Task<IResult?> AuthorizeOwnerAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -134,11 +134,11 @@ public static class RecipeShareEndpoints
     private static async Task<IResult?> FindRecipeAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
@@ -173,21 +173,4 @@ public static class RecipeShareEndpoints
 
     private static string NewToken() => Guid.NewGuid().ToString("N");
 
-    private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
-    {
-        var userId = UserIdFrom(principal);
-        if (userId is null)
-            return null;
-
-        var membership = await db.FamilyMembers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.UserId == userId.Value);
-        return membership?.FamilyId;
-    }
-
-    private static Guid? UserIdFrom(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(subject, out var userId) ? userId : null;
-    }
 }

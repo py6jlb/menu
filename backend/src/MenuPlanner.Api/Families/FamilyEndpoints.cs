@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
@@ -27,7 +26,7 @@ public static class FamilyEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
@@ -62,7 +61,7 @@ public static class FamilyEndpoints
 
     private static async Task<IResult> GetMyAsync(ClaimsPrincipal principal, AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
@@ -84,7 +83,7 @@ public static class FamilyEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
@@ -117,7 +116,7 @@ public static class FamilyEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
@@ -140,7 +139,7 @@ public static class FamilyEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var callerId = UserIdFrom(principal);
+        var callerId = CurrentUser.UserId(principal);
         if (callerId is null)
             return Results.Unauthorized();
 
@@ -184,11 +183,5 @@ public static class FamilyEndpoints
         }
 
         throw new InvalidOperationException("Не удалось сгенерировать уникальный инвайт-код.");
-    }
-
-    private static Guid? UserIdFrom(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(subject, out var userId) ? userId : null;
     }
 }
