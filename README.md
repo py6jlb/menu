@@ -75,7 +75,14 @@ npm run dev
 ## Конфигурация backend
 
 - Строка подключения: env `ConnectionStrings__Default` (или `DB_CONNECTION_STRING`), при отсутствии — дефолт `Host=localhost;...` в `appsettings.json`.
-- При старте применяется `EnsureCreated` (создание схемы БД). Миграции пока не используются: изменения модели данных применяются только к свежей БД. **Для dev-БД нужно пересоздать том: `docker compose down -v`.**
+- При старте применяются EF Core миграции (`MigrateAsync`) — схема БД обновляется автоматически. Новую миграцию генерируют из корня через SDK-контейнер:
+
+  ```bash
+  docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 \
+    sh -c "dotnet tool restore && dotnet ef migrations add <Name> --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api"
+  ```
+
+  **Разовая миграция при переходе:** если dev-БД была создана прежним `EnsureCreated`, пересоздать том — `docker compose down -v` и поднять заново.
 - Папка фото: env `PHOTOS_DIR`, по умолчанию `./photos` (в контейнере — `/app/photos`, смонтирована как named volume `photos_data`, чтобы фото переживали пересоздание контейнера).
 - Базовый URL ссылок шаринга: env `SHARE_BASE_URL` (необязательный). Если пусто — ссылка отдаётся относительной (`/r/{token}`) и разрешается фронтендом относительно текущего домена.
 - Endpoint `GET /health` возвращает `200 {"status":"ok"}`.
