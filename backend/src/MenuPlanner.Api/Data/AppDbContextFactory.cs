@@ -1,22 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 
 namespace MenuPlanner.Api.Data;
 
 public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
-    private const string DevFallback =
-        "Host=localhost;Port=5432;Database=menu_planner;Username=menu;Password=menu";
-
     public AppDbContext CreateDbContext(string[] args)
     {
-        var connectionString =
-            Environment.GetEnvironmentVariable("ConnectionStrings__Default")
-            ?? Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
-            ?? DevFallback;
+        var configuration = new ConfigurationBuilder()
+            .AddEnvironmentVariables()
+            .Build();
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseNpgsql(connectionString)
+            .UseNpgsql(DatabaseConnection.Resolve(configuration))
             .Options;
 
         return new AppDbContext(options);

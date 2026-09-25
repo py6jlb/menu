@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes.External;
 
 namespace MenuPlanner.Api.Recipes;
 
@@ -36,11 +37,7 @@ public static class SharedRecipeEndpoints
         if (recipe is null)
             return InvalidLink();
 
-        var familyName = await db.Families
-            .AsNoTracking()
-            .Where(f => f.Id == recipe.FamilyId)
-            .Select(f => f.Name)
-            .FirstOrDefaultAsync();
+        var familyName = await SourceFamilyNameResolver.ResolveAsync(db, recipe.FamilyId);
 
         // Источник ссылки: отдаём семью-владельца, чтобы фронт мог скрыть
         // «Добавить в мою семью» для участников этой же семьи.
@@ -117,7 +114,7 @@ public static class SharedRecipeEndpoints
         }
 
         return Results.Json(
-            new RecipeImportResultDto(externalRecipe.Id, AlreadyAdded: false),
+            new RecipeImportResultDto(externalRecipe.Id),
             statusCode: StatusCodes.Status201Created);
     }
 

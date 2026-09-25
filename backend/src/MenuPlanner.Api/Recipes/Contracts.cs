@@ -25,6 +25,8 @@ public sealed record RecipeSummaryDto(
     int CookTimeMinutes,
     int Servings,
     IReadOnlyList<string> Tags,
+    IReadOnlyList<string> Seasonality,
+    IReadOnlyList<string> Diet,
     int RepetitionCount = 0,
     string? PhotoUrl = null,
     bool IsExternal = false,
@@ -79,7 +81,7 @@ public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items
 
 public sealed record RecipeErrorDto(string Error);
 
-public sealed record RecipeImportResultDto(Guid RecipeId, bool AlreadyAdded);
+public sealed record RecipeImportResultDto(Guid RecipeId);
 
 public sealed record RecipeImportConflictDto(string Error, Guid RecipeId);
 

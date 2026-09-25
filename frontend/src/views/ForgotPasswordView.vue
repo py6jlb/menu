@@ -1,8 +1,11 @@
 <script setup>
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed } from 'vue'
 import { forgotPassword, resetPassword } from '../api/auth'
-
-const RESEND_COOLDOWN_SECONDS = 300
+import {
+  RESEND_COOLDOWN_SECONDS,
+  parseCooldownSeconds,
+  useCooldown
+} from '../composables/useCooldown'
 
 const email = ref('')
 const sent = ref(false)
@@ -17,43 +20,11 @@ const resetPending = ref(false)
 const resetError = ref('')
 const resetDone = ref(false)
 
-const cooldown = ref(0)
-let timer = null
-
-const cooldownLabel = computed(() => {
-  const minutes = Math.floor(cooldown.value / 60)
-  const seconds = cooldown.value % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-})
+const { cooldown, cooldownLabel, startCooldown } = useCooldown()
 
 const passwordsMismatch = computed(
   () => newPasswordConfirm.value.length > 0 && newPassword.value !== newPasswordConfirm.value
 )
-
-function stopTimer() {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
-}
-
-function startCooldown(seconds) {
-  cooldown.value = Math.max(0, Math.floor(seconds))
-  stopTimer()
-  if (cooldown.value === 0) return
-  timer = setInterval(() => {
-    cooldown.value -= 1
-    if (cooldown.value <= 0) {
-      cooldown.value = 0
-      stopTimer()
-    }
-  }, 1000)
-}
-
-function parseCooldownSeconds(message) {
-  const match = /(\d+)\s*сек/.exec(message || '')
-  return match ? Number(match[1]) : 0
-}
 
 async function requestCode() {
   forgotError.value = ''
@@ -106,8 +77,6 @@ async function submitReset() {
     resetPending.value = false
   }
 }
-
-onBeforeUnmount(stopTimer)
 </script>
 
 <template>

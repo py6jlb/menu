@@ -62,6 +62,8 @@ public static class RecipeEndpoints
                 r.CookTimeMinutes,
                 r.Servings,
                 r.Tags,
+                r.Seasonality,
+                r.Diet,
                 r.PhotoPath,
                 r.SourceRecipeId,
                 r.SourceFamilyId,
@@ -110,14 +112,8 @@ public static class RecipeEndpoints
         var sourceFamilyIds = recipes
             .Where(r => r.SourceFamilyId is not null)
             .Select(r => r.SourceFamilyId!.Value)
-            .Distinct()
             .ToList();
-        var sourceFamilyNames = sourceFamilyIds.Count == 0
-            ? new Dictionary<Guid, string>()
-            : await db.Families
-                .AsNoTracking()
-                .Where(f => sourceFamilyIds.Contains(f.Id))
-                .ToDictionaryAsync(f => f.Id, f => f.Name);
+        var sourceFamilyNames = await SourceFamilyNameResolver.ResolveManyAsync(db, sourceFamilyIds);
 
         var result = recipes
             .Select(r =>
@@ -129,15 +125,24 @@ public static class RecipeEndpoints
                 var sourceFamilyName = isExternal && r.SourceFamilyId is Guid sourceFamilyId
                     ? sourceFamilyNames.GetValueOrDefault(sourceFamilyId)
                     : null;
-                // Внешний рецепт показывает живое имя и фото источника, а не свои (у него их нет).
+                // Внешний рецепт показывает живой контент источника целиком; у него самого
+                // кэшируется только Name, остальные поля могут быть пустыми/устаревшими.
                 Recipe? liveSource = null;
                 var hasLiveSource = isExternal
                     && liveSources.TryGetValue(r.SourceRecipeId!.Value, out liveSource);
                 var name = hasLiveSource ? liveSource!.Name : r.Name;
+                var difficulty = hasLiveSource ? liveSource!.Difficulty : r.Difficulty;
+                var calories = hasLiveSource ? liveSource!.Calories : r.Calories;
+                var cookTimeMinutes = hasLiveSource ? liveSource!.CookTimeMinutes : r.CookTimeMinutes;
+                var servings = hasLiveSource ? liveSource!.Servings : r.Servings;
+                var tags = hasLiveSource ? liveSource!.Tags : r.Tags;
+                var seasonality = hasLiveSource ? liveSource!.Seasonality : r.Seasonality;
+                var diet = hasLiveSource ? liveSource!.Diet : r.Diet;
                 var photoPath = hasLiveSource ? liveSource!.PhotoPath : r.PhotoPath;
 
                 return new RecipeSummaryDto(
-                    r.Id, name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags,
+                    r.Id, name, difficulty, calories, cookTimeMinutes, servings, tags,
+                    seasonality, diet,
                     counts.GetValueOrDefault(r.Id),
                     PhotoUrl(photoPath),
                     isExternal,
@@ -176,13 +181,7 @@ public static class RecipeEndpoints
             .Include(r => r.Ingredients)
             .FirstOrDefaultAsync(r => r.Id == sourceId);
 
-        var sourceFamilyName = recipe.SourceFamilyId is Guid sourceFamilyId
-            ? await db.Families
-                .AsNoTracking()
-                .Where(f => f.Id == sourceFamilyId)
-                .Select(f => f.Name)
-                .FirstOrDefaultAsync()
-            : null;
+        var sourceFamilyName = await SourceFamilyNameResolver.ResolveAsync(db, recipe.SourceFamilyId);
 
         var state = await ExternalRecipeStateResolver.ResolveManyAsync(
             db,
@@ -263,7 +262,7 @@ public static class RecipeEndpoints
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
         if (recipe.SourceRecipeId is not null)
-            return ExternalReadOnly();
+            return RecipeErrors.ExternalReadOnly();
 
         var error = Validate(request);
         if (error is not null)
@@ -291,7 +290,7 @@ public static class RecipeEndpoints
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
         if (recipe.SourceRecipeId is not null)
-            return ExternalReadOnly();
+            return RecipeErrors.ExternalReadOnly();
 
         var photoPath = recipe.PhotoPath;
         db.Recipes.Remove(recipe);
@@ -348,6 +347,7 @@ public static class RecipeEndpoints
 
         var source = await db.Recipes
             .AsNoTracking()
+            .Include(r => r.Family)
             .Include(r => r.Steps)
             .Include(r => r.Ingredients)
             .FirstOrDefaultAsync(r => r.Id == sourceId);
@@ -358,12 +358,11 @@ public static class RecipeEndpoints
                 "Источник удалил рецепт — копию сделать нельзя."));
         }
 
-        var sourceFamilyId = wrapper.SourceFamilyId ?? source.FamilyId;
-        var copiedFromFamilyName = await db.Families
-            .AsNoTracking()
-            .Where(f => f.Id == sourceFamilyId)
-            .Select(f => f.Name)
-            .FirstOrDefaultAsync();
+        // Метка «скопировано из семьи X» всегда проставляется на достижимом пути:
+        // имя берём из навигации загруженного источника, с фолбэком на запись семьи.
+        var copiedFromFamilyName = source.Family?.Name
+            ?? await SourceFamilyNameResolver.ResolveAsync(db, wrapper.SourceFamilyId)
+            ?? await SourceFamilyNameResolver.ResolveAsync(db, source.FamilyId);
 
         var copiedPhoto = source.PhotoPath is null
             ? null
@@ -498,7 +497,7 @@ public static class RecipeEndpoints
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
         if (recipe.SourceRecipeId is not null)
-            return ExternalReadOnly();
+            return RecipeErrors.ExternalReadOnly();
 
         if (file is null || file.Length == 0)
             return Results.BadRequest(new RecipeErrorDto("Выберите файл изображения."));
@@ -531,7 +530,7 @@ public static class RecipeEndpoints
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
         if (recipe.SourceRecipeId is not null)
-            return ExternalReadOnly();
+            return RecipeErrors.ExternalReadOnly();
 
         var previous = recipe.PhotoPath;
         recipe.PhotoPath = null;
@@ -727,11 +726,6 @@ public static class RecipeEndpoints
         sourceFamilyId,
         state,
         recipe.CopiedFromFamilyName);
-
-    private static IResult ExternalReadOnly() =>
-        Results.Json(
-            new RecipeErrorDto("Внешний рецепт доступен только для чтения."),
-            statusCode: StatusCodes.Status403Forbidden);
 
     private static string? PhotoUrl(string? photoPath) =>
         photoPath is null ? null : $"/api/photos/{Path.GetFileName(photoPath)}";

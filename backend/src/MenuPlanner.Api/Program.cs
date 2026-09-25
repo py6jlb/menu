@@ -20,9 +20,7 @@ using MenuPlanner.Api.ShoppingList;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? builder.Configuration["DB_CONNECTION_STRING"]
-    ?? "Host=localhost;Port=5432;Database=menu_planner;Username=menu;Password=menu";
+var connectionString = DatabaseConnection.Resolve(builder.Configuration);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));

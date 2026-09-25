@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { matchRecipes } from '../api/recipes'
 import { getWeekPlan, saveWeekPlan } from '../api/plans'
 import { DAYS, MEALS, mondayOf, addDays, weekDays, toIso, weekRangeLabel } from '../constants/plan'
-import { externalState } from '../constants/external'
+import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 import { SEASONS, DIETS } from '../constants/recipe'
 import { useAuth } from '../stores/auth'
 
@@ -351,14 +351,11 @@ onMounted(async () => {
               <template v-if="slotEntry(index, meal.code)">
                 <span class="slot-recipe">{{ slotEntry(index, meal.code).recipeName }}</span>
                 <span class="slot-portions">{{ slotEntry(index, meal.code).portions }} порц.</span>
-                <span
-                  v-if="externalState(slotEntry(index, meal.code).state)"
-                  class="slot-state badge"
-                  :class="`badge--${externalState(slotEntry(index, meal.code).state).variant}`"
-                  :title="externalState(slotEntry(index, meal.code).state).slotTitle"
-                >
-                  {{ externalState(slotEntry(index, meal.code).state).slotLabel }}
-                </span>
+                <ExternalStateBadge
+                  class="slot-state"
+                  variant="slot"
+                  :state="slotEntry(index, meal.code).state"
+                />
                 <span v-if="isEmailVerified" class="slot-remove" @click.stop="removeSlot(index, meal.code)">✕</span>
               </template>
               <span v-else class="slot-empty">+</span>
@@ -394,13 +391,11 @@ onMounted(async () => {
               <span class="mobile-meal">{{ meal.label }}</span>
               <template v-if="slotEntry(mobileDay, meal.code)">
                 <span class="mobile-recipe">{{ slotEntry(mobileDay, meal.code).recipeName }}</span>
-                <span
-                  v-if="externalState(slotEntry(mobileDay, meal.code).state)"
-                  class="slot-state badge"
-                  :class="`badge--${externalState(slotEntry(mobileDay, meal.code).state).variant}`"
-                >
-                  {{ externalState(slotEntry(mobileDay, meal.code).state).mobileLabel }}
-                </span>
+                <ExternalStateBadge
+                  class="slot-state"
+                  variant="mobile"
+                  :state="slotEntry(mobileDay, meal.code).state"
+                />
                 <span class="mobile-meta">
                   {{ slotEntry(mobileDay, meal.code).portions }} порц.
                   <span v-if="isEmailVerified" class="mobile-remove" @click.stop="removeSlot(mobileDay, meal.code)">✕</span>

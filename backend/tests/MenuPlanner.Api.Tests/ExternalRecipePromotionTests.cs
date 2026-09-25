@@ -33,6 +33,7 @@ public sealed class ExternalRecipePromotionTests
         Assert.Equal("Классический борщ", copied.Description);
         Assert.Equal(new[] { "Сварить бульон.", "Добавить свёклу." }, copied.Steps);
         Assert.Equal(2, copied.Ingredients.Count);
+        Assert.NotNull(copied.CopiedFromFamilyName);
         Assert.Equal("Семья источника", copied.CopiedFromFamilyName);
 
         var (_, own) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(

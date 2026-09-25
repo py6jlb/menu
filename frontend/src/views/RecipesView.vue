@@ -1,7 +1,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { listRecipes } from '../api/recipes'
-import { externalState } from '../constants/external'
+import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 import { useAuth } from '../stores/auth'
 
 const { isEmailVerified } = useAuth()
@@ -88,13 +88,7 @@ onMounted(load)
           <h3 class="recipe-name">{{ recipe.name }}</h3>
           <div v-if="recipe.isExternal" class="origin">
             <span class="badge badge--external">Внешний</span>
-            <span
-              v-if="externalState(recipe.state)"
-              class="badge"
-              :class="`badge--${externalState(recipe.state).variant}`"
-            >
-              {{ externalState(recipe.state).label }}
-            </span>
+            <ExternalStateBadge :state="recipe.state" />
             <span v-if="recipe.sourceFamilyName" class="origin-family">
               из семьи {{ recipe.sourceFamilyName }}
             </span>
