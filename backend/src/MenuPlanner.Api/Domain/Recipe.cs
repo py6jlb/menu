@@ -17,15 +17,16 @@ public sealed class Recipe
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 
-    // External recipe linkage: a wrapper Recipe in the recipient family points at a source
-    // Recipe that stays owned by the source family (ADR-0001). Only Name is cached here;
-    // the rest of the content is read live from the source.
+    // Связь внешнего рецепта: строка Recipe в семье-получателе ссылается на рецепт-источник,
+    // который остаётся у семьи-источника (ADR-0001). Здесь кэшируется только Name;
+    // остальной контент читается живьём из источника.
     public Guid? SourceRecipeId { get; set; }
     public Guid? SourceFamilyId { get; set; }
     public string? SourceToken { get; set; }
 
-    // Origin label kept after promotion to a copy: «скопировано из семьи X». Null for ordinary
-    // recipes and for live external wrappers; cleared as soon as the user edits the copy.
+    // Метка происхождения, сохраняемая после промоушена в копию: «скопировано из семьи X».
+    // Null для обычных рецептов и для внешних рецептов; стирается, как только пользователь
+    // редактирует копию.
     public string? CopiedFromFamilyName { get; set; }
 
     public Family? Family { get; set; }

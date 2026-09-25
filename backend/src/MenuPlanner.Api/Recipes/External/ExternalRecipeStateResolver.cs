@@ -4,7 +4,7 @@ using MenuPlanner.Api.Data;
 namespace MenuPlanner.Api.Recipes.External;
 
 /// <summary>
-/// Ссылка обёртки на источник: минимум данных, нужный для вычисления состояния.
+/// Ссылка внешнего рецепта на источник: минимум данных, нужный для вычисления состояния.
 /// </summary>
 public readonly record struct ExternalSourceLink(
     Guid WrapperId,

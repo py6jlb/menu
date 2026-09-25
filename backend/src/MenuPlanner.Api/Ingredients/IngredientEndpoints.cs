@@ -1,6 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 
 namespace MenuPlanner.Api.Ingredients;
@@ -19,7 +19,7 @@ public static class IngredientEndpoints
     private static async Task<IResult> AutocompleteAsync(
         string? q, ClaimsPrincipal principal, AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.Json(new IngredientAutocompleteDto(Array.Empty<string>()));
 
@@ -69,24 +69,6 @@ public static class IngredientEndpoints
             .ToList();
 
         return Results.Json(new IngredientAutocompleteDto(items));
-    }
-
-    private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
-    {
-        var userId = UserIdFrom(principal);
-        if (userId is null)
-            return null;
-
-        var membership = await db.FamilyMembers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.UserId == userId.Value);
-        return membership?.FamilyId;
-    }
-
-    private static Guid? UserIdFrom(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(subject, out var userId) ? userId : null;
     }
 
     private sealed record IngredientGroup(string Normalized, string Name, int Usage);

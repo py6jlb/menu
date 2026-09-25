@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
@@ -29,7 +28,7 @@ public static class PlanEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
@@ -52,7 +51,7 @@ public static class PlanEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
@@ -123,7 +122,7 @@ public static class PlanEndpoints
         ClaimsPrincipal principal,
         AppDbContext db)
     {
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
@@ -173,21 +172,13 @@ public static class PlanEndpoints
     private static async Task<Dictionary<Guid, ExternalRecipeState>> ResolveStatesAsync(
         AppDbContext db, WeekPlan plan)
     {
-        var links = plan.Entries
-            .Where(e => e.Recipe?.SourceRecipeId is not null)
-            .Select(e => new ExternalSourceLink(
-                e.Recipe!.Id, e.Recipe.SourceRecipeId!.Value, e.Recipe.SourceToken))
-            .ToList();
-
+        var links = ExternalPlanContent.SourceLinks(plan.Entries);
         return await ExternalRecipeStateResolver.ResolveManyAsync(db, links);
     }
 
     private static Task<Dictionary<Guid, Recipe>> LoadLiveSourcesAsync(AppDbContext db, WeekPlan plan) =>
         ExternalRecipeContentResolver.LoadSourcesAsync(
-            db,
-            plan.Entries
-                .Where(e => e.Recipe?.SourceRecipeId is not null)
-                .Select(e => e.Recipe!.SourceRecipeId!.Value));
+            db, ExternalPlanContent.SourceRecipeIds(plan.Entries));
 
     private static WeekPlanDto ToDto(
         WeekPlan plan,
@@ -226,21 +217,4 @@ public static class PlanEndpoints
     private static string Format(DateOnly date) =>
         date.ToString(WeekStartFormat, CultureInfo.InvariantCulture);
 
-    private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
-    {
-        var userId = UserIdFrom(principal);
-        if (userId is null)
-            return null;
-
-        var membership = await db.FamilyMembers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.UserId == userId.Value);
-        return membership?.FamilyId;
-    }
-
-    private static Guid? UserIdFrom(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(subject, out var userId) ? userId : null;
-    }
 }

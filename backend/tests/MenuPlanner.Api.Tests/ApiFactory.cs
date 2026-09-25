@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MenuPlanner.Api.Data;
@@ -13,11 +14,21 @@ namespace MenuPlanner.Api.Tests;
 public class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = "menu_planner_test_" + Guid.NewGuid().ToString("N");
+    private readonly InMemoryDatabaseRoot _databaseRoot = new();
 
     public string PhotosDir { get; } =
         Path.Combine(Path.GetTempPath(), "menu_planner_photos_" + Guid.NewGuid().ToString("N"));
 
     public bool AutoVerifyEmailsOnRegistration { get; set; } = true;
+
+    /// <summary>Имя in-memory базы — общее для дополнительных контекстов в тестах.</summary>
+    public string DatabaseName => _databaseName;
+
+    /// <summary>Общий корень in-memory базы: делится между контекстами с тем же именем.</summary>
+    public InMemoryDatabaseRoot DatabaseRoot => _databaseRoot;
+
+    /// <summary>Дополнительные interceptor'ы, подключаемые к <see cref="AppDbContext"/>.</summary>
+    public List<IInterceptor> Interceptors { get; } = new();
 
     public async Task VerifyUserAsync(string email)
     {
@@ -54,8 +65,12 @@ public class ApiFactory : WebApplicationFactory<Program>
                 services.Remove(configDescriptor);
 
             services.AddDbContext<AppDbContext>(options =>
-                options.UseInMemoryDatabase(_databaseName)
-                    .AddInterceptors(new AutoVerifyEmailsInterceptor(this)));
+            {
+                options.UseInMemoryDatabase(_databaseName, _databaseRoot)
+                    .AddInterceptors(new AutoVerifyEmailsInterceptor(this));
+                foreach (var interceptor in Interceptors)
+                    options.AddInterceptors(interceptor);
+            });
         });
     }
 

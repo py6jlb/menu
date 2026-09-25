@@ -1,6 +1,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { listRecipes } from '../api/recipes'
+import { externalState } from '../constants/external'
 import { useAuth } from '../stores/auth'
 
 const { isEmailVerified } = useAuth()
@@ -87,9 +88,12 @@ onMounted(load)
           <h3 class="recipe-name">{{ recipe.name }}</h3>
           <div v-if="recipe.isExternal" class="origin">
             <span class="badge badge--external">Внешний</span>
-            <span v-if="recipe.state === 'broken'" class="badge badge--broken">Недоступно</span>
-            <span v-else-if="recipe.state === 'warning'" class="badge badge--warning">
-              Ссылка отозвана
+            <span
+              v-if="externalState(recipe.state)"
+              class="badge"
+              :class="`badge--${externalState(recipe.state).variant}`"
+            >
+              {{ externalState(recipe.state).label }}
             </span>
             <span v-if="recipe.sourceFamilyName" class="origin-family">
               из семьи {{ recipe.sourceFamilyName }}
@@ -214,21 +218,6 @@ onMounted(load)
   align-items: center;
   gap: 0.35rem;
   margin-bottom: 0.5rem;
-}
-
-.badge--external {
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-
-.badge--broken {
-  background: var(--danger-bg);
-  color: var(--danger);
-}
-
-.badge--warning {
-  background: var(--warning-bg);
-  color: var(--warning);
 }
 
 .origin-family {

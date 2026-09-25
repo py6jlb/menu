@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { matchRecipes } from '../api/recipes'
 import { getWeekPlan, saveWeekPlan } from '../api/plans'
 import { DAYS, MEALS, mondayOf, addDays, weekDays, toIso, weekRangeLabel } from '../constants/plan'
+import { externalState } from '../constants/external'
 import { SEASONS, DIETS } from '../constants/recipe'
 import { useAuth } from '../stores/auth'
 
@@ -351,18 +352,12 @@ onMounted(async () => {
                 <span class="slot-recipe">{{ slotEntry(index, meal.code).recipeName }}</span>
                 <span class="slot-portions">{{ slotEntry(index, meal.code).portions }} порц.</span>
                 <span
-                  v-if="slotEntry(index, meal.code).state === 'broken'"
-                  class="slot-state slot-state--broken"
-                  title="Убрать или заменить"
+                  v-if="externalState(slotEntry(index, meal.code).state)"
+                  class="slot-state badge"
+                  :class="`badge--${externalState(slotEntry(index, meal.code).state).variant}`"
+                  :title="externalState(slotEntry(index, meal.code).state).slotTitle"
                 >
-                  недоступно
-                </span>
-                <span
-                  v-else-if="slotEntry(index, meal.code).state === 'warning'"
-                  class="slot-state slot-state--warning"
-                  title="Ссылка отозвана"
-                >
-                  ссылка отозвана
+                  {{ externalState(slotEntry(index, meal.code).state).slotLabel }}
                 </span>
                 <span v-if="isEmailVerified" class="slot-remove" @click.stop="removeSlot(index, meal.code)">✕</span>
               </template>
@@ -400,16 +395,11 @@ onMounted(async () => {
               <template v-if="slotEntry(mobileDay, meal.code)">
                 <span class="mobile-recipe">{{ slotEntry(mobileDay, meal.code).recipeName }}</span>
                 <span
-                  v-if="slotEntry(mobileDay, meal.code).state === 'broken'"
-                  class="slot-state slot-state--broken"
+                  v-if="externalState(slotEntry(mobileDay, meal.code).state)"
+                  class="slot-state badge"
+                  :class="`badge--${externalState(slotEntry(mobileDay, meal.code).state).variant}`"
                 >
-                  недоступно — убрать или заменить
-                </span>
-                <span
-                  v-else-if="slotEntry(mobileDay, meal.code).state === 'warning'"
-                  class="slot-state slot-state--warning"
-                >
-                  ссылка отозвана
+                  {{ externalState(slotEntry(mobileDay, meal.code).state).mobileLabel }}
                 </span>
                 <span class="mobile-meta">
                   {{ slotEntry(mobileDay, meal.code).portions }} порц.
@@ -708,16 +698,6 @@ onMounted(async () => {
   font-size: 0.7rem;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.slot-state--broken {
-  background: var(--danger-bg);
-  color: var(--danger);
-}
-
-.slot-state--warning {
-  background: var(--warning-bg);
-  color: var(--warning);
 }
 
 .slot-remove {

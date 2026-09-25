@@ -2,8 +2,14 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Data;
+using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Recipes;
 
@@ -87,6 +93,60 @@ public sealed class ExternalRecipeImportTests
     }
 
     [Fact]
+    public async Task List_ExternalRecipe_ShowsLiveSourcePhoto()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья источника");
+        var source = await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
+        var (photoResponse, uploaded) = await PutPhotoAuthorizedAsync<RecipeDto>(
+            client, owner.Token, source.Id, new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "image/png", "photo.png");
+        Assert.Equal(HttpStatusCode.OK, photoResponse.StatusCode);
+        Assert.NotNull(uploaded!.PhotoUrl);
+        var share = await ShareAsync(client, owner.Token, source.Id);
+
+        var recipient = await RegisterAsync(client, "recipient");
+        await CreateFamilyAsync(client, recipient.Token, "Семья получателя");
+        await PostAuthorizedAsync<RecipeImportResultDto>(
+            client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
+
+        var (_, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
+            client, recipient.Token, "/api/recipes?scope=external");
+        var item = Assert.Single(list!);
+        Assert.Equal(uploaded.PhotoUrl, item.PhotoUrl);
+    }
+
+    [Fact]
+    public async Task List_ExternalRecipe_RefreshesCachedNameOnRead()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья источника");
+        var source = await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
+        var share = await ShareAsync(client, owner.Token, source.Id);
+
+        var recipient = await RegisterAsync(client, "recipient");
+        await CreateFamilyAsync(client, recipient.Token, "Семья получателя");
+        await PostAuthorizedAsync<RecipeImportResultDto>(
+            client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
+
+        // Чтение списка после переименования источника обновляет кэш имени.
+        await PutAuthorizedAsync<RecipeDto>(
+            client, owner.Token, $"/api/recipes/{source.Id}",
+            FullRequest() with { Name = "Борщ по-домашнему" });
+        await GetAuthorizedAsync<List<RecipeSummaryDto>>(client, recipient.Token, "/api/recipes");
+
+        // Источник удалён: живого контента нет, остаётся кэш — он должен быть актуальным.
+        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{source.Id}");
+
+        var (_, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
+            client, recipient.Token, "/api/recipes?scope=external");
+        var item = Assert.Single(list!);
+        Assert.Equal("broken", item.State);
+        Assert.Equal("Борщ по-домашнему", item.Name);
+    }
+
+    [Fact]
     public async Task Import_WithoutFamily_ReturnsNotFound()
     {
         using var client = new ApiFactory().CreateClient();
@@ -155,6 +215,74 @@ public sealed class ExternalRecipeImportTests
         var (_, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
             client, recipient.Token, "/api/recipes");
         Assert.Single(list!);
+    }
+
+    [Fact]
+    public async Task Import_RaceOnUniqueIndex_ReturnsConflictWithExistingExternalRecipe()
+    {
+        using var factory = new ApiFactory();
+        var race = new RaceInjectingInterceptor(factory.DatabaseName, factory.DatabaseRoot);
+        factory.Interceptors.Add(race);
+        using var client = factory.CreateClient();
+
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья источника");
+        var source = await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
+        var share = await ShareAsync(client, owner.Token, source.Id);
+
+        var recipient = await RegisterAsync(client, "recipient");
+        var recipientFamily = await CreateFamilyAsync(client, recipient.Token, "Семья получателя");
+
+        // Гонка: «параллельный» импорт успевает вставить внешний рецепт до нашего SaveChanges.
+        var concurrentId = Guid.NewGuid();
+        race.Arm(recipientFamily.Id, source.Id, concurrentId);
+
+        var (response, conflict) = await PostAuthorizedAsync<RecipeImportConflictDto>(
+            client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("Рецепт уже добавлен в вашу семью.", conflict!.Error);
+        Assert.Equal(concurrentId, conflict.RecipeId);
+
+        var (_, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
+            client, recipient.Token, "/api/recipes?scope=external");
+        Assert.Equal(concurrentId, Assert.Single(list!).Id);
+    }
+
+    [Fact]
+    public async Task Import_UnverifiedUser_ReturnsForbidden()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья источника");
+        var source = await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
+        var share = await ShareAsync(client, owner.Token, source.Id);
+
+        var recipient = await RegisterAsync(client, "recipient");
+        await CreateFamilyAsync(client, recipient.Token, "Семья получателя");
+        await UnverifyAsync(factory, recipient.User.Email);
+
+        var (response, _) = await PostAuthorizedAsync<RecipeErrorDto>(
+            client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public void ExternalRecipe_HasUniqueFilteredIndex()
+    {
+        using var factory = new ApiFactory();
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var index = db.Model.FindEntityType(typeof(Recipe))!
+            .GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name)
+                .SequenceEqual(new[] { nameof(Recipe.FamilyId), nameof(Recipe.SourceRecipeId) }));
+
+        Assert.True(index.IsUnique);
+        Assert.NotNull(index.GetFilter());
     }
 
     [Fact]
@@ -362,10 +490,22 @@ public sealed class ExternalRecipeImportTests
         return auth;
     }
 
-    private static async Task CreateFamilyAsync(HttpClient client, string token, string name)
+    private static async Task<FamilyDto> CreateFamilyAsync(HttpClient client, string token, string name)
     {
-        var (response, _) = await PostAuthorizedAsync<FamilyDto>(client, token, "/api/families", new { name });
+        var (response, family) = await PostAuthorizedAsync<FamilyDto>(client, token, "/api/families", new { name });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(family);
+        return family!;
+    }
+
+    private static async Task UnverifyAsync(ApiFactory factory, string email)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var user = await db.Users.SingleAsync(u => u.Email == email);
+        user.IsEmailVerified = false;
+        user.EmailVerifiedAt = null;
+        await db.SaveChangesAsync();
     }
 
     private static async Task<RecipeDto> CreateRecipeAsync(
@@ -449,4 +589,73 @@ public sealed class ExternalRecipeImportTests
     }
 
     private sealed record ImportedRecipe(Guid RecipeId, string RecipientToken);
+
+    /// <summary>
+    /// Симулирует гонку импорта: при вставке внешнего рецепта сначала создаёт
+    /// «параллельный» дубль в той же in-memory базе, а затем бросает <see cref="DbUpdateException"/>,
+    /// как это сделал бы уникальный индекс <c>(FamilyId, SourceRecipeId)</c>.
+    /// </summary>
+    private sealed class RaceInjectingInterceptor : SaveChangesInterceptor
+    {
+        private readonly string _databaseName;
+        private readonly InMemoryDatabaseRoot _databaseRoot;
+        private bool _armed;
+        private bool _fired;
+        private Guid _familyId;
+        private Guid _sourceId;
+        private Guid _duplicateId;
+
+        public RaceInjectingInterceptor(string databaseName, InMemoryDatabaseRoot databaseRoot)
+        {
+            _databaseName = databaseName;
+            _databaseRoot = databaseRoot;
+        }
+
+        public void Arm(Guid familyId, Guid sourceId, Guid duplicateId)
+        {
+            _familyId = familyId;
+            _sourceId = sourceId;
+            _duplicateId = duplicateId;
+            _armed = true;
+        }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (_armed && !_fired && eventData.Context is AppDbContext context)
+            {
+                var isExternalInsert = context.ChangeTracker.Entries<Recipe>()
+                    .Any(e => e.State == EntityState.Added && e.Entity.SourceRecipeId == _sourceId);
+                if (isExternalInsert)
+                {
+                    _fired = true;
+                    await InsertDuplicateAsync(cancellationToken);
+                    throw new DbUpdateException(
+                        "Симуляция нарушения уникального индекса (FamilyId, SourceRecipeId).");
+                }
+            }
+
+            return await base.SavingChangesAsync(eventData, result, cancellationToken);
+        }
+
+        private async Task InsertDuplicateAsync(CancellationToken cancellationToken)
+        {
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(_databaseName, _databaseRoot)
+                .Options;
+            using var db = new AppDbContext(options);
+            db.Recipes.Add(new Recipe
+            {
+                Id = _duplicateId,
+                FamilyId = _familyId,
+                Name = "Борщ",
+                SourceRecipeId = _sourceId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
+    }
 }

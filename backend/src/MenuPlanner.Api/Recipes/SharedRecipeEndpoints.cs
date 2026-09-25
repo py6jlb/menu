@@ -1,6 +1,6 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
@@ -11,7 +11,9 @@ public static class SharedRecipeEndpoints
     public static IEndpointRouteBuilder MapSharedRecipeEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/shared/{token}", GetAsync);
-        app.MapPost("/api/shared/{token}/import", ImportAsync).RequireAuthorization();
+        app.MapPost("/api/shared/{token}/import", ImportAsync)
+            .RequireAuthorization()
+            .RequireVerifiedEmail();
 
         return app;
     }
@@ -51,11 +53,11 @@ public static class SharedRecipeEndpoints
     private static async Task<IResult> ImportAsync(
         string token, ClaimsPrincipal principal, AppDbContext db)
     {
-        var userId = UserIdFrom(principal);
+        var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
-        var familyId = await CurrentFamilyIdAsync(principal, db);
+        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Вы не состоите в семье."));
 
@@ -81,7 +83,7 @@ public static class SharedRecipeEndpoints
             return Results.Conflict(new RecipeImportConflictDto(
                 "Рецепт уже добавлен в вашу семью.", existing.Id));
 
-        var wrapper = new Recipe
+        var externalRecipe = new Recipe
         {
             FamilyId = familyId.Value,
             Name = source.Name,
@@ -92,32 +94,34 @@ public static class SharedRecipeEndpoints
             UpdatedAt = DateTime.UtcNow
         };
 
-        db.Recipes.Add(wrapper);
-        await db.SaveChangesAsync();
+        db.Recipes.Add(externalRecipe);
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Гонка: параллельный импорт успел вставить внешний рецепт раньше.
+            // Уникальный индекс (FamilyId, SourceRecipeId) не даёт создать дубль —
+            // отдаём уже существующий, как и в проверке выше.
+            db.Entry(externalRecipe).State = EntityState.Detached;
+
+            var concurrent = await db.Recipes
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.FamilyId == familyId.Value && r.SourceRecipeId == source.Id);
+            if (concurrent is not null)
+                return Results.Conflict(new RecipeImportConflictDto(
+                    "Рецепт уже добавлен в вашу семью.", concurrent.Id));
+
+            throw;
+        }
 
         return Results.Json(
-            new RecipeImportResultDto(wrapper.Id, AlreadyAdded: false),
+            new RecipeImportResultDto(externalRecipe.Id, AlreadyAdded: false),
             statusCode: StatusCodes.Status201Created);
     }
 
     private static IResult InvalidLink() =>
         Results.NotFound(new RecipeErrorDto("Ссылка недействительна."));
 
-    private static async Task<Guid?> CurrentFamilyIdAsync(ClaimsPrincipal principal, AppDbContext db)
-    {
-        var userId = UserIdFrom(principal);
-        if (userId is null)
-            return null;
-
-        var membership = await db.FamilyMembers
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.UserId == userId.Value);
-        return membership?.FamilyId;
-    }
-
-    private static Guid? UserIdFrom(ClaimsPrincipal principal)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        return Guid.TryParse(subject, out var userId) ? userId : null;
-    }
 }
