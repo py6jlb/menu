@@ -591,6 +591,11 @@ input::placeholder, textarea::placeholder {
   color: var(--warning);
 }
 
+.badge--revoked {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

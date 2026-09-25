@@ -1,10 +1,13 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../stores/auth'
 import { verifyEmail, resendVerification } from '../api/auth'
-
-const RESEND_COOLDOWN_SECONDS = 300
+import {
+  RESEND_COOLDOWN_SECONDS,
+  parseCooldownSeconds,
+  useCooldown
+} from '../composables/useCooldown'
 
 const router = useRouter()
 const { state, isEmailVerified, updateUser } = useAuth()
@@ -17,39 +20,7 @@ const pending = ref(false)
 const resendPending = ref(false)
 const resendError = ref('')
 const resendMessage = ref('')
-const cooldown = ref(0)
-let timer = null
-
-const cooldownLabel = computed(() => {
-  const minutes = Math.floor(cooldown.value / 60)
-  const seconds = cooldown.value % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
-})
-
-function stopTimer() {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
-}
-
-function startCooldown(seconds) {
-  cooldown.value = Math.max(0, Math.floor(seconds))
-  stopTimer()
-  if (cooldown.value === 0) return
-  timer = setInterval(() => {
-    cooldown.value -= 1
-    if (cooldown.value <= 0) {
-      cooldown.value = 0
-      stopTimer()
-    }
-  }, 1000)
-}
-
-function parseCooldownSeconds(message) {
-  const match = /(\d+)\s*сек/.exec(message || '')
-  return match ? Number(match[1]) : 0
-}
+const { cooldown, cooldownLabel, startCooldown } = useCooldown()
 
 async function submit() {
   error.value = ''
@@ -106,8 +77,6 @@ onMounted(() => {
     success.value = 'Почта уже подтверждена.'
   }
 })
-
-onBeforeUnmount(stopTimer)
 </script>
 
 <template>

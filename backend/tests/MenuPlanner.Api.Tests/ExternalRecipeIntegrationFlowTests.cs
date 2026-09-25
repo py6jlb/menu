@@ -46,6 +46,39 @@ public sealed class ExternalRecipeIntegrationFlowTests
     }
 
     [Fact]
+    public async Task List_ShowsLiveMetadata_AfterSourceEdited()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var (owner, recipient, wrapperId, sourceId) = await ImportAsync(client,
+            FullRequest("Борщ", servings: 6, difficulty: 3));
+
+        var (_, before) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
+            client, recipient.Token, "/api/recipes?scope=external");
+        var initial = Assert.Single(before!);
+        Assert.Equal(3, initial.Difficulty);
+        Assert.Equal(6, initial.Servings);
+        Assert.Equal(new[] { "суп" }, initial.Tags);
+
+        await PutRecipeAsync(client, owner.Token, sourceId,
+            FullRequest("Борщ", servings: 2, difficulty: 1) with
+            {
+                Tags = new List<string> { "острое", "зимнее" },
+                Seasonality = new List<string> { "autumn" },
+                Diet = new List<string> { "вегетарианское" }
+            });
+
+        var (_, after) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
+            client, recipient.Token, "/api/recipes?scope=external");
+        var updated = Assert.Single(after!);
+        Assert.Equal(wrapperId, updated.Id);
+        Assert.Equal(1, updated.Difficulty);
+        Assert.Equal(2, updated.Servings);
+        Assert.Equal(new[] { "острое", "зимнее" }, updated.Tags);
+        Assert.Equal(new[] { "autumn" }, updated.Seasonality);
+        Assert.Equal(new[] { "вегетарианское" }, updated.Diet);
+    }
+
+    [Fact]
     public async Task ShoppingList_ScalesLiveIngredients_ByCurrentSourceServings()
     {
         using var client = new ApiFactory().CreateClient();

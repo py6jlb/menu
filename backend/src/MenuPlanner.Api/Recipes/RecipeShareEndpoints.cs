@@ -106,57 +106,54 @@ public static class RecipeShareEndpoints
     private static async Task<IResult?> AuthorizeOwnerAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db)
     {
-        var userId = CurrentUser.UserId(principal);
-        if (userId is null)
-            return Results.Unauthorized();
-
-        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
-        if (familyId is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-
-        var recipe = await db.Recipes
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (recipe is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-        if (recipe.SourceRecipeId is not null)
-            return ExternalReadOnly();
+        var access = await ResolveAccessAsync(id, principal, db);
+        if (access.Error is not null)
+            return access.Error;
 
         var family = await db.Families
             .AsNoTracking()
-            .SingleAsync(f => f.Id == familyId.Value);
-        if (family.OwnerId != userId.Value)
+            .SingleAsync(f => f.Id == access.FamilyId);
+        if (family.OwnerId != access.UserId)
             return Results.StatusCode(StatusCodes.Status403Forbidden);
 
         return null;
     }
 
     private static async Task<IResult?> FindRecipeAsync(
+        Guid id, ClaimsPrincipal principal, AppDbContext db) =>
+        (await ResolveAccessAsync(id, principal, db)).Error;
+
+    /// <summary>
+    /// Общая часть проверок владельца/участника: авторизация, семья, рецепт своей семьи
+    /// и запрет операций над внешним рецептом. Возвращает id семьи и пользователя для
+    /// дальнейшей проверки владельца.
+    /// </summary>
+    private static async Task<RecipeAccess> ResolveAccessAsync(
         Guid id, ClaimsPrincipal principal, AppDbContext db)
     {
         var userId = CurrentUser.UserId(principal);
         if (userId is null)
-            return Results.Unauthorized();
+            return new RecipeAccess(Results.Unauthorized(), Guid.Empty, Guid.Empty);
 
         var familyId = await CurrentUser.FamilyIdAsync(principal, db);
         if (familyId is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+            return new RecipeAccess(NotFoundRecipe(), Guid.Empty, Guid.Empty);
 
         var recipe = await db.Recipes
             .AsNoTracking()
             .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
         if (recipe is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+            return new RecipeAccess(NotFoundRecipe(), Guid.Empty, Guid.Empty);
         if (recipe.SourceRecipeId is not null)
-            return ExternalReadOnly();
+            return new RecipeAccess(RecipeErrors.ExternalReadOnly(), Guid.Empty, Guid.Empty);
 
-        return null;
+        return new RecipeAccess(null, familyId.Value, userId.Value);
     }
 
-    private static IResult ExternalReadOnly() =>
-        Results.Json(
-            new RecipeErrorDto("Внешний рецепт нельзя поделить."),
-            statusCode: StatusCodes.Status403Forbidden);
+    private static IResult NotFoundRecipe() =>
+        Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+    private sealed record RecipeAccess(IResult? Error, Guid FamilyId, Guid UserId);
 
     private static RecipeShareDto ToDto(RecipeShare share, ShareOptions options)
     {

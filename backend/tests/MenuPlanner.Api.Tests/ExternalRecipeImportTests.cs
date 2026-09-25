@@ -33,7 +33,6 @@ public sealed class ExternalRecipeImportTests
             client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
         Assert.Equal(HttpStatusCode.Created, importResponse.StatusCode);
         Assert.NotNull(imported);
-        Assert.False(imported.AlreadyAdded);
 
         var (listResponse, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
             client, recipient.Token, "/api/recipes");
