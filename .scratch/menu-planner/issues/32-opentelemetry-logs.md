@@ -4,11 +4,11 @@
 
 **Blocked by:** 21 (Prod-конфигурация — compose, Caddy, сеть, ForwardedHeaders)
 
-**Status:** ready-for-agent
+**Status:** resolved (commit `18940f5`)
 
-- [ ] Backend: пакеты OpenTelemetry, OTLP-экспорт логов и trace-id
-- [ ] `deploy/otel-collector.yaml`: OTLP-приём, console + file exporter (`max_days: 3`)
-- [ ] Сервис `otel-collector` в `docker-compose.prod.yml` с volume и mem limit
-- [ ] Логи в консоль и в файл, файлы хранятся максимум 3 дня
-- [ ] `X-Forwarded-For`-IP по-прежнему корректно попадает в логи/rate limit
-- [ ] Backend-тесты проходят в контейнере
+- [x] Backend: пакеты OpenTelemetry, OTLP-экспорт логов и trace-id
+- [x] `deploy/otel-collector.yaml`: OTLP-приём, console + file exporter (`max_days: 3`)
+- [x] Сервис `otel-collector` в `docker-compose.prod.yml` с volume и mem limit
+- [x] Логи в консоль и в файл, файлы хранятся максимум 3 дня
+- [x] `X-Forwarded-For`-IP по-прежнему корректно попадает в логи/rate limit
+- [x] Backend-тесты проходят в контейнере
