@@ -19,7 +19,7 @@
 
 - **Frontend**: `cd frontend && npm run build` (зависимости уже в `node_modules`).
 - **Живой стек**: `docker compose up --build`; фронт http://localhost:8081, health http://localhost:8080/health.
-- Схема БД создаётся `EnsureCreated`, миграций нет: при изменении модели — `docker compose down -v` и поднять заново.
+- Схема БД ведётся EF Core миграциями (`backend/src/MenuPlanner.Api/Migrations/`), применяются автоматически на старте (`MigrateAsync`). Новую миграцию генерируют из корня через SDK-контейнер: `dotnet tool restore` (локальный манифест `.config/dotnet-tools.json`) и `dotnet ef migrations add <Name> --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api`. При переходе существующей dev-БД со старого `EnsureCreated` — разово пересоздать том: `docker compose down -v`.
 
 ## Конвенции
 

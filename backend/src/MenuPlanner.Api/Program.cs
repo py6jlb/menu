@@ -124,7 +124,8 @@ app.MapShoppingListEndpoints();
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.EnsureCreatedAsync();
+    if (db.Database.IsRelational())
+        await db.Database.MigrateAsync();
 }
 
 app.Run();
