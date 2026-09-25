@@ -36,6 +36,18 @@ export async function deleteRecipe(id) {
   })
 }
 
+export async function removeExternalRecipe(id) {
+  return apiJson(`/api/recipes/${id}/external`, {
+    method: 'DELETE'
+  })
+}
+
+export async function copyRecipe(id) {
+  return apiJson(`/api/recipes/${id}/copy`, {
+    method: 'POST'
+  })
+}
+
 export async function uploadRecipePhoto(id, file) {
   const form = new FormData()
   form.append('file', file)

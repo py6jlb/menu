@@ -6,15 +6,43 @@ namespace MenuPlanner.Api.Tests;
 public sealed class ExternalRecipeStateTests
 {
     [Fact]
-    public void Resolve_WhenSourceExists_ReturnsOk()
+    public void Resolve_SourceAliveTokenMatchesNotRevoked_ReturnsOk()
     {
-        Assert.Equal(ExternalRecipeState.Ok, ExternalRecipeStateService.Resolve(sourceExists: true));
+        Assert.Equal(
+            ExternalRecipeState.Ok,
+            ExternalRecipeStateService.Resolve(sourceExists: true, tokenMatches: true, shareRevoked: false));
     }
 
     [Fact]
-    public void Resolve_WhenSourceMissing_ReturnsBroken()
+    public void Resolve_TokenMismatch_ReturnsWarning()
     {
-        Assert.Equal(ExternalRecipeState.Broken, ExternalRecipeStateService.Resolve(sourceExists: false));
+        Assert.Equal(
+            ExternalRecipeState.Warning,
+            ExternalRecipeStateService.Resolve(sourceExists: true, tokenMatches: false, shareRevoked: false));
+    }
+
+    [Fact]
+    public void Resolve_ShareRevoked_ReturnsWarning()
+    {
+        Assert.Equal(
+            ExternalRecipeState.Warning,
+            ExternalRecipeStateService.Resolve(sourceExists: true, tokenMatches: true, shareRevoked: true));
+    }
+
+    [Fact]
+    public void Resolve_SourceMissing_ReturnsBroken()
+    {
+        Assert.Equal(
+            ExternalRecipeState.Broken,
+            ExternalRecipeStateService.Resolve(sourceExists: false, tokenMatches: true, shareRevoked: false));
+    }
+
+    [Fact]
+    public void Resolve_SourceMissingWithMismatch_StillReturnsBroken()
+    {
+        Assert.Equal(
+            ExternalRecipeState.Broken,
+            ExternalRecipeStateService.Resolve(sourceExists: false, tokenMatches: false, shareRevoked: false));
     }
 
     [Theory]

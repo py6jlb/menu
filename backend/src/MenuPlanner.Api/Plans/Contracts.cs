@@ -9,7 +9,8 @@ public sealed record PlanEntryDto(
     string MealType,
     Guid RecipeId,
     string RecipeName,
-    int Portions);
+    int Portions,
+    string? State = null);
 
 public sealed record WeekPlanDto(string WeekStart, IReadOnlyList<PlanEntryDto> Entries);
 
