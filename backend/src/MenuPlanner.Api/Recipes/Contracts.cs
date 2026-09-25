@@ -29,7 +29,8 @@ public sealed record RecipeSummaryDto(
     string? PhotoUrl = null,
     bool IsExternal = false,
     string? SourceFamilyName = null,
-    string? State = null);
+    string? State = null,
+    string? CopiedFromFamilyName = null);
 
 public sealed record RecipeIngredientDto(
     Guid Id,
@@ -58,7 +59,8 @@ public sealed record RecipeDto(
     bool IsExternal = false,
     string? SourceFamilyName = null,
     Guid? SourceFamilyId = null,
-    string? State = null);
+    string? State = null,
+    string? CopiedFromFamilyName = null);
 
 public sealed record RecipeMatchItemDto(
     Guid RecipeId,

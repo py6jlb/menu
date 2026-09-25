@@ -187,7 +187,11 @@ onMounted(() => {
             Источник удалил рецепт — содержимое недоступно. Имя сохранено, но рецепт больше
             нельзя готовить. Уберите его из семьи или замените в плане недели.
           </p>
+          <p v-if="copyError" class="error">{{ copyError }}</p>
           <div class="external-actions">
+            <button type="button" class="btn btn--primary" disabled title="Источник удалён">
+              Сделать копию
+            </button>
             <button
               type="button"
               class="btn btn--danger"
@@ -224,10 +228,14 @@ onMounted(() => {
           <p class="external-note">
             Рецепт доступен только для чтения — изменения вносит семья-источник.
           </p>
+          <p v-if="copyError" class="error">{{ copyError }}</p>
           <div class="external-actions">
+            <button type="button" class="btn btn--primary" :disabled="copying" @click="onCopy">
+              {{ copying ? 'Сохранение…' : 'Сделать копию' }}
+            </button>
             <button
               type="button"
-              class="btn btn--ghost btn--small"
+              class="btn btn--ghost"
               :disabled="removingLocal"
               @click="onRemoveExternal"
             >
@@ -235,6 +243,14 @@ onMounted(() => {
             </button>
           </div>
         </template>
+      </div>
+
+      <div
+        v-if="!isExternal && recipe.copiedFromFamilyName"
+        class="card copied-origin"
+      >
+        <span class="badge badge--external">Скопировано</span>
+        <span class="copied-origin-text">из семьи {{ recipe.copiedFromFamilyName }}</span>
       </div>
 
       <p v-if="!isEmailVerified && !isExternal" class="notice">
@@ -368,6 +384,21 @@ onMounted(() => {
 }
 
 .external-source {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.copied-origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.copied-origin-text {
   color: var(--text-faint);
   font-size: 0.85rem;
   font-weight: 600;
