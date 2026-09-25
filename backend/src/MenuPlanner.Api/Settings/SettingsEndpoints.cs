@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
@@ -13,7 +14,7 @@ public static class SettingsEndpoints
         var group = app.MapGroup("/api/settings").RequireAuthorization();
 
         group.MapGet("/", GetAsync);
-        group.MapPut("/", UpdateAsync);
+        group.MapPut("/", UpdateAsync).RequireVerifiedEmail();
 
         return app;
     }

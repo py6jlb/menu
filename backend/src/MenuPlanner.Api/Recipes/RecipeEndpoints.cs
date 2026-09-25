@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.Repetition;
@@ -15,13 +16,13 @@ public static class RecipeEndpoints
 
         group.MapGet("/", ListAsync);
         group.MapGet("/{id:guid}", GetAsync);
-        group.MapPost("/", CreateAsync);
+        group.MapPost("/", CreateAsync).RequireVerifiedEmail();
         group.MapPost("/match", MatchAsync);
-        group.MapPut("/{id:guid}", UpdateAsync);
-        group.MapDelete("/{id:guid}", DeleteAsync);
+        group.MapPut("/{id:guid}", UpdateAsync).RequireVerifiedEmail();
+        group.MapDelete("/{id:guid}", DeleteAsync).RequireVerifiedEmail();
         group.MapGet("/repetition", RepetitionAsync);
-        group.MapPut("/{id:guid}/photo", UploadPhotoAsync).DisableAntiforgery();
-        group.MapDelete("/{id:guid}/photo", DeletePhotoAsync);
+        group.MapPut("/{id:guid}/photo", UploadPhotoAsync).DisableAntiforgery().RequireVerifiedEmail();
+        group.MapDelete("/{id:guid}/photo", DeletePhotoAsync).RequireVerifiedEmail();
 
         app.MapGet("/api/photos/{fileName}", GetPhotoFileAsync);
 
