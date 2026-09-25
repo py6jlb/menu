@@ -69,6 +69,12 @@ public static class RecipeEndpoints
             })
             .ToListAsync();
 
+        var liveSources = await ExternalRecipeContentResolver.LoadSourcesAsync(
+            db,
+            recipes
+                .Where(r => r.SourceRecipeId is not null)
+                .Select(r => r.SourceRecipeId!.Value));
+
         var states = await ExternalRecipeStateResolver.ResolveManyAsync(
             db,
             recipes
@@ -98,9 +104,13 @@ public static class RecipeEndpoints
                 var sourceFamilyName = isExternal && r.SourceFamilyId is Guid sourceFamilyId
                     ? sourceFamilyNames.GetValueOrDefault(sourceFamilyId)
                     : null;
+                var name = isExternal
+                    && liveSources.TryGetValue(r.SourceRecipeId!.Value, out var liveSource)
+                    ? liveSource.Name
+                    : r.Name;
 
                 return new RecipeSummaryDto(
-                    r.Id, r.Name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags,
+                    r.Id, name, r.Difficulty, r.Calories, r.CookTimeMinutes, r.Servings, r.Tags,
                     counts.GetValueOrDefault(r.Id),
                     PhotoUrl(r.PhotoPath),
                     isExternal,
@@ -302,7 +312,17 @@ public static class RecipeEndpoints
             .Where(r => r.FamilyId == familyId.Value)
             .ToListAsync();
 
-        var items = RecipeMatcher.Apply(recipes, request.Filters, request.Preferences)
+        // Внешние рецепты подбираются по живому контенту источника, как свои.
+        var liveSources = await ExternalRecipeContentResolver.LoadSourcesAsync(
+            db,
+            recipes
+                .Where(r => r.SourceRecipeId is not null)
+                .Select(r => r.SourceRecipeId!.Value));
+        var effective = recipes
+            .Select(r => ExternalRecipeContentResolver.Resolve(r, liveSources))
+            .ToList();
+
+        var items = RecipeMatcher.Apply(effective, request.Filters, request.Preferences)
             .Select(m => new RecipeMatchItemDto(
                 m.Recipe.Id,
                 m.Recipe.Name,

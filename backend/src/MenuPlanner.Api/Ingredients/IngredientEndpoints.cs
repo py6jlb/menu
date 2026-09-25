@@ -23,12 +23,30 @@ public static class IngredientEndpoints
         if (familyId is null)
             return Results.Json(new IngredientAutocompleteDto(Array.Empty<string>()));
 
-        var names = await db.Recipes
+        var ownNames = await db.Recipes
             .AsNoTracking()
-            .Where(r => r.FamilyId == familyId.Value)
+            .Where(r => r.FamilyId == familyId.Value && r.SourceRecipeId == null)
             .SelectMany(r => r.Ingredients)
             .Select(i => i.Name)
             .ToListAsync();
+
+        // Ингредиенты внешних рецептов читаются живьём из источника.
+        var sourceIds = await db.Recipes
+            .AsNoTracking()
+            .Where(r => r.FamilyId == familyId.Value && r.SourceRecipeId != null)
+            .Select(r => r.SourceRecipeId!.Value)
+            .ToListAsync();
+
+        var externalNames = sourceIds.Count == 0
+            ? new List<string>()
+            : await db.Recipes
+                .AsNoTracking()
+                .Where(r => sourceIds.Contains(r.Id))
+                .SelectMany(r => r.Ingredients)
+                .Select(i => i.Name)
+                .ToListAsync();
+
+        var names = ownNames.Concat(externalNames).ToList();
 
         var normalizedQuery = q?.Trim().ToLowerInvariant() ?? "";
 

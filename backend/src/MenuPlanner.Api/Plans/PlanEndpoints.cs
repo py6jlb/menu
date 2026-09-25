@@ -42,7 +42,8 @@ public static class PlanEndpoints
             return Results.Json(new WeekPlanDto(Format(monday), Array.Empty<PlanEntryDto>()));
 
         var states = await ResolveStatesAsync(db, plan);
-        return Results.Json(ToDto(plan, states));
+        var liveSources = await LoadLiveSourcesAsync(db, plan);
+        return Results.Json(ToDto(plan, states, liveSources));
     }
 
     private static async Task<IResult> SaveWeekAsync(
@@ -113,7 +114,8 @@ public static class PlanEndpoints
             ?? throw new InvalidOperationException("Сохранённый план недели не найден.");
 
         var states = await ResolveStatesAsync(db, saved);
-        return Results.Json(ToDto(saved, states));
+        var liveSources = await LoadLiveSourcesAsync(db, saved);
+        return Results.Json(ToDto(saved, states, liveSources));
     }
 
     private static async Task<IResult> DeleteWeekAsync(
@@ -180,8 +182,17 @@ public static class PlanEndpoints
         return await ExternalRecipeStateResolver.ResolveManyAsync(db, links);
     }
 
+    private static Task<Dictionary<Guid, Recipe>> LoadLiveSourcesAsync(AppDbContext db, WeekPlan plan) =>
+        ExternalRecipeContentResolver.LoadSourcesAsync(
+            db,
+            plan.Entries
+                .Where(e => e.Recipe?.SourceRecipeId is not null)
+                .Select(e => e.Recipe!.SourceRecipeId!.Value));
+
     private static WeekPlanDto ToDto(
-        WeekPlan plan, IReadOnlyDictionary<Guid, ExternalRecipeState> states)
+        WeekPlan plan,
+        IReadOnlyDictionary<Guid, ExternalRecipeState> states,
+        IReadOnlyDictionary<Guid, Recipe> liveSources)
     {
         var entries = plan.Entries
             .OrderBy(e => e.Day)
@@ -190,7 +201,9 @@ public static class PlanEndpoints
                 e.Day,
                 PlanningCatalog.CodeOf(e.MealType),
                 e.RecipeId,
-                e.Recipe?.Name ?? "",
+                e.Recipe is null
+                    ? ""
+                    : ExternalRecipeContentResolver.Resolve(e.Recipe, liveSources).Name,
                 e.Portions,
                 states.TryGetValue(e.RecipeId, out var state)
                     ? ExternalRecipeStateService.Code(state)
