@@ -4,13 +4,13 @@
 
 **Blocked by:** —
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] Создан `deploy/bootstrap.sh` (bash, идемпотентный, `set -euo pipefail`)
-- [ ] Non-root sudo-пользователь + SSH-ключ
-- [ ] SSH-порт `8822` со «страховкой» (старый порт закрывается отдельным шагом), `PasswordAuthentication no`, `PermitRootLogin no`
-- [ ] `ufw` (8822/80/443), `fail2ban`
-- [ ] `unattended-upgrades` только security + авто-перезагрузка ночью, TZ Europe/Moscow, NTP
-- [ ] swap 2 ГБ
-- [ ] Docker Engine + compose plugin, каталог `/opt/menu`, `rclone`
-- [ ] Скрипт проверен `bash -n` (и повторным прогоном — идемпотентность)
+- [x] Создан `deploy/bootstrap.sh` (bash, идемпотентный, `set -euo pipefail`)
+- [x] Non-root sudo-пользователь + SSH-ключ
+- [x] SSH-порт `8822` со «страховкой» (старый порт закрывается отдельным шагом), `PasswordAuthentication no`, `PermitRootLogin no`
+- [x] `ufw` (8822/80/443), `fail2ban`
+- [x] `unattended-upgrades` только security + авто-перезагрузка ночью, TZ Europe/Moscow, NTP
+- [x] swap 2 ГБ
+- [x] Docker Engine + compose plugin, каталог `/opt/menu`, `rclone`
+- [ ] `bash -n` пройден; повторный прогон на реальном VPS (идемпотентность) — после провижининга

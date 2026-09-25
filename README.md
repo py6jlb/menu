@@ -42,6 +42,20 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/
 # 200
 ```
 
+## Деплой
+
+Прод — собственный VPS/VDS (Ubuntu 24.04 LTS) с Docker Compose: Caddy как единый край, своя Postgres, бэкапы в объектное хранилище, логи через OpenTelemetry. Наружу открыты только 80/443 и SSH.
+
+Порядок и переменные — в [`deploy/README.md`](deploy/README.md):
+
+```bash
+sudo SSH_PUBLIC_KEY='ssh-ed25519 ...' ./deploy/bootstrap.sh   # настройка сервера
+./deploy/build-push.sh                                        # тесты, сборка, push в Docker Hub
+./deploy/deploy.sh <git-sha>                                  # деплой (откат — тем же скриптом)
+```
+
+Dev-стек остаётся прежним: `docker compose up --build`.
+
 ## Разработка
 
 Backend запускается в контейнере (`mcr.microsoft.com/dotnet/sdk:10.0`) — на хосте .NET SDK не требуется. Для команд `dotnet` используйте, например:

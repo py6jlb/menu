@@ -6,7 +6,8 @@
 
 - **Backend**: .NET 10 Minimal APIs + EF Core (Npgsql), `backend/`; solution `MenuPlanner.sln` в корне. Код — в feature-папках (`Auth`, `Families`, `Recipes`, `Plans`, `Settings`, `ShoppingList`, `Ingredients`, `Data`, `Domain`).
 - **Frontend**: Vue 3 + Vite, `frontend/`; экраны в `src/views/`, API-клиенты в `src/api/`, роутер в `src/router/`.
-- **Инфраструктура**: Docker Compose (`db` Postgres :5432, `backend` :8080, `frontend` :8081), nginx раздаёт SPA и проксирует `/api`. Карта API и запуск — в `README.md`.
+- **Инфраструктура (dev)**: Docker Compose (`db` Postgres :5432, `backend` :8080, `frontend` :8081), nginx раздаёт SPA и проксирует `/api`. Карта API и запуск — в `README.md`.
+- **Инфраструктура (prod)**: собственный VPS/VDS (Ubuntu 24.04 LTS, Docker Compose), Caddy — единый край (80/443), своя Postgres без публикации порта, образы из Docker Hub. Скрипты и конвенция — `deploy/`, разбор — `deploy/README.md`, решение — `docs/adr/0006-self-hosted-vps-deploy.md`. Наблюдаемость — OpenTelemetry (логи + trace-id) через `otel-collector`.
 
 ## Проверка изменений
 

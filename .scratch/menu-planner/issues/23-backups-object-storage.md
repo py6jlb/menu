@@ -4,12 +4,12 @@
 
 **Blocked by:** 21 (Prod-конфигурация — compose, Caddy, сеть, ForwardedHeaders)
 
-**Status:** ready-for-agent
+**Status:** ready-for-human
 
-- [ ] `deploy/backup.sh`: `pg_dump` (gzip) + `tar` фото → `rclone` в S3-совместимое хранилище
-- [ ] Ротация 7 дневных + 4 недельных бэкапов
-- [ ] Запуск по systemd-таймеру (или cron) на VPS
-- [ ] `deploy/restore-drill.sh`: восстановление дампа в scratch-БД + проверка архива фото
-- [ ] `deploy/.env.example` (JWT, БД, SMTP, DOMAIN, rclone)
-- [ ] Выбран провайдер объектного хранилища, оценена стоимость
-- [ ] Проверочное восстановление выполнено успешно
+- [x] `deploy/backup.sh`: `pg_dump` (gzip) + `tar` фото → `rclone` в S3-совместимое хранилище
+- [x] Ротация 7 дневных + 4 недельных бэкапов
+- [x] Запуск по systemd-таймеру (`deploy/systemd/`)
+- [x] `deploy/restore-drill.sh`: восстановление дампа в scratch-БД + проверка архива фото
+- [x] `deploy/.env.example` (JWT, БД, SMTP, DOMAIN, rclone)
+- [ ] Выбран провайдер объектного хранилища, оценена стоимость — требует аккаунта
+- [ ] Проверочное восстановление выполнено успешно — после провижининга
