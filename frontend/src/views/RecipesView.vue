@@ -88,6 +88,9 @@ onMounted(load)
           <div v-if="recipe.isExternal" class="origin">
             <span class="badge badge--external">Внешний</span>
             <span v-if="recipe.state === 'broken'" class="badge badge--broken">Недоступно</span>
+            <span v-else-if="recipe.state === 'warning'" class="badge badge--warning">
+              Ссылка отозвана
+            </span>
             <span v-if="recipe.sourceFamilyName" class="origin-family">
               из семьи {{ recipe.sourceFamilyName }}
             </span>
@@ -217,6 +220,11 @@ onMounted(load)
 .badge--broken {
   background: var(--danger-bg);
   color: var(--danger);
+}
+
+.badge--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .origin-family {

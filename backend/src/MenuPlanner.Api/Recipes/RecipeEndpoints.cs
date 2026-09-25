@@ -21,6 +21,7 @@ public static class RecipeEndpoints
         group.MapPost("/match", MatchAsync);
         group.MapPut("/{id:guid}", UpdateAsync).RequireVerifiedEmail();
         group.MapDelete("/{id:guid}", DeleteAsync).RequireVerifiedEmail();
+        group.MapDelete("/{id:guid}/external", RemoveExternalAsync).RequireVerifiedEmail();
         group.MapGet("/repetition", RepetitionAsync);
         group.MapPut("/{id:guid}/photo", UploadPhotoAsync).DisableAntiforgery().RequireVerifiedEmail();
         group.MapDelete("/{id:guid}/photo", DeletePhotoAsync).RequireVerifiedEmail();
@@ -63,22 +64,17 @@ public static class RecipeEndpoints
                 r.Tags,
                 r.PhotoPath,
                 r.SourceRecipeId,
-                r.SourceFamilyId
+                r.SourceFamilyId,
+                r.SourceToken
             })
             .ToListAsync();
 
-        var sourceRecipeIds = recipes
-            .Where(r => r.SourceRecipeId is not null)
-            .Select(r => r.SourceRecipeId!.Value)
-            .Distinct()
-            .ToList();
-        var aliveSourceIds = sourceRecipeIds.Count == 0
-            ? new HashSet<Guid>()
-            : (await db.Recipes
-                .AsNoTracking()
-                .Where(r => sourceRecipeIds.Contains(r.Id))
-                .Select(r => r.Id)
-                .ToListAsync()).ToHashSet();
+        var states = await ExternalRecipeStateResolver.ResolveManyAsync(
+            db,
+            recipes
+                .Where(r => r.SourceRecipeId is not null)
+                .Select(r => new ExternalSourceLink(r.Id, r.SourceRecipeId!.Value, r.SourceToken))
+                .ToList());
 
         var sourceFamilyIds = recipes
             .Where(r => r.SourceFamilyId is not null)
@@ -97,8 +93,7 @@ public static class RecipeEndpoints
             {
                 var isExternal = r.SourceRecipeId is not null;
                 var state = isExternal
-                    ? ExternalRecipeStateService.Code(
-                        ExternalRecipeStateService.Resolve(aliveSourceIds.Contains(r.SourceRecipeId!.Value)))
+                    ? ExternalRecipeStateService.Code(states[r.Id])
                     : null;
                 var sourceFamilyName = isExternal && r.SourceFamilyId is Guid sourceFamilyId
                     ? sourceFamilyNames.GetValueOrDefault(sourceFamilyId)
@@ -151,6 +146,11 @@ public static class RecipeEndpoints
                 .FirstOrDefaultAsync()
             : null;
 
+        var state = await ExternalRecipeStateResolver.ResolveManyAsync(
+            db,
+            new[] { new ExternalSourceLink(recipe.Id, sourceId, recipe.SourceToken) });
+        var stateCode = ExternalRecipeStateService.Code(state[recipe.Id]);
+
         if (source is null)
         {
             // Сломанная ссылка: контент недоступен, остаётся только кэш имени.
@@ -160,7 +160,7 @@ public static class RecipeEndpoints
                 isExternal: true,
                 sourceFamilyName: sourceFamilyName,
                 sourceFamilyId: recipe.SourceFamilyId,
-                state: ExternalRecipeStateService.Code(ExternalRecipeState.Broken)));
+                state: stateCode));
         }
 
         // Имя кэшируется в обёртке и обновляется при каждом чтении.
@@ -176,8 +176,7 @@ public static class RecipeEndpoints
             isExternal: true,
             sourceFamilyName: sourceFamilyName,
             sourceFamilyId: recipe.SourceFamilyId,
-            state: ExternalRecipeStateService.Code(
-                ExternalRecipeStateService.Resolve(sourceExists: true)));
+            state: stateCode);
 
         return Results.Json(live with { Id = recipe.Id });
     }
@@ -258,6 +257,30 @@ public static class RecipeEndpoints
         db.Recipes.Remove(recipe);
         await db.SaveChangesAsync();
         storage.Delete(photoPath);
+
+        return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Локальное удаление внешнего рецепта-обёртки из своей семьи. Источник не затрагивается:
+    /// обычный DELETE внешнего рецепта запрещён (403), а этот путь убирает только обёртку.
+    /// </summary>
+    private static async Task<IResult> RemoveExternalAsync(
+        Guid id, ClaimsPrincipal principal, AppDbContext db)
+    {
+        var familyId = await CurrentFamilyIdAsync(principal, db);
+        if (familyId is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+        var recipe = await db.Recipes
+            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
+        if (recipe is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+        if (recipe.SourceRecipeId is null)
+            return Results.BadRequest(new RecipeErrorDto("Это не внешний рецепт."));
+
+        db.Recipes.Remove(recipe);
+        await db.SaveChangesAsync();
 
         return Results.NoContent();
     }

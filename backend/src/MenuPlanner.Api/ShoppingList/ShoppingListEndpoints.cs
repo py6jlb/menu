@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
+using MenuPlanner.Api.Recipes.External;
 
 namespace MenuPlanner.Api.ShoppingList;
 
@@ -42,11 +43,23 @@ public static class ShoppingListEndpoints
         if (plan is null)
             return Results.Json(new ShoppingListDto(Format(monday), Array.Empty<ShoppingListItemDto>()));
 
+        var states = await ExternalRecipeStateResolver.ResolveManyAsync(
+            db,
+            plan.Entries
+                .Where(e => e.Recipe?.SourceRecipeId is not null)
+                .Select(e => new ExternalSourceLink(
+                    e.Recipe!.Id, e.Recipe.SourceRecipeId!.Value, e.Recipe.SourceToken))
+                .ToList());
+
         var lines = new List<IngredientLine>();
         foreach (var entry in plan.Entries)
         {
             var recipe = entry.Recipe;
             if (recipe is null)
+                continue;
+
+            // Сломанная ссылка: источник удалён, контент недоступен — из закупки исключаем.
+            if (states.TryGetValue(recipe.Id, out var state) && state == ExternalRecipeState.Broken)
                 continue;
 
             foreach (var ingredient in recipe.Ingredients)

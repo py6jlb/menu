@@ -110,7 +110,8 @@ async function load() {
       map[slotKey(entry.day, entry.mealType)] = {
         recipeId: entry.recipeId,
         recipeName: entry.recipeName,
-        portions: entry.portions
+        portions: entry.portions,
+        state: entry.state
       }
     }
     draft.value = map
@@ -255,7 +256,8 @@ async function save() {
       map[slotKey(entry.day, entry.mealType)] = {
         recipeId: entry.recipeId,
         recipeName: entry.recipeName,
-        portions: entry.portions
+        portions: entry.portions,
+        state: entry.state
       }
     }
     draft.value = map
@@ -348,6 +350,20 @@ onMounted(async () => {
               <template v-if="slotEntry(index, meal.code)">
                 <span class="slot-recipe">{{ slotEntry(index, meal.code).recipeName }}</span>
                 <span class="slot-portions">{{ slotEntry(index, meal.code).portions }} порц.</span>
+                <span
+                  v-if="slotEntry(index, meal.code).state === 'broken'"
+                  class="slot-state slot-state--broken"
+                  title="Убрать или заменить"
+                >
+                  недоступно
+                </span>
+                <span
+                  v-else-if="slotEntry(index, meal.code).state === 'warning'"
+                  class="slot-state slot-state--warning"
+                  title="Ссылка отозвана"
+                >
+                  ссылка отозвана
+                </span>
                 <span v-if="isEmailVerified" class="slot-remove" @click.stop="removeSlot(index, meal.code)">✕</span>
               </template>
               <span v-else class="slot-empty">+</span>
@@ -383,6 +399,18 @@ onMounted(async () => {
               <span class="mobile-meal">{{ meal.label }}</span>
               <template v-if="slotEntry(mobileDay, meal.code)">
                 <span class="mobile-recipe">{{ slotEntry(mobileDay, meal.code).recipeName }}</span>
+                <span
+                  v-if="slotEntry(mobileDay, meal.code).state === 'broken'"
+                  class="slot-state slot-state--broken"
+                >
+                  недоступно — убрать или заменить
+                </span>
+                <span
+                  v-else-if="slotEntry(mobileDay, meal.code).state === 'warning'"
+                  class="slot-state slot-state--warning"
+                >
+                  ссылка отозвана
+                </span>
                 <span class="mobile-meta">
                   {{ slotEntry(mobileDay, meal.code).portions }} порц.
                   <span v-if="isEmailVerified" class="mobile-remove" @click.stop="removeSlot(mobileDay, meal.code)">✕</span>
@@ -672,6 +700,24 @@ onMounted(async () => {
 .slot-portions {
   color: var(--success);
   font-size: 0.8rem;
+}
+
+.slot-state {
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.slot-state--broken {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.slot-state--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .slot-remove {

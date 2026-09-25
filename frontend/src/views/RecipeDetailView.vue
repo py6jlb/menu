@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getRecipe,
   deleteRecipe,
+  removeExternalRecipe,
+  copyRecipe,
   getRecipeShare,
   revokeRecipeShare,
   regenerateRecipeShare
@@ -20,6 +22,10 @@ const recipe = ref(null)
 const loading = ref(true)
 const error = ref('')
 const deleting = ref(false)
+
+const removingLocal = ref(false)
+const copying = ref(false)
+const copyError = ref('')
 
 const family = ref(null)
 const share = ref(null)
@@ -116,6 +122,36 @@ async function onDelete() {
   }
 }
 
+async function onRemoveExternal() {
+  if (
+    !window.confirm(
+      `Убрать рецепт «${recipe.value.name}» из вашей семьи? Семья-источник не пострадает.`
+    )
+  )
+    return
+  removingLocal.value = true
+  error.value = ''
+  const { response } = await removeExternalRecipe(recipe.value.id)
+  if (response.status === 204) {
+    router.push('/recipes')
+  } else {
+    error.value = 'Не удалось убрать рецепт из семьи.'
+    removingLocal.value = false
+  }
+}
+
+async function onCopy() {
+  copyError.value = ''
+  copying.value = true
+  const { response, data } = await copyRecipe(recipe.value.id)
+  if (response.status === 200 || response.status === 201) {
+    recipe.value = data
+  } else {
+    copyError.value = data?.error || 'Сохранение копии пока недоступно.'
+  }
+  copying.value = false
+}
+
 onMounted(() => {
   load()
   loadFamily()
@@ -139,16 +175,66 @@ onMounted(() => {
       <div v-if="isExternal" class="card external-banner">
         <div class="external-badges">
           <span class="badge badge--external">Внешний</span>
+          <span v-if="recipe.state === 'broken'" class="badge badge--broken">Недоступно</span>
+          <span v-else-if="recipe.state === 'warning'" class="badge badge--warning">Ссылка отозвана</span>
           <span v-if="recipe.sourceFamilyName" class="external-source">
             из семьи {{ recipe.sourceFamilyName }}
           </span>
         </div>
-        <p v-if="recipe.state === 'broken'" class="external-broken">
-          Источник удалён — рецепт недоступен, но остаётся в вашем списке под прежним названием.
-        </p>
-        <p v-else class="external-note">
-          Рецепт доступен только для чтения — изменения вносит семья-источник.
-        </p>
+
+        <template v-if="recipe.state === 'broken'">
+          <p class="external-broken">
+            Источник удалил рецепт — содержимое недоступно. Имя сохранено, но рецепт больше
+            нельзя готовить. Уберите его из семьи или замените в плане недели.
+          </p>
+          <div class="external-actions">
+            <button
+              type="button"
+              class="btn btn--danger"
+              :disabled="removingLocal"
+              @click="onRemoveExternal"
+            >
+              {{ removingLocal ? 'Удаление…' : 'Убрать из моей семьи' }}
+            </button>
+          </div>
+        </template>
+
+        <template v-else-if="recipe.state === 'warning'">
+          <p class="external-warning">
+            Ссылка отозвана или перегенерирована. Рецепт пока доступен, но может пропасть —
+            сделайте копию, чтобы сохранить.
+          </p>
+          <p v-if="copyError" class="error">{{ copyError }}</p>
+          <div class="external-actions">
+            <button type="button" class="btn btn--primary" :disabled="copying" @click="onCopy">
+              {{ copying ? 'Сохранение…' : 'Сделать копию, чтобы сохранить' }}
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost"
+              :disabled="removingLocal"
+              @click="onRemoveExternal"
+            >
+              Убрать из моей семьи
+            </button>
+          </div>
+        </template>
+
+        <template v-else>
+          <p class="external-note">
+            Рецепт доступен только для чтения — изменения вносит семья-источник.
+          </p>
+          <div class="external-actions">
+            <button
+              type="button"
+              class="btn btn--ghost btn--small"
+              :disabled="removingLocal"
+              @click="onRemoveExternal"
+            >
+              Убрать из моей семьи
+            </button>
+          </div>
+        </template>
       </div>
 
       <p v-if="!isEmailVerified && !isExternal" class="notice">
@@ -163,7 +249,7 @@ onMounted(() => {
 
       <p v-if="recipe.description" class="description">{{ recipe.description }}</p>
 
-      <div class="meta">
+      <div v-if="recipe.state !== 'broken'" class="meta">
         <span class="chip">⭐ Сложность {{ recipe.difficulty }}/5</span>
         <span class="chip">⏱ {{ recipe.cookTimeMinutes }} мин</span>
         <span class="chip">👥 {{ recipe.servings }} порц.</span>
@@ -185,7 +271,11 @@ onMounted(() => {
         </span>
       </div>
 
-      <div class="detail-columns">
+      <div v-if="recipe.state === 'broken'" class="card broken-content">
+        <p>Содержимое рецепта недоступно, потому что семья-источник удалила его.</p>
+      </div>
+
+      <div v-else class="detail-columns">
         <div class="card column">
           <h3>Ингредиенты</h3>
           <ul class="ingredients">
@@ -294,6 +384,39 @@ onMounted(() => {
   margin: 0;
   color: var(--danger);
   font-size: 0.9rem;
+}
+
+.external-warning {
+  margin: 0;
+  color: var(--warning);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.badge--broken {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.badge--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.external-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.broken-content {
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
+.broken-content p {
+  margin: 0;
 }
 
 .hero-photo {

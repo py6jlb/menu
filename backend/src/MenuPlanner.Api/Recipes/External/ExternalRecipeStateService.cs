@@ -17,12 +17,27 @@ public enum ExternalRecipeState
 
 /// <summary>
 /// Чистое правило состояния внешнего рецепта в стиле <c>RepetitionService</c>.
-/// Не знает про HTTP и БД: вызывающий сам решает, жив ли источник.
+/// Не знает про HTTP и БД: вызывающий сам сообщает, жив ли источник, совпадает ли
+/// сохранённый обёрткой токен с текущим токеном шеринга и не отозван ли шеринг.
 /// </summary>
 public static class ExternalRecipeStateService
 {
-    public static ExternalRecipeState Resolve(bool sourceExists)
-        => sourceExists ? ExternalRecipeState.Ok : ExternalRecipeState.Broken;
+    /// <summary>
+    /// Единое правило предупреждения: источник удалён → «сломанная»; иначе, если токен
+    /// обёртки не совпадает с текущим токеном шеринга или шеринг отозван → «отозванная»;
+    /// иначе всё в порядке.
+    /// </summary>
+    public static ExternalRecipeState Resolve(
+        bool sourceExists,
+        bool tokenMatches,
+        bool shareRevoked)
+    {
+        if (!sourceExists)
+            return ExternalRecipeState.Broken;
+        if (!tokenMatches || shareRevoked)
+            return ExternalRecipeState.Warning;
+        return ExternalRecipeState.Ok;
+    }
 
     public static string Code(ExternalRecipeState state) => state switch
     {

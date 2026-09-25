@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes.External;
 
 namespace MenuPlanner.Api.Plans;
 
@@ -40,7 +41,8 @@ public static class PlanEndpoints
         if (plan is null)
             return Results.Json(new WeekPlanDto(Format(monday), Array.Empty<PlanEntryDto>()));
 
-        return Results.Json(ToDto(plan));
+        var states = await ResolveStatesAsync(db, plan);
+        return Results.Json(ToDto(plan, states));
     }
 
     private static async Task<IResult> SaveWeekAsync(
@@ -110,7 +112,8 @@ public static class PlanEndpoints
         var saved = await LoadPlanAsync(db, familyId.Value, monday)
             ?? throw new InvalidOperationException("Сохранённый план недели не найден.");
 
-        return Results.Json(ToDto(saved));
+        var states = await ResolveStatesAsync(db, saved);
+        return Results.Json(ToDto(saved, states));
     }
 
     private static async Task<IResult> DeleteWeekAsync(
@@ -165,7 +168,20 @@ public static class PlanEndpoints
             .FirstOrDefaultAsync(p => p.FamilyId == familyId && p.WeekStart == weekStart);
     }
 
-    private static WeekPlanDto ToDto(WeekPlan plan)
+    private static async Task<Dictionary<Guid, ExternalRecipeState>> ResolveStatesAsync(
+        AppDbContext db, WeekPlan plan)
+    {
+        var links = plan.Entries
+            .Where(e => e.Recipe?.SourceRecipeId is not null)
+            .Select(e => new ExternalSourceLink(
+                e.Recipe!.Id, e.Recipe.SourceRecipeId!.Value, e.Recipe.SourceToken))
+            .ToList();
+
+        return await ExternalRecipeStateResolver.ResolveManyAsync(db, links);
+    }
+
+    private static WeekPlanDto ToDto(
+        WeekPlan plan, IReadOnlyDictionary<Guid, ExternalRecipeState> states)
     {
         var entries = plan.Entries
             .OrderBy(e => e.Day)
@@ -175,7 +191,10 @@ public static class PlanEndpoints
                 PlanningCatalog.CodeOf(e.MealType),
                 e.RecipeId,
                 e.Recipe?.Name ?? "",
-                e.Portions))
+                e.Portions,
+                states.TryGetValue(e.RecipeId, out var state)
+                    ? ExternalRecipeStateService.Code(state)
+                    : null))
             .ToList();
 
         return new WeekPlanDto(Format(plan.WeekStart), entries);
