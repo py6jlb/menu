@@ -1,0 +1,10 @@
+[Unit]
+Description=Menu planner: бэкап БД и фото
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=menu
+WorkingDirectory=/opt/menu
+ExecStart=/opt/menu/deploy/backup.sh

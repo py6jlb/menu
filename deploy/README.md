@@ -59,3 +59,20 @@
 ## Порты
 
 Наружу открыты только `80`/`443` (Caddy) и SSH. `db`, `backend`, `frontend` доступны только внутри compose-сети.
+
+## Бэкапы
+
+`backup.sh` делает `pg_dump` БД и `tar` фото, выгружает их через `rclone` в объектное хранилище и чистит старое (по умолчанию 7 дневных и 4 недельных копии). Прод-базу не блокирует.
+
+Настройка на сервере:
+
+```bash
+rclone config          # создай S3-совместимый remote, например "selectel"
+# в /opt/menu/.env укажи BACKUP_REMOTE=selectel:menu-backups
+sudo install -m 644 deploy/systemd/menu-backup.service /etc/systemd/system/
+sudo install -m 644 deploy/systemd/menu-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now menu-backup.timer
+```
+
+Проверка: `sudo systemctl start menu-backup.service` и `./deploy/restore-drill.sh` — последний дамп восстанавливается во временную БД, архив фото проверяется на читаемость.
