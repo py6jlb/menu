@@ -46,6 +46,11 @@ var authCodeOptions = ReadAuthCodeOptions(builder.Configuration);
 builder.Services.AddSingleton(authCodeOptions);
 builder.Services.AddSingleton<FixedWindowRateLimiter>();
 
+builder.Services.AddSingleton(services => new ShareOptions
+{
+    BaseUrl = services.GetRequiredService<IConfiguration>()["SHARE_BASE_URL"] ?? ""
+});
+
 var otlpEnabled = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
 var otelResource = ResourceBuilder.CreateDefault().AddService("menu-planner-api");
 
@@ -109,6 +114,7 @@ app.MapPasswordResetEndpoints();
 app.MapAdminEndpoints();
 app.MapFamilyEndpoints();
 app.MapRecipeEndpoints();
+app.MapRecipeShareEndpoints();
 app.MapIngredientEndpoints();
 app.MapPlanEndpoints();
 app.MapSettingsEndpoints();

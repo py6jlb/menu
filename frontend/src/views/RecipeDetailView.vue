@@ -1,18 +1,39 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getRecipe, deleteRecipe } from '../api/recipes'
-import { unitLabel, seasonLabel } from '../constants/recipe'
+import {
+  getRecipe,
+  deleteRecipe,
+  getRecipeShare,
+  revokeRecipeShare,
+  regenerateRecipeShare
+} from '../api/recipes'
+import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
+import { unitLabel, seasonLabel } from '../constants/recipe'
 
 const route = useRoute()
 const router = useRouter()
-const { isEmailVerified } = useAuth()
+const { state, isEmailVerified } = useAuth()
 
 const recipe = ref(null)
 const loading = ref(true)
 const error = ref('')
 const deleting = ref(false)
+
+const family = ref(null)
+const share = ref(null)
+const shareLoading = ref(false)
+const shareError = ref('')
+const copied = ref(false)
+
+const isOwner = computed(() => Boolean(family.value && family.value.ownerId === state.user?.id))
+
+const shareLink = computed(() => {
+  if (!share.value) return ''
+  const url = share.value.url || share.value.path || ''
+  return url.startsWith('http') ? url : `${window.location.origin}${url}`
+})
 
 async function load() {
   const { response, data } = await getRecipe(route.params.id)
@@ -24,6 +45,61 @@ async function load() {
     error.value = data?.error || 'Не удалось загрузить рецепт.'
   }
   loading.value = false
+}
+
+async function loadFamily() {
+  const { response, data } = await getMyFamily()
+  if (response.status === 200) {
+    family.value = data
+  }
+}
+
+async function onShare() {
+  shareError.value = ''
+  shareLoading.value = true
+  const { response, data } = await getRecipeShare(recipe.value.id)
+  if (response.status === 200) {
+    share.value = data
+  } else {
+    shareError.value = data?.error || 'Не удалось получить ссылку.'
+  }
+  shareLoading.value = false
+}
+
+async function onCopyLink() {
+  try {
+    await navigator.clipboard.writeText(shareLink.value)
+    copied.value = true
+    setTimeout(() => (copied.value = false), 1500)
+  } catch {
+    shareError.value = 'Не удалось скопировать ссылку.'
+  }
+}
+
+async function onRevoke() {
+  if (!window.confirm('Отозвать ссылку? Новые семьи не смогут добавить рецепт.')) return
+  shareError.value = ''
+  shareLoading.value = true
+  const { response, data } = await revokeRecipeShare(recipe.value.id)
+  if (response.status === 200) {
+    share.value = data
+  } else {
+    shareError.value = data?.error || 'Не удалось отозвать ссылку.'
+  }
+  shareLoading.value = false
+}
+
+async function onRegenerate() {
+  if (!window.confirm('Перегенерировать ссылку? Старая перестанет работать.')) return
+  shareError.value = ''
+  shareLoading.value = true
+  const { response, data } = await regenerateRecipeShare(recipe.value.id)
+  if (response.status === 200) {
+    share.value = data
+  } else {
+    shareError.value = data?.error || 'Не удалось перегенерировать ссылку.'
+  }
+  shareLoading.value = false
 }
 
 async function onDelete() {
@@ -39,7 +115,10 @@ async function onDelete() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadFamily()
+})
 </script>
 
 <template>
@@ -110,6 +189,54 @@ onMounted(load)
               <span class="step-text">{{ step }}</span>
             </li>
           </ol>
+        </div>
+      </div>
+
+      <div class="card share-card">
+        <div class="share-header">
+          <h3>Поделиться</h3>
+          <span v-if="share && share.revoked" class="badge badge--revoked">Ссылка отозвана</span>
+        </div>
+
+        <p v-if="shareError" class="error">{{ shareError }}</p>
+
+        <div v-else-if="!share" class="share-empty">
+          <p class="share-hint">Создайте ссылку, чтобы поделиться рецептом с другой семьёй.</p>
+          <button type="button" class="btn btn--primary" :disabled="shareLoading" @click="onShare">
+            {{ shareLoading ? 'Создание…' : 'Поделиться' }}
+          </button>
+        </div>
+
+        <div v-else class="share-content">
+          <p v-if="share.revoked" class="share-revoked">
+            Ссылка отозвана: новые семьи больше не смогут добавить этот рецепт.
+          </p>
+          <input
+            :value="shareLink"
+            type="text"
+            readonly
+            class="share-link"
+            @focus="$event.target.select()"
+          />
+          <div class="share-actions">
+            <button type="button" class="btn btn--primary" @click="onCopyLink">
+              {{ copied ? 'Скопировано!' : 'Скопировать' }}
+            </button>
+            <template v-if="isOwner">
+              <button type="button" class="btn btn--ghost" :disabled="shareLoading" @click="onRegenerate">
+                Перегенерировать
+              </button>
+              <button
+                v-if="!share.revoked"
+                type="button"
+                class="btn btn--danger"
+                :disabled="shareLoading"
+                @click="onRevoke"
+              >
+                Отозвать
+              </button>
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -251,5 +378,55 @@ onMounted(load)
 
 .step-text {
   font-size: 0.95rem;
+}
+
+.share-card {
+  margin-top: 1rem;
+}
+
+.share-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.share-header h3 {
+  margin: 0;
+}
+
+.badge--revoked {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.share-hint {
+  margin: 0 0 0.75rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.share-revoked {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.share-link {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: var(--text-soft);
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
 }
 </style>
