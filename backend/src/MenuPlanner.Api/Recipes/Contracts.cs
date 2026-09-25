@@ -69,3 +69,12 @@ public sealed record RecipeMatchItemDto(
 public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items);
 
 public sealed record RecipeErrorDto(string Error);
+
+public sealed record RecipeShareDto(
+    Guid RecipeId,
+    string Token,
+    string Url,
+    string Path,
+    DateTime CreatedAt,
+    bool Revoked,
+    DateTime? RevokedAt);

@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<AuthCode> AuthCodes => Set<AuthCode>();
+    public DbSet<RecipeShare> RecipeShares => Set<RecipeShare>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -139,6 +140,18 @@ public class AppDbContext : DbContext
         authCode.HasOne(c => c.User)
             .WithMany()
             .HasForeignKey(c => c.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var recipeShare = modelBuilder.Entity<RecipeShare>();
+
+        recipeShare.Property(s => s.Token).HasMaxLength(64).IsRequired();
+        recipeShare.Property(s => s.CreatedAt).HasColumnType("timestamp with time zone");
+        recipeShare.Property(s => s.RevokedAt).HasColumnType("timestamp with time zone");
+        recipeShare.HasIndex(s => s.RecipeId).IsUnique();
+        recipeShare.HasIndex(s => s.Token).IsUnique();
+        recipeShare.HasOne(s => s.Recipe)
+            .WithMany()
+            .HasForeignKey(s => s.RecipeId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

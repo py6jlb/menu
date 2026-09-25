@@ -49,3 +49,19 @@ export async function deleteRecipePhoto(id) {
     method: 'DELETE'
   })
 }
+
+export async function getRecipeShare(id) {
+  return apiJson(`/api/recipes/${id}/share`)
+}
+
+export async function revokeRecipeShare(id) {
+  return apiJson(`/api/recipes/${id}/share`, {
+    method: 'DELETE'
+  })
+}
+
+export async function regenerateRecipeShare(id) {
+  return apiJson(`/api/recipes/${id}/share/regenerate`, {
+    method: 'POST'
+  })
+}

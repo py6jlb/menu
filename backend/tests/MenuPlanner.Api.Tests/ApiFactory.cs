@@ -37,7 +37,8 @@ public class ApiFactory : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["PHOTOS_DIR"] = PhotosDir,
-                ["SMTP_HOST"] = ""
+                ["SMTP_HOST"] = "",
+                ["SHARE_BASE_URL"] = "https://menu.example.com"
             }));
 
         builder.ConfigureServices(services =>
