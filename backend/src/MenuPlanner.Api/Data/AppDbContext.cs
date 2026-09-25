@@ -66,7 +66,9 @@ public class AppDbContext : DbContext
         recipe.Property(r => r.Calories);
         recipe.Property(r => r.CreatedAt).HasColumnType("timestamp with time zone");
         recipe.Property(r => r.UpdatedAt).HasColumnType("timestamp with time zone");
+        recipe.Property(r => r.SourceToken).HasMaxLength(64);
         recipe.HasIndex(r => r.FamilyId);
+        recipe.HasIndex(r => new { r.FamilyId, r.SourceRecipeId });
         recipe.HasOne(r => r.Family)
             .WithMany(f => f.Recipes)
             .HasForeignKey(r => r.FamilyId)

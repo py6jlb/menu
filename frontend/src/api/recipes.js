@@ -1,7 +1,8 @@
 import { apiJson } from './client'
 
-export async function listRecipes() {
-  return apiJson('/api/recipes')
+export async function listRecipes(scope = 'all') {
+  const query = scope && scope !== 'all' ? `?scope=${encodeURIComponent(scope)}` : ''
+  return apiJson(`/api/recipes${query}`)
 }
 
 export async function matchRecipes(body) {
@@ -52,6 +53,12 @@ export async function deleteRecipePhoto(id) {
 
 export async function getSharedRecipe(token) {
   return apiJson(`/api/shared/${token}`)
+}
+
+export async function importSharedRecipe(token) {
+  return apiJson(`/api/shared/${token}/import`, {
+    method: 'POST'
+  })
 }
 
 export async function getRecipeShare(id) {

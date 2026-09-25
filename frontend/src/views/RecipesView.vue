@@ -1,9 +1,16 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { listRecipes } from '../api/recipes'
 import { useAuth } from '../stores/auth'
 
 const { isEmailVerified } = useAuth()
+
+const scopes = [
+  { value: 'all', label: 'Все' },
+  { value: 'own', label: 'Свои' },
+  { value: 'external', label: 'Внешние' }
+]
+const scope = ref('all')
 
 const recipes = ref([])
 const loading = ref(true)
@@ -12,7 +19,7 @@ const error = ref('')
 async function load() {
   loading.value = true
   error.value = ''
-  const { response, data } = await listRecipes()
+  const { response, data } = await listRecipes(scope.value)
   if (response.status === 200) {
     recipes.value = data || []
   } else {
@@ -21,6 +28,7 @@ async function load() {
   loading.value = false
 }
 
+watch(scope, load)
 onMounted(load)
 </script>
 
@@ -35,6 +43,21 @@ onMounted(load)
       Подтвердите почту, чтобы создавать и редактировать рецепты.
       <router-link to="/verify">Ввести код</router-link>
     </p>
+
+    <div class="filter-tabs" role="tablist" aria-label="Фильтр рецептов">
+      <button
+        v-for="item in scopes"
+        :key="item.value"
+        type="button"
+        class="filter-tab"
+        :class="{ 'filter-tab--active': scope === item.value }"
+        role="tab"
+        :aria-selected="scope === item.value"
+        @click="scope = item.value"
+      >
+        {{ item.label }}
+      </button>
+    </div>
 
     <p v-if="loading" class="loading">Загрузка…</p>
     <p v-else-if="error" class="error">{{ error }}</p>
@@ -62,6 +85,13 @@ onMounted(load)
         </div>
         <div class="card-body">
           <h3 class="recipe-name">{{ recipe.name }}</h3>
+          <div v-if="recipe.isExternal" class="origin">
+            <span class="badge badge--external">Внешний</span>
+            <span v-if="recipe.state === 'broken'" class="badge badge--broken">Недоступно</span>
+            <span v-if="recipe.sourceFamilyName" class="origin-family">
+              из семьи {{ recipe.sourceFamilyName }}
+            </span>
+          </div>
           <div class="meta">
             <span class="chip">⭐ {{ recipe.difficulty }}/5</span>
             <span class="chip">⏱ {{ recipe.cookTimeMinutes }} мин</span>
@@ -135,9 +165,65 @@ onMounted(load)
   padding: 1rem 1.1rem 1.1rem;
 }
 
+.filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.filter-tab {
+  min-height: 40px;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.filter-tab:hover {
+  background: var(--surface-2);
+}
+
+.filter-tab--active {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
 .recipe-name {
   margin: 0 0 0.5rem;
   font-size: 1.1rem;
+}
+
+.origin {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+
+.badge--external {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.badge--broken {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.origin-family {
+  color: var(--text-faint);
+  font-size: 0.78rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .meta {

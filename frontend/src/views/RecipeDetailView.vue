@@ -28,6 +28,7 @@ const shareError = ref('')
 const copied = ref(false)
 
 const isOwner = computed(() => Boolean(family.value && family.value.ownerId === state.user?.id))
+const isExternal = computed(() => recipe.value?.isExternal === true)
 
 const shareLink = computed(() => {
   if (!share.value) return ''
@@ -129,13 +130,28 @@ onMounted(() => {
     <div v-else-if="recipe">
       <div class="page-heading">
         <h2>{{ recipe.name }}</h2>
-        <div v-if="isEmailVerified" class="page-heading-actions">
+        <div v-if="isEmailVerified && !isExternal" class="page-heading-actions">
           <router-link :to="`/recipes/${recipe.id}/edit`" class="btn btn--primary">Редактировать</router-link>
           <button type="button" class="btn btn--danger" :disabled="deleting" @click="onDelete">Удалить</button>
         </div>
       </div>
 
-      <p v-if="!isEmailVerified" class="notice">
+      <div v-if="isExternal" class="card external-banner">
+        <div class="external-badges">
+          <span class="badge badge--external">Внешний</span>
+          <span v-if="recipe.sourceFamilyName" class="external-source">
+            из семьи {{ recipe.sourceFamilyName }}
+          </span>
+        </div>
+        <p v-if="recipe.state === 'broken'" class="external-broken">
+          Источник удалён — рецепт недоступен, но остаётся в вашем списке под прежним названием.
+        </p>
+        <p v-else class="external-note">
+          Рецепт доступен только для чтения — изменения вносит семья-источник.
+        </p>
+      </div>
+
+      <p v-if="!isEmailVerified && !isExternal" class="notice">
         Подтвердите почту, чтобы редактировать рецепт.
         <router-link to="/verify">Ввести код</router-link>
       </p>
@@ -192,7 +208,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="card share-card">
+      <div v-if="!isExternal" class="card share-card">
         <div class="share-header">
           <h3>Поделиться</h3>
           <span v-if="share && share.revoked" class="badge badge--revoked">Ссылка отозвана</span>
@@ -244,6 +260,42 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.external-banner {
+  margin-bottom: 1rem;
+}
+
+.external-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.badge--external {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.external-source {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.external-note {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.external-broken {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
 .hero-photo {
   margin-bottom: 1rem;
 }

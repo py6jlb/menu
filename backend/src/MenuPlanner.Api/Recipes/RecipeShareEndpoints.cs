@@ -119,6 +119,8 @@ public static class RecipeShareEndpoints
             .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+        if (recipe.SourceRecipeId is not null)
+            return ExternalReadOnly();
 
         var family = await db.Families
             .AsNoTracking()
@@ -145,9 +147,16 @@ public static class RecipeShareEndpoints
             .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+        if (recipe.SourceRecipeId is not null)
+            return ExternalReadOnly();
 
         return null;
     }
+
+    private static IResult ExternalReadOnly() =>
+        Results.Json(
+            new RecipeErrorDto("Внешний рецепт нельзя поделить."),
+            statusCode: StatusCodes.Status403Forbidden);
 
     private static RecipeShareDto ToDto(RecipeShare share, ShareOptions options)
     {
