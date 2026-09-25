@@ -11,7 +11,7 @@ public sealed class ReadOnlyUnverifiedTests
     [Fact]
     public async Task Unverified_CannotCreateFamily_ReturnsForbidden()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "unverified");
 
@@ -24,7 +24,7 @@ public sealed class ReadOnlyUnverifiedTests
     [Fact]
     public async Task Unverified_CannotJoinFamily_ReturnsForbidden()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "unverified");
 
@@ -37,7 +37,7 @@ public sealed class ReadOnlyUnverifiedTests
     [Fact]
     public async Task Unverified_CannotCreateRecipe_ReturnsForbidden()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "unverified");
 
@@ -50,7 +50,7 @@ public sealed class ReadOnlyUnverifiedTests
     [Fact]
     public async Task Unverified_CannotUpdateOrDeleteRecipe_ReturnsForbidden()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "unverified");
         var recipeId = Guid.NewGuid();
@@ -66,7 +66,7 @@ public sealed class ReadOnlyUnverifiedTests
     [Fact]
     public async Task Unverified_CannotWriteRecipePhoto_ReturnsForbidden()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "unverified");
         var recipeId = Guid.NewGuid();
@@ -86,7 +86,7 @@ public sealed class ReadOnlyUnverifiedTests
     [Fact]
     public async Task Unverified_CannotChangePlan_ReturnsForbidden()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "unverified");
         const string weekStart = "2026-09-07";
@@ -100,9 +100,22 @@ public sealed class ReadOnlyUnverifiedTests
     }
 
     [Fact]
+    public async Task Unverified_CannotChangeSettings_ReturnsForbidden()
+    {
+        using var factory = new UnverifiedApiFactory();
+        using var client = factory.CreateClient();
+        var user = await RegisterAsync(client, "unverified");
+
+        var response = await SendAsync(client, HttpMethod.Put, "/api/settings", user.Token,
+            JsonContent.Create(new { repetitionWindowWeeks = 4 }));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Unverified_CanReadData()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "unverified");
 
@@ -114,16 +127,16 @@ public sealed class ReadOnlyUnverifiedTests
         var family = await SendAsync(client, HttpMethod.Get, "/api/families/my", user.Token, null);
 
         Assert.Equal(HttpStatusCode.OK, recipes.StatusCode);
-        Assert.NotEqual(HttpStatusCode.Forbidden, plan.StatusCode);
-        Assert.NotEqual(HttpStatusCode.Forbidden, shopping.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, plan.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, shopping.StatusCode);
         Assert.Equal(HttpStatusCode.OK, settings.StatusCode);
-        Assert.NotEqual(HttpStatusCode.Forbidden, family.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, family.StatusCode);
     }
 
     [Fact]
     public async Task Unverified_CanUseVerificationEndpoints()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "unverified");
 
@@ -132,13 +145,13 @@ public sealed class ReadOnlyUnverifiedTests
         var resend = await SendAsync(client, HttpMethod.Post, "/api/auth/verify/resend", user.Token, null);
 
         Assert.Equal(HttpStatusCode.BadRequest, verify.StatusCode);
-        Assert.NotEqual(HttpStatusCode.Forbidden, resend.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, resend.StatusCode);
     }
 
     [Fact]
     public async Task Verified_CanCreateFamily()
     {
-        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var factory = new UnverifiedApiFactory();
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "verified");
         await factory.VerifyUserAsync(user.User.Email);
@@ -169,5 +182,10 @@ public sealed class ReadOnlyUnverifiedTests
         if (content is not null)
             request.Content = content;
         return await client.SendAsync(request);
+    }
+
+    private sealed class UnverifiedApiFactory : ApiFactory
+    {
+        public UnverifiedApiFactory() => AutoVerifyEmailsOnRegistration = false;
     }
 }

@@ -33,7 +33,6 @@ public sealed class RequireVerifiedEmailFilter : IEndpointFilter
 
 public static class VerifiedEmailEndpointExtensions
 {
-    public static TBuilder RequireVerifiedEmail<TBuilder>(this TBuilder builder)
-        where TBuilder : IEndpointConventionBuilder =>
+    public static IEndpointConventionBuilder RequireVerifiedEmail(this IEndpointConventionBuilder builder) =>
         builder.AddEndpointFilter(new RequireVerifiedEmailFilter());
 }
