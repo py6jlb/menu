@@ -81,6 +81,10 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1)
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = TokenVersionValidator.ValidateAsync
+        };
     });
 builder.Services.AddAuthorization();
 
@@ -101,6 +105,7 @@ app.MapGet("/health", () => Results.Json(
 
 app.MapAuthEndpoints();
 app.MapEmailVerificationEndpoints();
+app.MapPasswordResetEndpoints();
 app.MapFamilyEndpoints();
 app.MapRecipeEndpoints();
 app.MapIngredientEndpoints();

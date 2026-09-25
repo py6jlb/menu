@@ -8,6 +8,16 @@ public sealed record LoginRequest(string? Email, string? Password);
 
 public sealed record VerifyEmailRequest(string? Code);
 
+public sealed record ForgotPasswordRequest(string? Email);
+
+public sealed record ResetPasswordRequest(
+    string? Email,
+    string? Code,
+    string? NewPassword,
+    string? NewPasswordConfirm);
+
+public sealed record MessageDto(string Message);
+
 public sealed record UserDto(Guid Id, string Email, string Role, bool IsEmailVerified)
 {
     public static UserDto From(User user) => new(user.Id, user.Email, user.Role.ToString(), user.IsEmailVerified);

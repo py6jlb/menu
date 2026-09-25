@@ -8,6 +8,8 @@ namespace MenuPlanner.Api.Auth;
 
 public sealed class JwtTokenService
 {
+    public const string TokenVersionClaim = "tv";
+
     private readonly JwtOptions _options;
 
     public JwtTokenService(JwtOptions options)
@@ -25,7 +27,8 @@ public sealed class JwtTokenService
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
+            new Claim(ClaimTypes.Role, user.Role.ToString()),
+            new Claim(TokenVersionClaim, user.TokenVersion.ToString())
         };
 
         var token = new JwtSecurityToken(

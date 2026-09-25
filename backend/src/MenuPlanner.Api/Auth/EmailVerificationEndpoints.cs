@@ -42,7 +42,7 @@ public static class EmailVerificationEndpoints
             return Results.Conflict(new ErrorDto("Почта уже подтверждена."));
 
         var window = TimeSpan.FromHours(1);
-        var ip = ClientIp(http);
+        var ip = ClientIpResolver.Resolve(http);
         var allowedByEmail = limiter.TryConsume(EmailKeyPrefix + user.Email, options.ResendRateLimitPerHour, window, now);
         var allowedByIp = limiter.TryConsume(IpKeyPrefix + ip, options.ResendRateLimitPerHour, window, now);
         if (!allowedByEmail || !allowedByIp)
@@ -68,21 +68,6 @@ public static class EmailVerificationEndpoints
         var code = await EmailVerificationService.IssueCodeAsync(db, hasher, user.Id, now);
         await emailSender.SendVerificationCodeAsync(user.Email, code);
         return Results.Ok();
-    }
-
-    private static string ClientIp(HttpContext http)
-    {
-        var forwarded = http.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(forwarded))
-        {
-            var first = forwarded
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(first))
-                return first;
-        }
-
-        return http.Connection.RemoteIpAddress?.ToString() ?? "unknown";
     }
 
     private static async Task<IResult> VerifyEmailAsync(

@@ -17,7 +17,7 @@ public sealed class EmailVerificationFlowTests
     [Fact]
     public async Task Register_ReturnsUnverifiedUser_AndSendsVerificationCodeEmail()
     {
-        using var factory = new VerificationApiFactory();
+        using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
         var email = $"verify-{Guid.NewGuid():N}@example.com";
 
@@ -39,7 +39,7 @@ public sealed class EmailVerificationFlowTests
     [Fact]
     public async Task Verify_WithCorrectCode_ReturnsVerifiedUser_AndRepeatIsConflict()
     {
-        using var factory = new VerificationApiFactory();
+        using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
         var email = $"verify-ok-{Guid.NewGuid():N}@example.com";
         var token = await RegisterAsync(client, email);
@@ -58,7 +58,7 @@ public sealed class EmailVerificationFlowTests
     [Fact]
     public async Task Verify_AfterFiveWrongAttempts_LocksOperation_EvenForCorrectCode()
     {
-        using var factory = new VerificationApiFactory();
+        using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
         var email = $"verify-lock-{Guid.NewGuid():N}@example.com";
         var token = await RegisterAsync(client, email);
@@ -80,7 +80,7 @@ public sealed class EmailVerificationFlowTests
     [Fact]
     public async Task Resend_WithinCooldown_ReturnsTooManyRequests()
     {
-        using var factory = new VerificationApiFactory();
+        using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
         var email = $"verify-resend-{Guid.NewGuid():N}@example.com";
         var token = await RegisterAsync(client, email);
@@ -92,7 +92,7 @@ public sealed class EmailVerificationFlowTests
     [Fact]
     public async Task Resend_AfterCooldown_SendsNewCode_AndInvalidatesOld()
     {
-        using var factory = new VerificationApiFactory()
+        using var factory = new AuthApiFactory()
             .WithConfig("AUTH_CODE_RESEND_COOLDOWN_MINUTES", "0");
         using var client = factory.CreateClient();
         var email = $"verify-resend-new-{Guid.NewGuid():N}@example.com";
@@ -116,7 +116,7 @@ public sealed class EmailVerificationFlowTests
     [Fact]
     public async Task Resend_IsRateLimited_ToFivePerHour_OnEmailAndIp()
     {
-        using var factory = new VerificationApiFactory()
+        using var factory = new AuthApiFactory()
             .WithConfig("AUTH_CODE_RESEND_COOLDOWN_MINUTES", "0");
         using var client = factory.CreateClient();
         var emailA = $"verify-rate-a-{Guid.NewGuid():N}@example.com";
@@ -140,7 +140,7 @@ public sealed class EmailVerificationFlowTests
     [Fact]
     public async Task Resend_WhileLocked_ReturnsLocked()
     {
-        using var factory = new VerificationApiFactory()
+        using var factory = new AuthApiFactory()
             .WithConfig("AUTH_CODE_RESEND_COOLDOWN_MINUTES", "0");
         using var client = factory.CreateClient();
         var email = $"verify-resend-locked-{Guid.NewGuid():N}@example.com";
@@ -175,7 +175,7 @@ public sealed class EmailVerificationFlowTests
         return await client.SendAsync(request);
     }
 
-    private static string CodeFrom(VerificationApiFactory factory)
+    private static string CodeFrom(AuthApiFactory factory)
     {
         var letter = factory.Emails.Last();
         var match = CodeRegex.Match(letter.HtmlBody);
@@ -184,17 +184,17 @@ public sealed class EmailVerificationFlowTests
     }
 }
 
-internal sealed class VerificationApiFactory : ApiFactory
+internal sealed class AuthApiFactory : ApiFactory
 {
     private readonly Dictionary<string, string?> _config = new();
 
-    public VerificationApiFactory() => AutoVerifyEmailsOnRegistration = false;
+    public AuthApiFactory() => AutoVerifyEmailsOnRegistration = false;
 
     public RecordingEmailTransport Transport { get; } = new();
 
     public IReadOnlyList<EmailMessage> Emails => Transport.Emails;
 
-    public VerificationApiFactory WithConfig(string key, string value)
+    public AuthApiFactory WithConfig(string key, string value)
     {
         _config[key] = value;
         return this;
