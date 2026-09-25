@@ -8,7 +8,7 @@ public sealed record LoginRequest(string? Email, string? Password);
 
 public sealed record VerifyEmailRequest(string? Code);
 
-public sealed record ForgotPasswordRequest(string? Email);
+public sealed record PasswordResetCodeRequest(string? Email);
 
 public sealed record ResetPasswordRequest(
     string? Email,

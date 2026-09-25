@@ -9,9 +9,8 @@ namespace MenuPlanner.Api.Auth;
 
 public static class PasswordResetEndpoints
 {
-    private const int PasswordMinLength = 6;
-    private const string EmailKeyPrefix = "forgot-password:email:";
-    private const string IpKeyPrefix = "forgot-password:ip:";
+    private const string EmailKeyPrefix = "password-reset:email:";
+    private const string IpKeyPrefix = "password-reset:ip:";
     private const string NeutralMessage =
         "Если аккаунт существует и почта подтверждена, отправлен код.";
 
@@ -19,14 +18,14 @@ public static class PasswordResetEndpoints
     {
         var group = app.MapGroup("/api/auth");
 
-        group.MapPost("/forgot", ForgotPasswordAsync);
+        group.MapPost("/forgot", RequestPasswordResetAsync);
         group.MapPost("/reset", ResetPasswordAsync);
 
         return app;
     }
 
-    private static async Task<IResult> ForgotPasswordAsync(
-        ForgotPasswordRequest request,
+    private static async Task<IResult> RequestPasswordResetAsync(
+        PasswordResetCodeRequest request,
         AppDbContext db,
         IPasswordHasher<User> hasher,
         EmailSender emailSender,
@@ -73,9 +72,8 @@ public static class PasswordResetEndpoints
         AuthCodeOptions options)
     {
         var newPassword = request.NewPassword ?? "";
-        if (newPassword.Length < PasswordMinLength)
-            return Results.BadRequest(
-                new ErrorDto($"Пароль должен содержать минимум {PasswordMinLength} символов."));
+        if (newPassword.Length < PasswordPolicy.MinLength)
+            return Results.BadRequest(new ErrorDto(PasswordPolicy.TooShortMessage));
         if (!string.Equals(newPassword, request.NewPasswordConfirm, StringComparison.Ordinal))
             return Results.BadRequest(new ErrorDto("Пароли не совпадают."));
 

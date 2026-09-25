@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
@@ -11,7 +12,6 @@ namespace MenuPlanner.Api.Auth;
 
 public static class AuthEndpoints
 {
-    private const int PasswordMinLength = 6;
     private static readonly Regex EmailRegex = new(
         @"^[^@\s]+@[^@\s]+\.[^@\s]+$",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -39,8 +39,8 @@ public static class AuthEndpoints
             return Results.BadRequest(new ErrorDto("Некорректный email."));
 
         var password = request.Password ?? "";
-        if (password.Length < PasswordMinLength)
-            return Results.BadRequest(new ErrorDto($"Пароль должен содержать минимум {PasswordMinLength} символов."));
+        if (password.Length < PasswordPolicy.MinLength)
+            return Results.BadRequest(new ErrorDto(PasswordPolicy.TooShortMessage));
 
         if (await db.Users.AnyAsync(u => u.Email == email))
             return Results.Conflict(new ErrorDto("Пользователь с таким email уже существует."));
@@ -57,7 +57,8 @@ public static class AuthEndpoints
         db.Users.Add(user);
         await db.SaveChangesAsync();
 
-        var code = await EmailVerificationService.IssueCodeAsync(db, passwordHasher, user.Id, DateTime.UtcNow);
+        var code = await AuthCodeIssuer.IssueAsync(
+            db, passwordHasher, user.Id, AuthCodeType.Verify, DateTime.UtcNow);
         await emailSender.SendVerificationCodeAsync(email, code);
 
         return Results.Json(

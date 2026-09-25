@@ -65,7 +65,7 @@ public static class EmailVerificationEndpoints
                 statusCode: StatusCodes.Status429TooManyRequests);
         }
 
-        var code = await EmailVerificationService.IssueCodeAsync(db, hasher, user.Id, now);
+        var code = await AuthCodeIssuer.IssueAsync(db, hasher, user.Id, AuthCodeType.Verify, now);
         await emailSender.SendVerificationCodeAsync(user.Email, code);
         return Results.Ok();
     }
