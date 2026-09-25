@@ -26,7 +26,10 @@ public sealed record RecipeSummaryDto(
     int Servings,
     IReadOnlyList<string> Tags,
     int RepetitionCount = 0,
-    string? PhotoUrl = null);
+    string? PhotoUrl = null,
+    bool IsExternal = false,
+    string? SourceFamilyName = null,
+    string? State = null);
 
 public sealed record RecipeIngredientDto(
     Guid Id,
@@ -51,7 +54,11 @@ public sealed record RecipeDto(
     DateTime CreatedAt,
     DateTime UpdatedAt,
     int RepetitionCount = 0,
-    string? PhotoUrl = null);
+    string? PhotoUrl = null,
+    bool IsExternal = false,
+    string? SourceFamilyName = null,
+    Guid? SourceFamilyId = null,
+    string? State = null);
 
 public sealed record RecipeMatchItemDto(
     Guid RecipeId,
@@ -69,6 +76,10 @@ public sealed record RecipeMatchItemDto(
 public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items);
 
 public sealed record RecipeErrorDto(string Error);
+
+public sealed record RecipeImportResultDto(Guid RecipeId, bool AlreadyAdded);
+
+public sealed record RecipeImportConflictDto(string Error, Guid RecipeId);
 
 public sealed record RecipeShareDto(
     Guid RecipeId,
