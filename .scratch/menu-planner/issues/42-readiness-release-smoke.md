@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** claimed (ticket/42-readiness-release-smoke; ожидает code-review)
 
 - [ ] Существующий дешёвый liveness сохранён; readiness проверяет работоспособность БД с коротким ограниченным временем и не раскрывает секретную конфигурацию.
 - [ ] Остановка/недоступность БД даёт отрицательную readiness, возвращение БД восстанавливает готовность без обязательного перезапуска процесса.
