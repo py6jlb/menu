@@ -91,7 +91,8 @@ class SmokeHarness(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         (self.root / "deploy").mkdir()
-        for filename in ("config.sh", "release.sh", "smoke.sh", "remote-deploy.sh"):
+        for filename in ("config.sh", "release.sh", "backup-lib.sh", "deploy-lib.sh",
+                         "smoke.sh", "remote-deploy.sh"):
             shutil.copy(ROOT / "deploy" / filename, self.root / "deploy" / filename)
         shutil.copy(ROOT / "docker-compose.prod.yml", self.root)
 
