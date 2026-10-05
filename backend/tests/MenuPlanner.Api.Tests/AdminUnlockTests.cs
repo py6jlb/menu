@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
+using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Tests;
 
@@ -19,7 +20,7 @@ public sealed class AdminUnlockTests
     {
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
-        var admin = await RegisterAsync(client, "admin");
+        var admin = await RegisterAdminAsync(factory, client, "admin");
         var target = await RegisterAsync(client, "locked");
         var code = CodeFrom(factory, target.User.Email);
 
@@ -43,7 +44,6 @@ public sealed class AdminUnlockTests
     {
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
-        await RegisterAsync(client, "admin");
         var target = await RegisterAsync(client, "locked");
 
         for (var i = 0; i < 5; i++)
@@ -73,7 +73,7 @@ public sealed class AdminUnlockTests
     {
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
-        var admin = await RegisterAsync(client, "admin");
+        var admin = await RegisterAdminAsync(factory, client, "admin");
 
         var unlock = await UnlockAsync(client, admin.Token, $"missing-{Guid.NewGuid():N}@example.com");
 
@@ -85,7 +85,7 @@ public sealed class AdminUnlockTests
     {
         using var factory = new AuthApiFactory();
         using var client = factory.CreateClient();
-        var admin = await RegisterAsync(client, "admin");
+        var admin = await RegisterAdminAsync(factory, client, "admin");
         var target = await RegisterAsync(client, "locked");
 
         for (var i = 0; i < 10; i++)
@@ -93,6 +93,51 @@ public sealed class AdminUnlockTests
 
         var eleventh = await UnlockAsync(client, admin.Token, target.User.Email);
         Assert.Equal(HttpStatusCode.TooManyRequests, eleventh.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unlock_ByUnverifiedAdmin_ReturnsForbidden()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        var admin = await RegisterAdminAsync(factory, client, "admin", verified: false);
+        var target = await RegisterAsync(client, "locked");
+
+        for (var i = 0; i < 5; i++)
+            await VerifyAsync(client, target.Token, "000000");
+
+        var unlock = await UnlockAsync(client, admin.Token, target.User.Email);
+        Assert.Equal(HttpStatusCode.Forbidden, unlock.StatusCode);
+
+        var user = await GetUserAsync(factory, target.User.Email);
+        Assert.NotNull(user.LockedUntil);
+    }
+
+    private static async Task<AuthResponse> RegisterAdminAsync(
+        AuthApiFactory factory, HttpClient client, string prefix, bool verified = true)
+    {
+        var registered = await RegisterAsync(client, prefix);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await db.Users.SingleAsync(u => u.Email == registered.User.Email);
+            user.Role = UserRole.Admin;
+            if (verified)
+            {
+                user.IsEmailVerified = true;
+                user.EmailVerifiedAt = DateTime.UtcNow;
+            }
+            await db.SaveChangesAsync();
+        }
+
+        // Токен регистрации несёт старую роль из claim, поэтому роль берём из
+        // свежего входа уже после изменения пользователя.
+        var login = await client.PostAsJsonAsync("/api/auth/login",
+            new { email = registered.User.Email, password = "secret1" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var auth = await login.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(auth);
+        return auth;
     }
 
     private static async Task<AuthResponse> RegisterAsync(HttpClient client, string prefix)

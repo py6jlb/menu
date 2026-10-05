@@ -52,14 +52,16 @@ public sealed class AuthFlowTests
     }
 
     [Fact]
-    public async Task FirstRegisteredUserIsAdmin_SecondIsUser()
+    public async Task Registration_AlwaysAssignsUserRole_EvenInEmptyDatabase()
     {
         using var client = new ApiFactory().CreateClient();
 
-        var first = await RegisterAsync(client, $"admin-{Guid.NewGuid():N}@example.com");
-        Assert.Equal("Admin", first.User.Role);
+        // Даже первый публично зарегистрированный пользователь в пустой БД —
+        // не Администратор: системная роль выдаётся только закрытым bootstrap.
+        var first = await RegisterAsync(client, $"first-{Guid.NewGuid():N}@example.com");
+        Assert.Equal("User", first.User.Role);
 
-        var second = await RegisterAsync(client, $"user-{Guid.NewGuid():N}@example.com");
+        var second = await RegisterAsync(client, $"second-{Guid.NewGuid():N}@example.com");
         Assert.Equal("User", second.User.Role);
     }
 

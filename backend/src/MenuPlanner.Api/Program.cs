@@ -60,6 +60,7 @@ builder.Services.AddSingleton<IAuthCodeGenerator, RandomAuthCodeGenerator>();
 builder.Services.AddScoped<AuthCodeLifecycle>();
 builder.Services.AddScoped<EmailVerificationService>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<AdminBootstrap>();
 
 builder.Services.AddSingleton(services => new ShareOptions
 {
@@ -109,6 +110,15 @@ builder.Services
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// Закрытая операторская команда назначения первоначального администратора.
+// Выполняется вне публичного HTTP-маршрута и завершает процесс до старта
+// веб-сервера; применяет миграции и читает пароль скрыто из stdin.
+if (AdminBootstrapArgs.IsCommand(args))
+{
+    Environment.ExitCode = await AdminBootstrapCommand.RunAsync(app.Services, args);
+    return;
+}
 
 // X-Forwarded-* принимаются только когда задан доверенный прокси. Без него
 // middleware не подключается вовсе: пустой список известных прокси в ASP.NET

@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -12,10 +11,6 @@ namespace MenuPlanner.Api.Auth;
 
 public static class AuthEndpoints
 {
-    private static readonly Regex EmailRegex = new(
-        @"^[^@\s]+@[^@\s]+\.[^@\s]+$",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/auth");
@@ -40,8 +35,8 @@ public static class AuthEndpoints
         TimeProvider clock,
         HttpContext http)
     {
-        var email = request.Email?.Trim().ToLowerInvariant() ?? "";
-        if (!EmailRegex.IsMatch(email))
+        var email = EmailPolicy.Normalize(request.Email);
+        if (!EmailPolicy.IsValid(email))
             return Results.BadRequest(new ErrorDto("Некорректный email."));
 
         var limited = AuthRateLimitPolicy.Check(
@@ -63,12 +58,14 @@ public static class AuthEndpoints
         if (await db.Users.AnyAsync(u => u.Email == email))
             return Results.Conflict(new ErrorDto("Пользователь с таким email уже существует."));
 
-        var isFirstUser = !await db.Users.AnyAsync();
+        // Публичная регистрация всегда выдаёт только роль Пользователя.
+        // Системная роль Администратора назначается отдельной закрытой
+        // процедурой (AdminBootstrap), а не первым обратившимся.
         var user = new User
         {
             Email = email,
             PasswordHash = passwordHasher.HashPassword(null!, password),
-            Role = isFirstUser ? UserRole.Admin : UserRole.User,
+            Role = UserRole.User,
             CreatedAt = clock.GetUtcNow().UtcDateTime
         };
 

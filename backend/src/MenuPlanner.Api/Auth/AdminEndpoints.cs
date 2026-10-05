@@ -15,7 +15,8 @@ public static class AdminEndpoints
         var group = app.MapGroup("/api/admin");
 
         group.MapPost("/unlock", UnlockAsync)
-            .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()));
+            .RequireAuthorization(policy => policy.RequireRole(UserRole.Admin.ToString()))
+            .RequireVerifiedEmail();
 
         return app;
     }

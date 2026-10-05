@@ -34,8 +34,8 @@ onMounted(async () => {
 
       <div v-if="isAuthenticated" class="user-area">
         <span class="email">{{ state.user?.email }}</span>
-        <span class="role-badge" :class="{ owner: state.user?.role === 'Admin' || state.user?.role === 'Owner' }">
-          {{ state.user?.role === 'Admin' || state.user?.role === 'Owner' ? 'Владелец' : 'Участник' }}
+        <span class="role-badge" :class="{ admin: isAdmin }">
+          {{ isAdmin ? 'Администратор' : 'Пользователь' }}
         </span>
         <button type="button" class="btn btn--ghost btn--small logout-btn" @click="logout">
           <svg class="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
@@ -315,7 +315,7 @@ input::placeholder, textarea::placeholder {
   white-space: nowrap;
 }
 
-.role-badge.owner {
+.role-badge.admin {
   background: var(--primary-soft);
   color: var(--primary);
 }
