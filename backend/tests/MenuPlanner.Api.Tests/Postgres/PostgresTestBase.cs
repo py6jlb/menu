@@ -27,5 +27,11 @@ public abstract class PostgresTestBase : IAsyncLifetime
         }
     }
 
-    public async Task DisposeAsync() => await Database.DisposeAsync();
+    public async Task DisposeAsync()
+    {
+        if (Database is null)
+            return;
+
+        await Database.DisposeAsync();
+    }
 }

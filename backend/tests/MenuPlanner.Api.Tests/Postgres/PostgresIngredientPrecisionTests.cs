@@ -7,8 +7,6 @@ namespace MenuPlanner.Api.Tests.Postgres;
 
 public sealed class PostgresIngredientPrecisionTests : PostgresTestBase
 {
-    private const string NumericValueOutOfRange = "22003";
-
     [PostgresTheory]
     [InlineData("12345678.91")]
     [InlineData("0.01")]
@@ -19,12 +17,7 @@ public sealed class PostgresIngredientPrecisionTests : PostgresTestBase
 
         await using (var db = Database.CreateContext())
         {
-            var owner = PostgresData.NewUser("owner@example.com");
-            db.Users.Add(owner);
-            var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-            db.Families.Add(family);
-            var recipe = PostgresData.NewRecipe(family.Id, "Суп");
-            db.Recipes.Add(recipe);
+            var (_, _, recipe) = await PostgresData.SeedFamilyWithRecipeAsync(db);
             db.RecipeIngredients.Add(new RecipeIngredient
             {
                 Id = Guid.NewGuid(),
@@ -53,12 +46,7 @@ public sealed class PostgresIngredientPrecisionTests : PostgresTestBase
         var amount = decimal.Parse(raw, CultureInfo.InvariantCulture);
 
         await using var db = Database.CreateContext();
-        var owner = PostgresData.NewUser("owner@example.com");
-        db.Users.Add(owner);
-        var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-        db.Families.Add(family);
-        var recipe = PostgresData.NewRecipe(family.Id, "Суп");
-        db.Recipes.Add(recipe);
+        var (_, _, recipe) = await PostgresData.SeedFamilyWithRecipeAsync(db);
         db.RecipeIngredients.Add(new RecipeIngredient
         {
             Id = Guid.NewGuid(),
@@ -69,6 +57,7 @@ public sealed class PostgresIngredientPrecisionTests : PostgresTestBase
             Unit = "g"
         });
 
-        await PostgresData.AssertPostgresErrorAsync(NumericValueOutOfRange, () => db.SaveChangesAsync());
+        await PostgresData.AssertPostgresErrorAsync(
+            PostgresSqlState.NumericValueOutOfRange, () => db.SaveChangesAsync());
     }
 }

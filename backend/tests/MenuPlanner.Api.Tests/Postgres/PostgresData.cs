@@ -1,3 +1,4 @@
+using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -57,12 +58,33 @@ internal static class PostgresData
         Portions = portions
     };
 
-    public static async Task<PostgresException> AssertPostgresErrorAsync(
-        string sqlState, Func<Task> action)
+    /// <summary>Семья с владельцем — базовый граф для большинства проверок.</summary>
+    public static async Task<(User Owner, Family Family)> SeedFamilyAsync(
+        AppDbContext db, string email = "owner@example.com", string inviteCode = "FAMILY-1")
+    {
+        var owner = NewUser(email);
+        db.Users.Add(owner);
+        var family = NewFamily("Семья", inviteCode, owner.Id);
+        db.Families.Add(family);
+        await db.SaveChangesAsync();
+        return (owner, family);
+    }
+
+    /// <summary>Семья с владельцем и рецептом — для проверок, где нужен рецепт.</summary>
+    public static async Task<(User Owner, Family Family, Recipe Recipe)> SeedFamilyWithRecipeAsync(
+        AppDbContext db, string email = "owner@example.com", string inviteCode = "FAMILY-1")
+    {
+        var (owner, family) = await SeedFamilyAsync(db, email, inviteCode);
+        var recipe = NewRecipe(family.Id, "Суп");
+        db.Recipes.Add(recipe);
+        await db.SaveChangesAsync();
+        return (owner, family, recipe);
+    }
+
+    public static async Task AssertPostgresErrorAsync(string sqlState, Func<Task> action)
     {
         var exception = await Assert.ThrowsAsync<DbUpdateException>(action);
         var postgres = Assert.IsType<PostgresException>(exception.InnerException);
         Assert.Equal(sqlState, postgres.SqlState);
-        return postgres;
     }
 }

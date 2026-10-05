@@ -7,8 +7,6 @@ namespace MenuPlanner.Api.Tests.Postgres;
 
 public sealed class PostgresCascadeTests : PostgresTestBase
 {
-    private const string ForeignKeyViolation = "23503";
-
     [PostgresFact]
     public async Task DeletingFamily_CascadesMembersRecipesPlanAndShares()
     {
@@ -77,12 +75,7 @@ public sealed class PostgresCascadeTests : PostgresTestBase
     public async Task DeletingRecipe_CascadesDependentsButKeepsFamilyAndPlan()
     {
         await using var db = Database.CreateContext();
-        var owner = PostgresData.NewUser("owner@example.com");
-        db.Users.Add(owner);
-        var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-        db.Families.Add(family);
-        var recipe = PostgresData.NewRecipe(family.Id, "Суп");
-        db.Recipes.Add(recipe);
+        var (_, family, recipe) = await PostgresData.SeedFamilyWithRecipeAsync(db);
         db.RecipeIngredients.Add(new RecipeIngredient
         {
             Id = Guid.NewGuid(),
@@ -108,19 +101,29 @@ public sealed class PostgresCascadeTests : PostgresTestBase
     }
 
     [PostgresFact]
+    public async Task PlanEntry_WithUnknownRecipe_IsRejected()
+    {
+        await using var db = Database.CreateContext();
+        var (_, family) = await PostgresData.SeedFamilyAsync(db);
+        var plan = PostgresData.NewWeekPlan(family.Id, new DateOnly(2026, 1, 5));
+        db.WeekPlans.Add(plan);
+        await db.SaveChangesAsync();
+
+        db.PlanEntries.Add(PostgresData.NewPlanEntry(plan.Id, Guid.NewGuid(), 0, MealType.Lunch, 2));
+        await PostgresData.AssertPostgresErrorAsync(
+            PostgresSqlState.ForeignKeyViolation, () => db.SaveChangesAsync());
+    }
+
+    [PostgresFact]
     public async Task DeletingFamilyOwner_IsRejectedWhileFamilyExists()
     {
         await using var db = Database.CreateContext();
-        var owner = PostgresData.NewUser("owner@example.com");
-        db.Users.Add(owner);
-        var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-        db.Families.Add(family);
-        await db.SaveChangesAsync();
+        var (owner, _) = await PostgresData.SeedFamilyAsync(db);
 
         // EF до БД считает обязательную связь с владельцем разорванной и падает
         // концептуально, поэтому внешний ключ Restrict проверяется прямым SQL.
         var exception = await Assert.ThrowsAsync<PostgresException>(() =>
             db.Database.ExecuteSqlRawAsync("DELETE FROM \"Users\" WHERE \"Id\" = {0}", owner.Id));
-        Assert.Equal(ForeignKeyViolation, exception.SqlState);
+        Assert.Equal(PostgresSqlState.ForeignKeyViolation, exception.SqlState);
     }
 }

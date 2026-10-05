@@ -35,7 +35,8 @@ public sealed class PostgresInterleavingTests : PostgresTestBase
                 return "success";
             }
             catch (DbUpdateException exception)
-                when (exception.InnerException is PostgresException { SqlState: "23505" })
+                when (exception.InnerException is PostgresException
+                    { SqlState: PostgresSqlState.UniqueViolation })
             {
                 return "conflict";
             }

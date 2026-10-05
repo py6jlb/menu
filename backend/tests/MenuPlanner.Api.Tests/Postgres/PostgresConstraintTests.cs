@@ -6,8 +6,6 @@ namespace MenuPlanner.Api.Tests.Postgres;
 
 public sealed class PostgresConstraintTests : PostgresTestBase
 {
-    private const string UniqueViolation = "23505";
-
     [PostgresFact]
     public async Task FamilyMembership_IsUniquePerUser()
     {
@@ -33,37 +31,30 @@ public sealed class PostgresConstraintTests : PostgresTestBase
             UserId = member.Id,
             JoinedAt = DateTime.UtcNow
         });
-        await PostgresData.AssertPostgresErrorAsync(UniqueViolation, () => db.SaveChangesAsync());
+        await PostgresData.AssertPostgresErrorAsync(
+            PostgresSqlState.UniqueViolation, () => db.SaveChangesAsync());
     }
 
     [PostgresFact]
     public async Task Week_IsUniqueWithinFamily()
     {
         await using var db = Database.CreateContext();
-        var owner = PostgresData.NewUser("owner@example.com");
-        db.Users.Add(owner);
-        var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-        db.Families.Add(family);
-        await db.SaveChangesAsync();
+        var (_, family) = await PostgresData.SeedFamilyAsync(db);
 
         var weekStart = new DateOnly(2026, 1, 5);
         db.WeekPlans.Add(PostgresData.NewWeekPlan(family.Id, weekStart));
         await db.SaveChangesAsync();
 
         db.WeekPlans.Add(PostgresData.NewWeekPlan(family.Id, weekStart));
-        await PostgresData.AssertPostgresErrorAsync(UniqueViolation, () => db.SaveChangesAsync());
+        await PostgresData.AssertPostgresErrorAsync(
+            PostgresSqlState.UniqueViolation, () => db.SaveChangesAsync());
     }
 
     [PostgresFact]
     public async Task PlanEntry_IsUniquePerWeekDayAndMeal()
     {
         await using var db = Database.CreateContext();
-        var owner = PostgresData.NewUser("owner@example.com");
-        db.Users.Add(owner);
-        var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-        db.Families.Add(family);
-        var recipe = PostgresData.NewRecipe(family.Id, "Суп");
-        db.Recipes.Add(recipe);
+        var (_, family, recipe) = await PostgresData.SeedFamilyWithRecipeAsync(db);
         var plan = PostgresData.NewWeekPlan(family.Id, new DateOnly(2026, 1, 5));
         db.WeekPlans.Add(plan);
         await db.SaveChangesAsync();
@@ -72,20 +63,15 @@ public sealed class PostgresConstraintTests : PostgresTestBase
         await db.SaveChangesAsync();
 
         db.PlanEntries.Add(PostgresData.NewPlanEntry(plan.Id, recipe.Id, 0, MealType.Lunch, 3));
-        await PostgresData.AssertPostgresErrorAsync(UniqueViolation, () => db.SaveChangesAsync());
+        await PostgresData.AssertPostgresErrorAsync(
+            PostgresSqlState.UniqueViolation, () => db.SaveChangesAsync());
     }
 
     [PostgresFact]
     public async Task RecipeShare_IsUniquePerRecipe()
     {
         await using var db = Database.CreateContext();
-        var owner = PostgresData.NewUser("owner@example.com");
-        db.Users.Add(owner);
-        var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-        db.Families.Add(family);
-        var recipe = PostgresData.NewRecipe(family.Id, "Суп");
-        db.Recipes.Add(recipe);
-        await db.SaveChangesAsync();
+        var (_, _, recipe) = await PostgresData.SeedFamilyWithRecipeAsync(db);
 
         db.RecipeShares.Add(new RecipeShare
         {
@@ -103,20 +89,17 @@ public sealed class PostgresConstraintTests : PostgresTestBase
             Token = "token-two",
             CreatedAt = DateTime.UtcNow
         });
-        await PostgresData.AssertPostgresErrorAsync(UniqueViolation, () => db.SaveChangesAsync());
+        await PostgresData.AssertPostgresErrorAsync(
+            PostgresSqlState.UniqueViolation, () => db.SaveChangesAsync());
     }
 
     [PostgresFact]
     public async Task RecipeShare_TokenIsUnique()
     {
         await using var db = Database.CreateContext();
-        var owner = PostgresData.NewUser("owner@example.com");
-        db.Users.Add(owner);
-        var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-        db.Families.Add(family);
-        var first = PostgresData.NewRecipe(family.Id, "Первый");
+        var (_, family, first) = await PostgresData.SeedFamilyWithRecipeAsync(db);
         var second = PostgresData.NewRecipe(family.Id, "Второй");
-        db.Recipes.AddRange(first, second);
+        db.Recipes.Add(second);
         await db.SaveChangesAsync();
 
         db.RecipeShares.Add(new RecipeShare
@@ -135,18 +118,15 @@ public sealed class PostgresConstraintTests : PostgresTestBase
             Token = "shared-token",
             CreatedAt = DateTime.UtcNow
         });
-        await PostgresData.AssertPostgresErrorAsync(UniqueViolation, () => db.SaveChangesAsync());
+        await PostgresData.AssertPostgresErrorAsync(
+            PostgresSqlState.UniqueViolation, () => db.SaveChangesAsync());
     }
 
     [PostgresFact]
     public async Task ExternalRecipeSource_PartialIndex_AllowsNullsButRejectsDuplicates()
     {
         await using var db = Database.CreateContext();
-        var owner = PostgresData.NewUser("owner@example.com");
-        db.Users.Add(owner);
-        var family = PostgresData.NewFamily("Семья", "FAMILY-1", owner.Id);
-        db.Families.Add(family);
-        await db.SaveChangesAsync();
+        var (_, family) = await PostgresData.SeedFamilyAsync(db);
 
         var sourceId = Guid.NewGuid();
 
@@ -171,6 +151,7 @@ public sealed class PostgresConstraintTests : PostgresTestBase
         var duplicate = PostgresData.NewRecipe(family.Id, "Дубликат");
         duplicate.SourceRecipeId = sourceId;
         db.Recipes.Add(duplicate);
-        await PostgresData.AssertPostgresErrorAsync(UniqueViolation, () => db.SaveChangesAsync());
+        await PostgresData.AssertPostgresErrorAsync(
+            PostgresSqlState.UniqueViolation, () => db.SaveChangesAsync());
     }
 }
