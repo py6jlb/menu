@@ -22,7 +22,7 @@ if command -v shellcheck >/dev/null 2>&1; then shellcheck deploy/*.sh; fi
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/app:ro -w /app \
   koalaman/shellcheck:stable deploy/config.sh deploy/release.sh deploy/backup.sh \
   deploy/build-push.sh deploy/deploy.sh deploy/compose.sh deploy/remote-deploy.sh \
-  deploy/restore-drill.sh deploy/smoke.sh
+  deploy/restore-drill.sh deploy/install-backup.sh deploy/smoke.sh
 ```
 
 Targeted runtime-тесты требуют Docker daemon и SDK-контейнер (SDK на хост не устанавливается):
@@ -112,3 +112,28 @@ Compose `config` экранирует все `$` как `$$` при сериал
 5. Структурные гарантии: **RED** — `node:18` и `npm install`, отсутствие 404-asset; после `node:24-alpine` + `npm ci` и nginx-правила **GREEN**.
 
 Итог: deploy-suite — **25 тестов GREEN**; контейнерный Shellcheck изменённых скриптов — чисто; frontend собирается `npm ci` в `node:24-alpine` без изменения lockfile. Ограничения: реальный registry, серверный `remote-deploy.sh`/`smoke.sh` и повторный деплой на стенде не запускаются — проверены изолированно (manifest, приоритет тега, структура).
+
+## Тикет 39: работающая установка резервного копирования
+
+`test_backup_restore.py` проверяет `backup.sh`, `restore-drill.sh` и `install-backup.sh` через transport-adapters: `docker`, `rclone` и `systemctl` подменены, rclone-remote эмулируется локальным каталогом (`FAKE_REMOTE_DIR`). Реальный Docker daemon, сеть, systemd и объектное хранилище не используются; все значения вымышленные.
+
+| Критерий | Проверка |
+|---|---|
+| Доставленные инструменты и units; установка без checkout | `test_readme_describes_delivered_install_without_checkout`, `test_backup_drill_scripts_are_delivered`, `test_installs_renders_and_enables_units` |
+| Пользователь службы, права, расположение rclone и доступ к remote | `test_unconfigured_remote_is_rejected`, `test_missing_rclone_is_rejected`, `test_unreadable_backup_script_is_rejected`, `test_installs_renders_and_enables_units` (рендер `User=`, `WorkingDirectory=`, `ExecStart=`) |
+| Timer включён, следующий запуск виден | `test_installs_renders_and_enables_units` (`daemon-reload`, `enable --now menu-backup.timer`) |
+| Сбой dump/архивации/хранилища/upload → ненулевой код, нет «Готово» | `test_dump_failure_...`, `test_archive_failure_...`, `test_missing_backend_container_...`, `test_missing_photos_volume_...`, `test_upload_failure_...`, `test_upload_without_remote_object_...`, `test_storage_listing_error_...` |
+| Запуск восстановления без аргумента; отсутствие `$1` не прерывает | `test_runs_without_argument_and_verifies_remote_set`, `test_explicit_empty_argument_is_treated_as_missing` |
+| SQL-восстановление останавливается при ошибке; БД/роль совпадают с дампом; нет фото → не успех | `test_sql_error_aborts`, `test_configured_database_identity_is_used`, `test_missing_photos_archive_is_not_success`, `test_corrupt_dump_is_rejected_before_container_start` |
+| Изолированная временная БД, уникальное имя, очистка контейнера и volume | `test_runs_without_argument_and_verifies_remote_set` (`--network none`, суффикс имени, `rm -f -v`) |
+| Успешная доставка объектов | `test_success_reaches_remote_and_declares_success` |
+
+### TDD evidence (тикет 39)
+
+1. Install-шов: **RED** — `install-backup.sh` отсутствовал, доставка не покрыта; после рендера units, проверки remote от имени службы и `enable --now` — **GREEN**.
+2. Восстановление без `$1`: **RED** — `set -u` прерывал запуск, drill требовал пустой аргумент; после `${1-}` и `ON_ERROR_STOP` — **GREEN**.
+3. Отказы backup: **RED** — отсутствие объекта после upload и ошибка чтения хранилища давали «Готово»; после `verify_upload` и разбора кода rclone (терпим только «каталог не найден») — **GREEN**.
+4. Изоляция и очистка drill: **RED** — фиксированное имя контейнера без `--network none` и без снятия volume; после уникального суффикса, `--network none` и `rm -f -v` — **GREEN**.
+5. Обязательный архив фото: **RED** — отсутствие фото давало успешный drill; после обязательной проверки архива — **GREEN**.
+
+Ограничения: реальные Postgres, systemd, rclone-remote и `pg_dump`/`pg_restore` не запускаются. Проверяются вызовы на публичных границах скриптов, коды завершения и отсутствие ложного успеха. Согласование БД/фото в одну точку и полный запуск восстановленного приложения — тикет 40.

@@ -14,6 +14,7 @@
 | `otel-collector.yaml` | приём OTLP-логов, вывод в консоль и файл (3 дня) |
 | `backup.sh` | бэкап БД и фото в объектное хранилище |
 | `restore-drill.sh` | проверочное восстановление |
+| `install-backup.sh` | установка и обновление systemd-units бэкапа |
 | `config.sh` | доверенная библиотека чтения literal-конфигурации |
 | `release.sh` | доверенная библиотека релиза: clean-tree, хэши конфигурации, manifest |
 | `compose.sh` | серверный Compose без автоматического чтения `.env` |
@@ -106,6 +107,7 @@ SMTP_PASSWORD=пробел $HOME ${SMTP_USER} $$ # "двойные" 'одина�
 | `remote-deploy.sh`, `compose.sh` | непустые `DOCKERHUB_USER`, `POSTGRES_PASSWORD`, `JWT_SECRET`; у remote ещё тег-аргумент |
 | `backup.sh` | те же Compose-параметры и непустой `BACKUP_REMOTE`; корректные сроки хранения |
 | `restore-drill.sh` | непустой `BACKUP_REMOTE` |
+| `install-backup.sh` | непустой `BACKUP_REMOTE`; существующий пользователь службы (`DEPLOY_USER`, env) и rclone-remote, настроенный для него |
 
 Defaults показаны в примерах и Compose. `BACKUP_KEEP_DAILY`/`BACKUP_KEEP_WEEKLY` — целые 1–9999 без ведущих нулей: произвольный текст не допускается в bash-арифметику. Операционные SSH-настройки ограничены: `VPS_HOST` — DNS/IPv4 (буквы, цифры, точки, дефисы), `VPS_USER` — обычный Unix-login, `VPS_SSH_PORT` — цифры, `APP_DIR` — абсолютный путь из букв/цифр, `/`, `.`, `_`, `-`. IPv6 и пути с пробелами для локальной доставки не поддерживаются. Это ограничения адресов/путей; текстовые SMTP/JWT-значения читаются буквально.
 
@@ -153,20 +155,39 @@ Prod-Compose одновременно передаёт `DB_*` **и** `Connection
 
 ## Бэкапы
 
-`backup.sh` делает `pg_dump` БД и `tar` фото, выгружает их через `rclone` в объектное хранилище и чистит старое (по умолчанию 7 дневных и 4 недельных копии). Прод-базу не блокирует.
+`backup.sh` делает `pg_dump` БД и `tar` фото, выгружает их через `rclone` в объектное хранилище и чистит старое (по умолчанию 7 дневных и 4 недельных копии). Прод-базу не блокирует. Каждый шаг (дамп, архивация, выгрузка, подтверждение объектов, чистка) при ошибке завершает запуск ненулевым кодом; `Готово` печатается только после успешной доставки обоих объектов.
 
-Настройка на сервере:
+### Установка на сервере
+
+Штатная процедура деплоя доставляет `backup.sh`, `restore-drill.sh`, `install-backup.sh` и шаблоны units в `/opt/menu/deploy/` (см. шаг «Деплой»). Checkout репозитория на сервере не нужен: все команды ниже используют доставленные файлы по абсолютному пути.
+
+Служба `menu-backup.service` работает от пользователя `menu` (создаётся `bootstrap.sh`, состоит в группе `docker`). `server.conf` должен читаться этим пользователем — установщик выставляет `menu:menu` и `600`. rclone-настройки служба ищет в `$HOME/.config/rclone/rclone.conf` пользователя `menu`, поэтому remote создаётся **от его имени**, а не от root; remote root-пользователя службе не виден.
 
 ```bash
-rclone config          # создай S3-совместимый remote, например "selectel"
-# в /opt/menu/server.conf укажи BACKUP_REMOTE=selectel:menu-backups
-sudo install -m 644 deploy/systemd/menu-backup.service /etc/systemd/system/
-sudo install -m 644 deploy/systemd/menu-backup.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now menu-backup.timer
+# 1. rclone-remote от имени пользователя службы
+sudo -u menu -H rclone config          # создай S3-совместимый remote, например "selectel"
+
+# 2. BACKUP_REMOTE и POSTGRES_* в /opt/menu/server.conf
+#    BACKUP_REMOTE=selectel:menu-backups
+
+# 3. Доставленные скрипты ставят и обновляют units, включают timer
+sudo /opt/menu/deploy/install-backup.sh
 ```
 
-Проверка: `sudo systemctl start menu-backup.service` и `./deploy/restore-drill.sh ''` — последний дамп восстанавливается во временную БД, архив фото проверяется на читаемость. Пустой аргумент нужен из-за существующего обращения к `$1` при `set -u`; исправление этого поведения — отдельный тикет.
+`install-backup.sh` идемпотентен: рендерит units под фактического `DEPLOY_USER` и каталог приложения, ставит их в `/etc/systemd/system`, проверяет доступ к remote от имени службы, делает `daemon-reload` и `enable --now menu-backup.timer`. Если remote не настроен, установка останавливается с подсказкой.
+
+### Проверка после установки
+
+```bash
+sudo systemctl start menu-backup.service        # ручной запуск
+sudo journalctl -u menu-backup.service -n 50 --no-pager
+sudo -u menu -H rclone lsf selectel:menu-backups/db/ --files-only       # объекты появились
+sudo -u menu -H rclone lsf selectel:menu-backups/photos/ --files-only
+systemctl list-timers menu-backup.timer --no-pager                       # активен, видно Next
+/opt/menu/deploy/restore-drill.sh               # проверочное восстановление
+```
+
+`restore-drill.sh` без аргумента берёт последний дамп и последний архив фото из `BACKUP_REMOTE`, поднимает временную Postgres в изолированном контейнере (уникальное имя, `--network none`, контейнер и его volume удаляются на выходе) и восстанавливает дамп с `ON_ERROR_STOP`: ошибка SQL прерывает drill. Имя БД и роль берутся из тех же `POSTGRES_DB`/`POSTGRES_USER`, что у `backup.sh`, поэтому настройки совпадают с дампом. Отсутствие архива фото — неуспех, а не «успешный» drill. Явный аргумент — путь к скачанному дампу; архив фото всё равно сверяется. Согласование БД, фото и закреплённого релиза в одну точку восстановления — следующий тикет.
 
 ## Изолированные regression tests
 

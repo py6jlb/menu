@@ -100,7 +100,7 @@ class EntrypointTests(unittest.TestCase):
         # Только публичные артефакты: никогда не копируем реальный local.conf/.env.
         for filename in ("config.sh", "release.sh", "compose.sh", "remote-deploy.sh",
                          "build-push.sh", "deploy.sh", "backup.sh", "restore-drill.sh",
-                         "smoke.sh", "Caddyfile", "otel-collector.yaml",
+                         "install-backup.sh", "smoke.sh", "Caddyfile", "otel-collector.yaml",
                          "systemd/menu-backup.service", "systemd/menu-backup.timer"):
             destination = self.root / "deploy" / filename
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -397,7 +397,8 @@ sys.exit(subprocess.run(["bash", "-c", sys.argv[-1]]).returncode)
         delivered = [argument for call in calls if call["command"] == "scp"
                      for argument in call["args"][2:-1]]
         for filename in ("deploy/config.sh", "deploy/compose.sh", "deploy/remote-deploy.sh",
-                         "deploy/backup.sh", "deploy/restore-drill.sh"):
+                         "deploy/backup.sh", "deploy/restore-drill.sh",
+                         "deploy/install-backup.sh"):
             self.assertIn(filename, delivered)
             self.assertTrue((remote / filename).exists())
         self.assertFalse(any(".conf" in path or ".env" in path for path in delivered))

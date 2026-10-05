@@ -58,6 +58,7 @@ archive_photos() {
   [ -n "$photos_volume" ] || die "Не найден volume с фото"
   docker run --rm -v "$photos_volume":/data:ro -v "$TMP":/backup alpine:3.20 \
     tar czf "/backup/photos-$STAMP.tar.gz" -C /data .
+  [ -s "$TMP/photos-$STAMP.tar.gz" ] || die "Архив фото пуст"
 }
 
 upload() {
@@ -72,22 +73,44 @@ upload() {
   fi
 }
 
+# Независимое подтверждение доставки: copyto мог завершиться успешно без объекта.
+verify_upload() {
+  local spec dir file
+  for spec in "db:$STAMP.sql.gz" "photos:$STAMP.tar.gz"; do
+    dir="${spec%%:*}"
+    file="${spec#*:}"
+    if ! rclone lsf "$BACKUP_REMOTE/$dir/" --files-only 2>/dev/null | grep -qx "$file"; then
+      die "Проверка выгрузки: $dir/$file не найден в $BACKUP_REMOTE"
+    fi
+  done
+}
+
 prune() {
-  local dir="$1" keep="$2" cutoff file date_part
+  local dir="$1" keep="$2" cutoff file date_part listing code
   cutoff="$(date -d "$((keep - 1)) days ago" +%F)"
   log "Чистка $dir (оставляем с $cutoff)"
+  # lsf на отсутствующий каталог даёт код 3 — это нормально до первой недели.
+  # Прочие ошибки (доступ к хранилищу) не должны выдаваться за успех.
+  set +e
+  listing="$(rclone lsf "$BACKUP_REMOTE/$dir/" --files-only 2>/dev/null)"
+  code=$?
+  set -e
+  if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then
+    die "Не удалось прочитать $BACKUP_REMOTE/$dir (rclone код $code)"
+  fi
   while IFS= read -r file; do
     [ -n "$file" ] || continue
     date_part="${file:0:10}"
     if [[ "$date_part" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [[ "$date_part" < "$cutoff" ]]; then
       rclone deletefile "$BACKUP_REMOTE/$dir/$file"
     fi
-  done < <(rclone lsf "$BACKUP_REMOTE/$dir/" --files-only 2>/dev/null || true)
+  done <<< "$listing"
 }
 
 dump_database
 archive_photos
 upload
+verify_upload
 prune db "$BACKUP_KEEP_DAILY"
 prune photos "$BACKUP_KEEP_DAILY"
 prune weekly "$((BACKUP_KEEP_WEEKLY * 7))"
