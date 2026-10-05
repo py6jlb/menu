@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../stores/auth'
 import { apiJson } from '../api/client'
+import { rateLimitMessage } from '../composables/useCooldown'
 
 const router = useRouter()
 const { setSession } = useAuth()
@@ -23,6 +24,8 @@ async function submit() {
     if (response.status === 200) {
       setSession(data.token, data.user)
       router.push({ name: 'home' })
+    } else if (response.status === 429) {
+      error.value = rateLimitMessage(response, data)
     } else {
       error.value = data?.error || 'Не удалось войти.'
     }

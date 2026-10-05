@@ -5,7 +5,8 @@ import { useAuth } from '../stores/auth'
 import { verifyEmail, resendVerification } from '../api/auth'
 import {
   RESEND_COOLDOWN_SECONDS,
-  parseCooldownSeconds,
+  rateLimitMessage,
+  retryAfterSeconds,
   useCooldown
 } from '../composables/useCooldown'
 
@@ -65,9 +66,9 @@ async function resend() {
       resendMessage.value = 'Код отправлен повторно.'
       startCooldown(RESEND_COOLDOWN_SECONDS)
     } else if (response.status === 429) {
-      const seconds = parseCooldownSeconds(data?.error)
+      const seconds = retryAfterSeconds(response, data)
       if (seconds) startCooldown(seconds)
-      resendError.value = data?.error || 'Слишком много запросов. Попробуйте позже.'
+      resendError.value = rateLimitMessage(response, data)
     } else if (response.status === 423) {
       resendError.value = data?.error || 'Ввод кода временно заблокирован.'
     } else {

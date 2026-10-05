@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { unlockUser } from '../api/admin'
+import { rateLimitMessage } from '../composables/useCooldown'
 
 const email = ref('')
 const pending = ref(false)
@@ -19,7 +20,7 @@ async function submit() {
     } else if (response.status === 404) {
       error.value = data?.error || 'Пользователь не найден.'
     } else if (response.status === 429) {
-      error.value = data?.error || 'Слишком много запросов. Попробуйте позже.'
+      error.value = rateLimitMessage(response, data)
     } else if (response.status === 403) {
       error.value = 'Недостаточно прав для этого действия.'
     } else {

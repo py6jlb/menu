@@ -8,9 +8,7 @@ namespace MenuPlanner.Api.Auth;
 
 public static class AdminEndpoints
 {
-    public const int UnlockRateLimitPerMinute = 10;
     private static readonly TimeSpan UnlockRateWindow = TimeSpan.FromMinutes(1);
-    private const string UnlockRateKeyPrefix = "admin-unlock:user:";
 
     public static IEndpointRouteBuilder MapAdminEndpoints(this IEndpointRouteBuilder app)
     {
@@ -26,19 +24,27 @@ public static class AdminEndpoints
         UnlockUserRequest request,
         ClaimsPrincipal principal,
         AppDbContext db,
+        AuthRateLimitOptions rateLimits,
         FixedWindowRateLimiter limiter,
         EmailVerificationService verification,
-        TimeProvider clock)
+        TimeProvider clock,
+        HttpContext http)
     {
         var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
         if (!Guid.TryParse(subject, out var adminId))
             return Results.Unauthorized();
 
-        var now = clock.GetUtcNow().UtcDateTime;
-        if (!limiter.TryConsume(UnlockRateKeyPrefix + adminId, UnlockRateLimitPerMinute, UnlockRateWindow, now))
-            return Results.Json(
-                new ErrorDto("Слишком много запросов. Попробуйте позже."),
-                statusCode: StatusCodes.Status429TooManyRequests);
+        var limited = AuthRateLimitPolicy.Check(
+            limiter,
+            scope: "admin-unlock",
+            ip: ClientIpResolver.Resolve(http),
+            perIp: rateLimits.UnlockPerIpPerMinute,
+            perIdentity: rateLimits.UnlockPerAdminPerMinute,
+            identity: adminId.ToString(),
+            window: UnlockRateWindow,
+            now: clock.GetUtcNow().UtcDateTime);
+        if (limited is not null)
+            return limited;
 
         var email = request.Email?.Trim().ToLowerInvariant() ?? "";
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
