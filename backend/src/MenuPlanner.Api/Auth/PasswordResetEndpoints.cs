@@ -1,8 +1,5 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
 
 namespace MenuPlanner.Api.Auth;
@@ -27,14 +24,15 @@ public static class PasswordResetEndpoints
     private static async Task<IResult> RequestPasswordResetAsync(
         PasswordResetCodeRequest request,
         AppDbContext db,
-        IPasswordHasher<User> hasher,
+        PasswordResetService reset,
         EmailSender emailSender,
         AuthCodeOptions options,
         FixedWindowRateLimiter limiter,
+        TimeProvider clock,
         HttpContext http)
     {
         var email = request.Email?.Trim().ToLowerInvariant() ?? "";
-        var now = DateTime.UtcNow;
+        var now = clock.GetUtcNow().UtcDateTime;
         var window = TimeSpan.FromHours(1);
         var ip = ClientIpResolver.Resolve(http);
         var allowedByEmail = limiter.TryConsume(
@@ -49,27 +47,19 @@ public static class PasswordResetEndpoints
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
         if (user is not null && user.IsEmailVerified)
         {
-            AuthCodeService.ClearExpiredLock(user, now);
-
-            var cooldown = TimeSpan.FromMinutes(options.ResendCooldownMinutes);
-            var latest = await LatestResetCodeAsync(db, user.Id);
-            var withinCooldown = latest is not null && now - latest.CreatedAt < cooldown;
-
-            if (!AuthCodeService.IsLocked(user, now) && !withinCooldown)
-            {
-                var code = await AuthCodeIssuer.IssueAsync(db, hasher, user.Id, AuthCodeType.Reset, now);
-                await emailSender.SendPasswordResetCodeAsync(user.Email, code);
-            }
+            var result = await reset.RequestAsync(user);
+            if (result.Outcome == PasswordResetRequestOutcome.Sent)
+                await emailSender.SendPasswordResetCodeAsync(user.Email, result.Code!);
         }
 
+        // Нейтральный ответ для существующих/неизвестных/неподтверждённых email.
         return Results.Json(new MessageDto(NeutralMessage));
     }
 
     private static async Task<IResult> ResetPasswordAsync(
         ResetPasswordRequest request,
         AppDbContext db,
-        IPasswordHasher<User> hasher,
-        AuthCodeOptions options)
+        PasswordResetService reset)
     {
         var newPassword = request.NewPassword ?? "";
         if (newPassword.Length < PasswordPolicy.MinLength)
@@ -78,49 +68,27 @@ public static class PasswordResetEndpoints
             return Results.BadRequest(new ErrorDto("Пароли не совпадают."));
 
         var email = request.Email?.Trim().ToLowerInvariant() ?? "";
-        var now = DateTime.UtcNow;
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
         if (user is null || !user.IsEmailVerified)
             return InvalidCode();
 
-        AuthCodeService.ClearExpiredLock(user, now);
-        if (AuthCodeService.IsLocked(user, now))
-            return Locked();
-
-        var stored = await LatestResetCodeAsync(db, user.Id);
-        var code = request.Code?.Trim() ?? "";
-        var result = stored is null
-            ? CodeCheckResult.Invalid
-            : AuthCodeService.Check(hasher, stored, code, now);
-
-        if (result == CodeCheckResult.Ok)
+        var result = await reset.ResetAsync(user, request.Code?.Trim() ?? "", newPassword);
+        return result.Outcome switch
         {
-            AuthCodeService.Burn(stored!);
-            user.PasswordHash = hasher.HashPassword(user, newPassword);
-            user.TokenVersion++;
-            AuthCodeService.ResetAttempts(user);
-            await db.SaveChangesAsync();
-            return Results.Json(new MessageDto("Пароль изменён."));
-        }
-
-        AuthCodeService.RecordFailedAttempt(
-            user, now, options.MaxAttempts, TimeSpan.FromDays(options.LockDurationDays));
-        await db.SaveChangesAsync();
-
-        return AuthCodeService.IsLocked(user, now) ? Locked() : InvalidCode();
+            PasswordResetOutcome.Reset => Results.Json(new MessageDto("Пароль изменён.")),
+            PasswordResetOutcome.ExpiredCode => BadCode(
+                "Срок действия кода истёк. Запросите новый код.", "expired"),
+            PasswordResetOutcome.CodeAlreadyUsed => BadCode(
+                "Этот код уже использован. Запросите новый код.", "used"),
+            PasswordResetOutcome.ChallengeClosed => BadCode(
+                "Слишком много неверных попыток. Запросите новый код.", "closed"),
+            _ => BadCode("Неверный код. Проверьте и попробуйте снова.", "invalid")
+        };
     }
 
     private static IResult InvalidCode() =>
-        Results.BadRequest(new ErrorDto("Неверный или истёкший код."));
+        Results.BadRequest(new ResetErrorDto("Неверный или истёкший код.", "invalid"));
 
-    private static IResult Locked() =>
-        Results.Json(
-            new ErrorDto("Слишком много неверных попыток. Попробуйте позже."),
-            statusCode: StatusCodes.Status423Locked);
-
-    private static Task<AuthCode?> LatestResetCodeAsync(AppDbContext db, Guid userId) =>
-        db.AuthCodes
-            .Where(c => c.UserId == userId && c.Type == AuthCodeType.Reset)
-            .OrderByDescending(c => c.CreatedAt)
-            .FirstOrDefaultAsync();
+    private static IResult BadCode(string message, string code) =>
+        Results.BadRequest(new ResetErrorDto(message, code));
 }

@@ -52,7 +52,9 @@ builder.Services.AddSingleton(authCodeOptions);
 builder.Services.AddSingleton<FixedWindowRateLimiter>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<IAuthCodeGenerator, RandomAuthCodeGenerator>();
+builder.Services.AddScoped<AuthCodeLifecycle>();
 builder.Services.AddScoped<EmailVerificationService>();
+builder.Services.AddScoped<PasswordResetService>();
 
 builder.Services.AddSingleton(services => new ShareOptions
 {

@@ -22,6 +22,13 @@ const resetDone = ref(false)
 
 const { cooldown, cooldownLabel, startCooldown } = useCooldown()
 
+const RESET_CODE_ERRORS = {
+  invalid: 'Неверный код. Проверьте и попробуйте снова.',
+  expired: 'Срок действия кода истёк. Запросите новый код.',
+  used: 'Этот код уже использован. Запросите новый код.',
+  closed: 'Слишком много неверных попыток. Запросите новый код.'
+}
+
 const passwordsMismatch = computed(
   () => newPasswordConfirm.value.length > 0 && newPassword.value !== newPasswordConfirm.value
 )
@@ -66,8 +73,10 @@ async function submitReset() {
     })
     if (response.status === 200) {
       resetDone.value = true
+    } else if (response.status === 400 && data?.code) {
+      resetError.value = RESET_CODE_ERRORS[data.code] || data.error || 'Неверный или истёкший код.'
     } else if (response.status === 423) {
-      resetError.value = data?.error || 'Слишком много неверных попыток. Попробуйте позже.'
+      resetError.value = data?.error || 'Слишком много неверных попыток. Запросите новый код.'
     } else {
       resetError.value = data?.error || 'Неверный или истёкший код.'
     }
