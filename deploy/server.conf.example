@@ -1,4 +1,8 @@
-# Docker Hub
+# Сервер: скопировать в /opt/menu/server.conf (chmod 600).
+# KEY=value; всё после первого = буквально, без shell/Compose-подстановок.
+# Кавычки не нужны: они станут частью значения. Комментарии — отдельными строками.
+
+# Docker Hub (тот же namespace, что в локальном файле)
 DOCKERHUB_USER=your-dockerhub-login
 IMAGE_TAG=latest
 
@@ -33,8 +37,6 @@ BACKUP_REMOTE=
 BACKUP_KEEP_DAILY=7
 BACKUP_KEEP_WEEKLY=4
 
-# Локальный деплой (не попадает на сервер в /opt/menu/.env)
-VPS_HOST=
-VPS_USER=menu
-VPS_SSH_PORT=8822
-APP_DIR=/opt/menu
+# Дополнительные серверные ключи (обычно достаточно defaults):
+# COMPOSE_FILE=docker-compose.prod.yml
+# DRILL_CONTAINER=menu-restore-drill

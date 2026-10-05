@@ -5,7 +5,7 @@ set -euo pipefail
 #
 #   ./deploy/build-push.sh
 #
-# Переменные (env или deploy/.env):
+# Переменные (env или deploy/local.conf):
 #   DOCKERHUB_USER  логин Docker Hub (обязателен)
 #   IMAGE_TAG       тег образа (по умолчанию короткий git-sha)
 
@@ -13,12 +13,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 # shellcheck disable=SC1091
-[ -f deploy/.env ] && set -a && . deploy/.env && set +a
+. "$ROOT/deploy/config.sh"
+config_load "$ROOT/deploy/local.conf" local
+config_require DOCKERHUB_USER
 
-DOCKERHUB_USER="${DOCKERHUB_USER:-}"
-: "${DOCKERHUB_USER:?Задай DOCKERHUB_USER (deploy/.env или env)}"
-
-TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
+TAG="${IMAGE_TAG-$(git rev-parse --short HEAD)}"
+config_image_tag "$TAG"
 BACKEND_IMAGE="$DOCKERHUB_USER/menu-backend"
 FRONTEND_IMAGE="$DOCKERHUB_USER/menu-frontend"
 
