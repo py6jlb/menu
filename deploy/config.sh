@@ -60,6 +60,9 @@ config_require() {
 
 config_server() {
   config_load "$APP_DIR/server.conf" server || return
+  # Состояние выбранного релиза, записанное remote-deploy. Ниже приоритета
+  # server.conf и окружения: повторный штатный Compose берёт тот же тег.
+  config_load "$APP_DIR/current-release" server || return
   config_require DOCKERHUB_USER POSTGRES_PASSWORD JWT_SECRET || return
   config_image_tag "${IMAGE_TAG-latest}"
 }
