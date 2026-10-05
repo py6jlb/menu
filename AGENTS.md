@@ -17,6 +17,8 @@
   docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 dotnet test
   ```
 
+  Критические гарантии PostgreSQL (миграции, индексы, каскады, точность, гонки) — отдельный suite: `scripts/test-postgres.sh` (одноразовый `postgres:16` в контейнере, без SDK и БД на хосте; без `MENU_PLANNER_TEST_POSTGRES` эти тесты пропускаются).
+
 - **Frontend**: `cd frontend && npm run build` (зависимости уже в `node_modules`).
 - **Живой стек**: `docker compose up --build`; фронт http://localhost:8081, health http://localhost:8080/health.
 - Схема БД ведётся EF Core миграциями (`backend/src/MenuPlanner.Api/Migrations/`), применяются автоматически на старте (`MigrateAsync`). Новую миграцию генерируют из корня через SDK-контейнер: `dotnet tool restore` (локальный манифест `.config/dotnet-tools.json`) и `dotnet ef migrations add <Name> --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api`. При переходе существующей dev-БД со старого `EnsureCreated` — разово пересоздать том: `docker compose down -v`.

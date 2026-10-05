@@ -4,7 +4,9 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** claimed (ticket/37-postgres-critical-suite; ожидает итогового code-review)
+
+Реализация и изолированные проверки подготовлены в worktree; чеклист оставлен для итогового ревью основным агентом. Suite — `backend/tests/MenuPlanner.Api.Tests/Postgres/`, запуск — `scripts/test-postgres.sh`.
 
 - [ ] Узкий интеграционный набор работает с настоящей PostgreSQL той же основной версии, что и приложение, не затрагивая рабочие данные и dev-БД.
 - [ ] Проверены миграция пустой БД штатным запуском и повторный запуск без изменения данных; проверка upgrade допускает добавление следующей миграции в последующих тикетах.
