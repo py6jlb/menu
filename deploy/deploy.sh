@@ -79,8 +79,8 @@ scp -P "$VPS_SSH_PORT" docker-compose.prod.yml "$TARGET:$APP_DIR/docker-compose.
 scp -P "$VPS_SSH_PORT" deploy/Caddyfile "$TARGET:$APP_DIR/Caddyfile"
 scp -P "$VPS_SSH_PORT" deploy/otel-collector.yaml "$TARGET:$APP_DIR/otel-collector.yaml"
 scp -P "$VPS_SSH_PORT" deploy/config.sh deploy/compose.sh deploy/release.sh \
-  deploy/remote-deploy.sh deploy/backup.sh deploy/restore-drill.sh deploy/smoke.sh \
-  "$TARGET:$APP_DIR/deploy/"
+  deploy/remote-deploy.sh deploy/backup.sh deploy/restore-drill.sh deploy/install-backup.sh \
+  deploy/smoke.sh "$TARGET:$APP_DIR/deploy/"
 scp -P "$VPS_SSH_PORT" deploy/systemd/menu-backup.service deploy/systemd/menu-backup.timer \
   "$TARGET:$APP_DIR/deploy/systemd/"
 if [ -f "$MANIFEST" ]; then
