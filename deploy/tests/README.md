@@ -22,7 +22,8 @@ if command -v shellcheck >/dev/null 2>&1; then shellcheck deploy/*.sh; fi
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/app:ro -w /app \
   koalaman/shellcheck:stable deploy/config.sh deploy/release.sh deploy/backup-lib.sh \
   deploy/backup.sh deploy/build-push.sh deploy/deploy.sh deploy/compose.sh \
-  deploy/remote-deploy.sh deploy/restore-drill.sh deploy/install-backup.sh deploy/smoke.sh
+  deploy/remote-deploy.sh deploy/restore-drill.sh deploy/install-backup.sh deploy/smoke.sh \
+  deploy/bootstrap.sh
 ```
 
 Targeted runtime-тесты требуют Docker daemon и SDK-контейнер (SDK на хост не устанавливается):
@@ -169,3 +170,35 @@ Compose `config` экранирует все `$` как `$$` при сериал
 7. Состояние и RPO/RTO: **RED** — результат drill нигде не сохранялся; после `backup-state` (`last_full_backup*`, `last_drill_*`, `last_drill_ok_set`, `last_drill_seconds`) — **GREEN**; RPO/RTO описаны как измеряемые, без гарантированных чисел.
 
 Итог: deploy-suite — **62 теста GREEN**; `bash -n deploy/*.sh` и контейнерный Shellcheck (включая `backup-lib.sh`) — чисто. Ограничения: реальные Postgres/rclone-remote/Docker daemon, S3-семантика, фактическое время восстановления и поведение Caddy в окне quiesce не запускаются; проверяются вызовы на публичных границах, коды и состояния. Запуск закреплённого релиза в изоляции проверен на уровне вызова `docker run` и health-пробы.
+
+## Тикет 43: повторяемый bootstrap без потери доступа
+
+`test_bootstrap.py` проверяет `deploy/bootstrap.sh` без root: скрипт подключается через `source`, системные пути (`SSHD_CONFIG_DIR`, `SYSTEMD_UNIT_DIR`, `SUDOERS_DIR`, `FAIL2BAN_JAIL_DIR`, `SWAPFILE`, `FSTAB`, `OS_RELEASE_FILE`, `DOCKER_KEYRING`, `DOCKER_APT_LIST`, `LEGACY_MARKER`) переопределены на временный каталог, а внешние команды (`sshd`, `systemctl`, `ss`, `docker`, `ufw`, `fail2ban-client`, `install`, `chown`, `visudo`, `runuser`, `getent`, `id`, `adduser`, `usermod`, `curl`, `apt-get`, `dpkg`, `fallocate`, ...) подменены исполняемыми адаптерами в `PATH`. Root, sshd, systemd и Docker daemon не нужны; секреты вымышленные.
+
+| Критерий | Проверка |
+|---|---|
+| Повторный прогон сохраняет существующие ключи, новый добавляется без дублей | `test_repeatable_runs_preserve_existing_and_avoid_duplicates` (два последовательных `bootstrap`) |
+| Дубль не создаётся при том же ключе с другим комментарием; второй ключ добавляется; мусор отвергается | `test_same_key_with_different_comment_is_not_duplicated`, `test_second_key_is_appended_and_invalid_key_is_rejected` |
+| Административный путь: NOPASSWD-файл и фактическая проверка `sudo -n`, а не членство в группе | `test_admin_path_uses_nopasswd_and_is_verified`, `test_broken_admin_path_is_rejected` |
+| Отказ до применения при неверном `sshd -t`/эффективной конфигурации; старый порт не пропадает | `test_invalid_config_is_rejected_before_apply`, `test_invalid_effective_config_is_rejected` |
+| Socket activation Ubuntu 24.04: `ssh.socket.d` c `ListenStream` на новом и старом порту | `test_socket_activation_listens_on_both_ports`, `test_marker_removes_legacy_listen_stream` |
+| Порядок «сначала проверка sshd, потом закрытие/применение» | `test_validates_before_closing_and_keeps_marker_after` (индексы вызовов `sshd` < `systemctl restart`) |
+| Неверная конфигурация не закрывает рабочий путь; закрытие отложено, пока новый порт не слушается | `test_invalid_config_does_not_close_legacy_port`, `test_refuses_when_new_port_is_not_listening` |
+| Docker из официального repo с `signed-by`, без `get.docker.com` | `test_official_repository_with_signed_key_is_used` |
+| Compose v2 проверяется явно; отсутствующий инструмент отвергается | `test_compose_v2_is_checked_explicitly`, `test_missing_tool_is_rejected` |
+| fail2ban реально банит и снимает пробный адрес (RFC 5737) | `test_fail2ban_real_ban_action_is_verified` |
+| Jail настроен на выбранный порт и применяется | `test_fail2ban_jail_targets_the_selected_port` |
+
+### TDD evidence (тикет 43)
+
+1. Ключи: **RED** — старый `read_public_key > authorized_keys` затирал файл при повторном прогоне. После `merge_authorized_key` (уникальность по типу+base64, сохранение чужих строк) — **GREEN**, включая два последовательных `bootstrap`.
+2. Проверка sshd: **RED** — конфигурация писалась и сразу `reload`; неверный `sshd -t` не мешал применению. После `validate_sshd_config` (`sshd -t` + `sshd -T`) до firewall/`apply_sshd` — **GREEN**.
+3. Порядок закрытия: **RED** — `--close-legacy-port` удалял страховочный конфиг до проверки. После `verify_ssh_listener` + повторной валидации до удаления — **GREEN**; при неверном конфиге или неслушающем порту старый путь остаётся.
+4. Socket activation: **RED** — `Port` в `sshd_config` игнорировался бы `ssh.socket` Ubuntu 24.04. После drop-in `ListenStream` и `restart ssh.socket` — **GREEN**.
+5. Docker: **RED** — использовался `curl get.docker.com | sh`, Compose v2 явно не проверялся. После официального repo с `signed-by` и проверки `docker compose version` v2 — **GREEN**.
+6. fail2ban: **RED** — проверялась только установка. После реального `banip`/`unbanip` пробного `192.0.2.1` — **GREEN**.
+7. sudoers: **RED** (`Permission denied` на втором прогоне из-за `chmod 440`) — после атомарной записи через `mktemp` + `visudo` + `mv` — **GREEN**.
+
+Итог: deploy-suite — **80 тестов GREEN** (включая 18 новых `test_bootstrap.py`); `bash -n deploy/*.sh` и контейнерный Shellcheck (включая `bootstrap.sh`) — чисто.
+
+Ограничения: автоматизированный suite не запускает настоящий sshd, systemd, Docker, ufw и fail2ban — проверяются публичные швы под подменёнными адаптерами. Реальный сценарий «два последовательных прогона на чистой временной VM + неверный SSH-конфиг, после которого работают ключевой вход, административный путь и Compose» — **ручная проверка на стенде**, описанная в `deploy/README.md` (разделы «Bootstrap: повторяемость и доступ» и «Аварийный доступ»); в этом окружении VM нет.
