@@ -95,12 +95,16 @@ normalize_key() {
 
 # Ключ уникален по типу и base64-телу; комментарий (user@host) не учитывается,
 # поэтому повторная выдача того же ключа с другим комментарием не дублируется.
+key_fingerprint() {
+  awk '{ if (NF >= 2) printf "%s %s", $1, $2 }' <<<"$1"
+}
+
 authorized_keys_has() {
-  local file="$1" key="$2" type blob
-  read -r type blob _ <<<"$key"
-  awk -v t="$type" -v b="$blob" '
+  local file="$1" fp
+  fp="$(key_fingerprint "$2")"
+  awk -v fp="$fp" '
     /^[[:space:]]*#/ { next }
-    NF >= 2 && $1 == t && $2 == b { found = 1 }
+    NF >= 2 && ($1 " " $2) == fp { found = 1 }
     END { exit(found ? 0 : 1) }
   ' "$file"
 }
@@ -108,12 +112,12 @@ authorized_keys_has() {
 # Идемпотентное слияние: существующие строки сохраняются, новый ключ
 # добавляется один раз. Файл создаётся при отсутствии.
 merge_authorized_key() {
-  local file="$1" key type blob
+  local file="$1" key fp
   [ -n "$file" ] || { warn "merge_authorized_key: не задан путь"; return 1; }
   key="$(normalize_key "$2")"
   [ -n "$key" ] || { warn "Пустой SSH-ключ"; return 1; }
-  read -r type blob _ <<<"$key"
-  if [ -z "${type:-}" ] || [ -z "${blob:-}" ]; then
+  fp="$(key_fingerprint "$key")"
+  if [ -z "$fp" ]; then
     warn "Неверный формат SSH-ключа (ожидается 'тип base64 [комментарий]')"
     return 1
   fi
@@ -254,6 +258,8 @@ apply_sshd() {
       printf '[Socket]\n'
       printf 'ListenStream=\n'
       printf 'ListenStream=%s\n' "$SSH_PORT"
+      # Страховочный порт слушаем, пока существует его конфиг: закрытие
+      # удаляет конфиг и перезапускает socket, поэтому порт не возвращается.
       if [ -f "$SSHD_LEGACY_CONF" ]; then
         printf 'ListenStream=%s\n' "$SSH_LEGACY_PORT"
       fi

@@ -393,6 +393,13 @@ class AdminAndFail2banTests(BootstrapTestCase):
                 if call["command"] == "fail2ban-client" and call["args"][:3] == ["set", "sshd", "banip"]]
         self.assertEqual(len(bans), 1)
 
+    def test_fail2ban_jail_targets_the_selected_port(self):
+        result = self.call("configure_fail2ban")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        jail = (self.fail2ban_dir / "menu-sshd.local").read_text()
+        self.assertIn("port = 8822", jail)
+        self.assertIn({"command": "systemctl", "args": ["restart", "fail2ban"]}, self.calls_list())
+
 
 if __name__ == "__main__":
     unittest.main()
