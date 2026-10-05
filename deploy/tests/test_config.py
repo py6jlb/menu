@@ -99,6 +99,7 @@ class EntrypointTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         # Только публичные артефакты: никогда не копируем реальный local.conf/.env.
         for filename in ("config.sh", "release.sh", "compose.sh", "remote-deploy.sh",
+                         "deploy-lib.sh", "rollback.sh",
                          "build-push.sh", "deploy.sh", "backup-lib.sh", "backup.sh",
                          "restore-drill.sh", "install-backup.sh", "smoke.sh", "Caddyfile",
                          "otel-collector.yaml",
@@ -402,7 +403,8 @@ sys.exit(subprocess.run(["bash", "-c", sys.argv[-1]]).returncode)
         delivered = [argument for call in calls if call["command"] == "scp"
                      for argument in call["args"][2:-1]]
         for filename in ("deploy/config.sh", "deploy/compose.sh", "deploy/backup-lib.sh",
-                         "deploy/remote-deploy.sh", "deploy/backup.sh", "deploy/restore-drill.sh",
+                         "deploy/deploy-lib.sh", "deploy/remote-deploy.sh", "deploy/rollback.sh",
+                         "deploy/backup.sh", "deploy/restore-drill.sh",
                          "deploy/install-backup.sh"):
             self.assertIn(filename, delivered)
             self.assertTrue((remote / filename).exists())
