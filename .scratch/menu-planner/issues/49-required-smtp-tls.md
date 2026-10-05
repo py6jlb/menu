@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** claimed (ticket/49-required-smtp-tls; ожидает code-review)
 
 - [ ] Настройка TLS означает обязательную защиту: выбран явный требуемый STARTTLS либо TLS-соединение, без downgrade «когда доступно» и без отключения проверки сертификата.
 - [ ] Несовместимые host/port/TLS-настройки и отсутствие обязательных полей дают понятную ошибку конфигурации без секретов.

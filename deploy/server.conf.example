@@ -22,14 +22,22 @@ JWT_SECRET=change-me-min-32-chars-0123456789abcdef
 JWT_ISSUER=menu-planner
 JWT_AUDIENCE=menu-planner-client
 
-# SMTP (production обязателен; пусто — письма в лог только в lab)
+# SMTP (production обязателен; только защищённое соединение)
+# SMTP_SECURITY=starttls — явно требуемый STARTTLS (порт 587),
+# SMTP_SECURITY=ssl — неявный TLS (порт 465). Даунгрейда и отключения
+# проверки сертификата нет. Пусто — письма в лог только в lab.
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=
 SMTP_PASSWORD=
 SMTP_FROM=
 SMTP_FROM_NAME=Меню для домохозяек
-SMTP_ENABLE_STARTTLS=true
+SMTP_SECURITY=starttls
+# Предел ожидания SMTP-операций, 1–300 секунд; сбой не считается доставкой.
+SMTP_TIMEOUT_SECONDS=10
+# smtp (по умолчанию) или log — dev/test-запись полного письма в журнал,
+# доступна только в lab. В production log запрещён.
+EMAIL_TRANSPORT=smtp
 
 # Caddy: ":80" до домена (только lab), "example.com" для авто-HTTPS
 DOMAIN=:80

@@ -170,7 +170,7 @@ SMTP_PASSWORD=пробел $HOME ${SMTP_USER} $$ # "двойные" 'одина�
 | Область | Разрешённые ключи |
 |---|---|
 | Локально (`deploy/local.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `VPS_HOST`, `VPS_USER`, `VPS_SSH_PORT`, `APP_DIR` |
-| Сервер (`/opt/menu/server.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DEPLOYMENT_MODE`, `PUBLIC_BASE_URL`, `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_FROM_NAME`, `SMTP_ENABLE_STARTTLS`, `DOMAIN`, `SHARE_BASE_URL`, `BACKUP_REMOTE`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `COMPOSE_FILE`, `DRILL_CONTAINER` |
+| Сервер (`/opt/menu/server.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DEPLOYMENT_MODE`, `PUBLIC_BASE_URL`, `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_FROM_NAME`, `SMTP_SECURITY`, `SMTP_TIMEOUT_SECONDS`, `EMAIL_TRANSPORT`, `DOMAIN`, `SHARE_BASE_URL`, `BACKUP_REMOTE`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `COMPOSE_FILE`, `DRILL_CONTAINER` |
 
 | Скрипт | Обязательно до внешних действий |
 |---|---|
@@ -229,8 +229,10 @@ Prod-Compose одновременно передаёт `DB_*` **и** `Connection
 
 Backend проверяет конфигурацию на старте. Режим задаёт `DEPLOYMENT_MODE`:
 
-- **`production`** (по умолчанию, если переменная не задана) требует `PUBLIC_BASE_URL` вида `https://<домен>`, непустые `SMTP_HOST` и `SMTP_FROM`, а также случайные не-шаблонные `JWT_SECRET` (≥32 символа), `DB_PASSWORD` (≥12) и `SMTP_PASSWORD`. Известные dev/placeholder-значения (`dev-only-secret-…`, `change-me-strong`, `menu`, `postgres`, слова `secret`/`password`/`test`/`local`/… в составе) отклоняются понятной ошибкой. Значения секретов в ошибке не печатаются.
+- **`production`** (по умолчанию, если переменная не задана) требует `PUBLIC_BASE_URL` вида `https://<домен>`, непустые `SMTP_HOST` и `SMTP_FROM`, а также случайные не-шаблонные `JWT_SECRET` (≥32 символа), `DB_PASSWORD` (≥12) и `SMTP_PASSWORD`. Известные dev/placeholder-значения (`dev-only-secret-…`, `change-me-strong`, `menu`, `postgres`, слова `secret`/`password`/`test`/`local`/… в составе) отклоняются понятной ошибкой. Значения секретов в ошибке не печатаются. `EMAIL_TRANSPORT=log` в production запрещён: коды и HTML не попадают в журналы.
 - **`lab`** — явный лабораторный режим: допускает HTTP-адрес и письма в лог. Включается только явно (`DEPLOYMENT_MODE=lab`); см. `docker-compose.yml`. Лабораторная установка не выдаётся за production: `smoke.sh` отказывается проверять HTTP-край без `DEPLOYMENT_MODE=lab`.
+
+Почта идёт только по защищённому соединению. `SMTP_SECURITY=starttls` (по умолчанию) требует STARTTLS (порт 587), `SMTP_SECURITY=ssl` включает неявный TLS (порт 465); даунгрейда «когда доступно» и отключения проверки сертификата нет. Несовместимые host/port/TLS и неполные поля (`SMTP_FROM`, пара `SMTP_USER`/`SMTP_PASSWORD`, диапазон `SMTP_TIMEOUT_SECONDS` 1–300) — понятная ошибка на старте без секретов. Сбой SMTP ограничен тайм-аутом и не считается доставкой; полное письмо в журнал пишется только явно (`EMAIL_TRANSPORT=log`, только lab).
 
 Backend в образе работает от встроенного непривилегированного пользователя `app` (uid 1654 в `aspnet:10.0`). `PHOTOS_DIR=/app/photos` создаётся в образе под этим пользователем, поэтому named volume наследует владельца и загрузка/чтение/копирование/удаление фото работают (проверено запуском образа с named volume: `id` — `app`, запись/копирование/чтение/удаление в `/app/photos` проходят). Capabilities минимизированы: `backend` и `otel-collector` — `cap_drop: ALL`; `caddy` — `cap_drop: ALL` + `NET_BIND_SERVICE`; всем рабочим контейнерам добавлен `security_opt: no-new-privileges:true`. Эти ограничения не трогают исходящий трафик: backend остаётся в обычной сети и может открывать исходящее SMTP-соединение. `db` и `frontend` получают только `no-new-privileges` — их штатные entrypoint'ы требуют capabilities смены пользователя.
 

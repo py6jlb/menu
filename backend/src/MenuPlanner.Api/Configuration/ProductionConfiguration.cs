@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using MenuPlanner.Api.Emails;
 
 namespace MenuPlanner.Api.Configuration;
 
@@ -60,6 +61,14 @@ public static partial class ProductionConfiguration
             throw new InvalidOperationException(
                 "Конфигурация: production требует непустых SMTP_HOST и SMTP_FROM "
                 + "(режим без писем — только DEPLOYMENT_MODE=lab)");
+
+        if (string.Equals(
+                (configuration[EmailConfiguration.TransportVariable] ?? "").Trim(),
+                "log",
+                StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "Конфигурация: EMAIL_TRANSPORT=log (письма в журнал) запрещён в production; "
+                + "укажи SMTP или DEPLOYMENT_MODE=lab");
 
         RequireStrongSecret("JWT_SECRET", jwtSecret, MinJwtSecretLength);
 
