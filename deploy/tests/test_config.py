@@ -98,13 +98,26 @@ class EntrypointTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         # Только публичные артефакты: никогда не копируем реальный local.conf/.env.
-        for filename in ("config.sh", "compose.sh", "remote-deploy.sh", "build-push.sh",
-                         "deploy.sh", "backup.sh", "restore-drill.sh", "Caddyfile",
-                         "otel-collector.yaml", "systemd/menu-backup.service", "systemd/menu-backup.timer"):
+        for filename in ("config.sh", "release.sh", "compose.sh", "remote-deploy.sh",
+                         "build-push.sh", "deploy.sh", "backup.sh", "restore-drill.sh",
+                         "smoke.sh", "Caddyfile", "otel-collector.yaml",
+                         "systemd/menu-backup.service", "systemd/menu-backup.timer"):
             destination = self.root / "deploy" / filename
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / "deploy" / filename, destination)
         shutil.copy(ROOT / "docker-compose.prod.yml", self.root)
+        # Релиз привязан к чистому checkout: тестовый «repo» фиксирует файлы,
+        # а тег abc123 указывает на тот же коммит.
+        (self.root / ".gitignore").write_text(
+            "deploy/local.conf\nserver.conf\n.env\ndeploy/release/\nbin/\ncalls.jsonl\n")
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=self.root, check=True)
+        subprocess.run(["git", "config", "user.name", "test"], cwd=self.root, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=self.root, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "release fixture"], cwd=self.root, check=True)
+        subprocess.run(["git", "tag", "abc123"], cwd=self.root, check=True)
+        self.long_tag = "_" + "a" * 127
+        subprocess.run(["git", "tag", self.long_tag], cwd=self.root, check=True)
         self.bin = self.root / "bin"
         self.bin.mkdir()
         self.calls = self.root / "calls.jsonl"

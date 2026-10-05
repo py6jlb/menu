@@ -55,9 +55,16 @@ Compose выполняются через `./deploy/compose.sh`, чтобы из
 
 ```bash
 sudo SSH_PUBLIC_KEY='ssh-ed25519 ...' ./deploy/bootstrap.sh   # настройка сервера
-./deploy/build-push.sh                                        # тесты, сборка, push в Docker Hub
+./deploy/build-push.sh --publish                              # сборка и публикация образов
 ./deploy/deploy.sh <git-sha>                                  # деплой (откат — тем же скриптом)
+./deploy/smoke.sh                                             # проверка релиза на сервере
 ```
+
+Сборка без `--publish` не публикует образы. Релиз привязан к чистому commit:
+`build-push.sh` пишет `deploy/release/<tag>.json` (commit, дайджесты, версии
+конфигурации, время сборки), `deploy.sh` выкатывает конфигурации этого коммита,
+а `remote-deploy.sh` сохраняет выбранный тег в `/opt/menu/current-release` и
+manifest в `/opt/menu/release.json`. Подробности — в [`deploy/README.md`](deploy/README.md).
 
 Dev-стек остаётся прежним: `docker compose up --build`.
 

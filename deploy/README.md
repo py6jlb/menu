@@ -7,15 +7,17 @@
 | Файл | Назначение |
 |---|---|
 | `bootstrap.sh` | первичная настройка и харденинг сервера |
-| `build-push.sh` | тесты, сборка и публикация образов в Docker Hub |
-| `deploy.sh` | доставка конфигов и рестарт на прибитом теге, откат |
+| `build-push.sh` | проверки, сборка образов и manifest; публикация только с `--publish` |
+| `deploy.sh` | доставка конфигураций выпускаемого коммита и рестарт на прибитом теге, откат |
+| `smoke.sh` | проверка запущенного релиза: идентичность manifest, живой путь, 404 asset |
 | `Caddyfile` | маршрутизация края (`/api`, `/health`, SPA) |
 | `otel-collector.yaml` | приём OTLP-логов, вывод в консоль и файл (3 дня) |
 | `backup.sh` | бэкап БД и фото в объектное хранилище |
 | `restore-drill.sh` | проверочное восстановление |
 | `config.sh` | доверенная библиотека чтения literal-конфигурации |
+| `release.sh` | доверенная библиотека релиза: clean-tree, хэши конфигурации, manifest |
 | `compose.sh` | серверный Compose без автоматического чтения `.env` |
-| `remote-deploy.sh` | серверный entrypoint деплоя, вызывается через SSH |
+| `remote-deploy.sh` | серверный entrypoint деплоя, вызывает Compose и записывает manifest |
 | `local.conf.example` | шаблон локальных настроек публикации и доставки |
 | `server.conf.example` | шаблон серверных настроек и секретов |
 
@@ -35,13 +37,14 @@
 
 2. **Конфигурация.** Локально скопируй `deploy/local.conf.example` в `deploy/local.conf`, заполни Docker Hub и SSH-адрес, выполни `chmod 600 deploy/local.conf`. На сервере отдельно создай `/opt/menu/server.conf` по `deploy/server.conf.example`, заполни серверные секреты и выполни `chmod 600 /opt/menu/server.conf`. Файлы необязательны: все настройки можно передать окружением процесса. `.conf` не читается через `source` и не передаётся как `--env-file` Compose.
 
-3. **Сборка и публикация** (локально, из корня репозитория):
+3. **Сборка** (локально, из корня репозитория):
 
    ```bash
-   ./deploy/build-push.sh
+   ./deploy/build-push.sh            # проверки + сборка образов + manifest, без публикации
+   ./deploy/build-push.sh --publish  # то же и push в Docker Hub
    ```
 
-   Гейт: backend-тесты и `npm run build`. Образы пушатся в Docker Hub тегами `:<git-sha>` и `:latest`.
+   Гейт: чистый checkout (без незакоммиченных изменений), `npm ci` в Node LTS по lockfile, backend-тесты, drift-guard миграций. Образы собираются с тегом `:<git-sha>`. Публикация образов выполняется только с явным `--publish`; `latest` — вспомогательный указатель, деплой на него не опирается. Manifest `deploy/release/<tag>.json` (и `current.json`) связывает commit, дайджесты backend/frontend, версии конфигурации и время сборки.
 
 4. **Деплой:**
 
@@ -49,9 +52,28 @@
    ./deploy/deploy.sh <git-sha>
    ```
 
-   Скрипт кладёт `docker-compose.prod.yml`, `Caddyfile`, `otel-collector.yaml`, общую библиотеку, серверные скрипты и systemd-шаблоны в `/opt/menu`. Затем вызывает серверный `remote-deploy.sh`: `compose pull && up -d` на указанном теге и проверка `/health`. `local.conf`, `server.conf` и файлы примеров не доставляются. `server.conf` создаётся и изменяется оператором только на сервере; одинаковый `DOCKERHUB_USER` задаётся в двух окружениях явно.
+   Тег — реальный commit. Деплой требует чистый checkout ровно на этом коммите: конфигурации берутся из выпускаемого среза, а не из произвольного рабочего дерева, поэтому повторный деплой старого релиза не подмешивает новые локальные правки. Скрипт сверяет конфигурации с manifest, кладёт `docker-compose.prod.yml`, `Caddyfile`, `otel-collector.yaml`, общую библиотеку, серверные скрипты и systemd-шаблоны в `/opt/menu`, затем вызывает серверный `remote-deploy.sh`: `compose pull && up -d` на указанном теге, проверка `/health` и запись `/opt/menu/release.json` и `/opt/menu/current-release`. `local.conf`, `server.conf` и файлы примеров не доставляются. `server.conf` создаётся и изменяется оператором только на сервере; одинаковый `DOCKERHUB_USER` задаётся в двух окружениях явно.
 
-5. **Откат:** `./deploy/deploy.sh <предыдущий-sha>`.
+5. **Проверка и откат:**
+
+   ```bash
+   ./deploy/smoke.sh              # на сервере: manifest, живой путь, 404 asset
+   ./deploy/deploy.sh <предыдущий-sha>   # откат
+   ```
+
+   Повторный штатный запуск Compose (`./deploy/compose.sh up -d`) использует тег из `/opt/menu/current-release` — без временного экспорта в SSH-сессии. Откат — деплой предыдущего sha тем же путём.
+
+## Воспроизводимый релиз
+
+- **Manifest.** `deploy/release/<tag>.json`: `commit`, `tag`, `builtAt`, `backendDigest`, `frontendDigest`, `config` (хэши файлов среза). Хранится локально после сборки и на сервере (`/opt/menu/release.json`); используется для диагностики, отката и smoke-проверки идентичности.
+- **Чистый checkout.** Сборка и деплой отклоняют незакоммиченные изменения понятной ошибкой: под идентификатором чистого commit нельзя опубликовать/выкатить чужой код.
+- **Неизменяемый выбор.** Тег — sha коммита; `latest` не заменяет закреплённую версию. Предыдущие теги остаются в registry для отката.
+- **Состояние сервера.** `remote-deploy.sh` пишет `/opt/menu/current-release` (`IMAGE_TAG`) и `release.json`; `config_server` читает `current-release` ниже окружения и `server.conf`.
+- **Срез конфигураций.** `deploy.sh` доставляет конфигурации выпускаемого коммита и сверяет их хэши с manifest, поэтому старый релиз не смешивается с новыми локальными файлами.
+
+### Обновление базовых образов
+
+Базовые образы закреплены контролируемыми тегами в `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose*.yml`, `deploy/backup.sh` и перечислены в `release_base_images` (`deploy/release.sh`). Порядок обновления: изменить тег в одном коммите, прогнать `./deploy/build-push.sh` и `scripts/test-postgres.sh`, задеплоить на стенд и проверить `./deploy/smoke.sh`. Node держим на поддерживаемой LTS (`frontend/.nvmrc`, `engines`), установка — только по `frontend/package-lock.json` (`npm ci`); чистая установка не должна менять lockfile.
 
 ## Формат и приоритет
 

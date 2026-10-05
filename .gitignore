@@ -11,6 +11,9 @@ dist/
 local.conf
 server.conf
 
+# Release artifacts
+deploy/release/
+
 # Python
 __pycache__/
 *.py[cod]
