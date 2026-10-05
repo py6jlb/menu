@@ -282,3 +282,19 @@ Compose `config` экранирует все `$` как `$$` при сериал
 6. Документация: **RED** — README/ADR описывали откат как «деплой предыдущего sha»; после разделов о code-only/recovery, lock, данных после точки и ручной проверки на стенде — **GREEN**.
 
 Итог: deploy-suite — **125 тестов GREEN** (110 прежних + 15 новых `test_rollback.py`); `bash -n deploy/*.sh` и контейнерный Shellcheck `deploy-lib.sh`/`rollback.sh`/`remote-deploy.sh`/`deploy.sh`/`release.sh` — чисто. Ограничения: реальный VPS, Docker daemon, Postgres, rclone-remote и Caddy не запускаются; проверяются вызовы, порядок, коды и состояния на публичных границах. Фактическое время восстановления и поведение записи в окне остановки — измеряются на изолированном стенде (раздел «Ручная проверка на изолированном стенде» в `deploy/README.md`).
+
+## Тикет 47: доверенный прокси и обход поддельного IP
+
+`ProxyTrustTests` в `test_production_hardening.py` — структурные проверки поставляемых Compose без Docker daemon: backend доверяет ровно одному прокси (Caddy в prod, nginx в dev), а сам прокси получает статический адрес в выделенной подсети. Backend-тесты (`AuthRateLimitTests`, `ForwardedHeaderConfigurationTests`) покрывают middleware отдельно: поддельный `X-Forwarded-For` от недоверенного peer игнорируется, от доверенного края — учитывается.
+
+| Критерий | Проверка |
+|---|---|
+| prod доверяет только краю Caddy, backend не публикует порт | `ProxyTrustTests.test_prod_trusts_only_the_caddy_edge` (`TRUSTED_PROXY_ADDRESSES: "172.29.0.10"`, `ipv4_address: 172.29.0.10`, `subnet: 172.29.0.0/24`) |
+| dev доверяет только nginx-входу; прямой запрос не доверяется | `ProxyTrustTests.test_dev_trusts_only_the_nginx_entry` (`172.28.0.10`) |
+| Сырой `X-Forwarded-For` не доверяется; через настроенный край — учитывается | `ForwardedHeaderConfigurationTests.Middleware_IgnoresForwardedFor_FromUntrustedPeer`, `Middleware_HonoursForwardedFor_FromTrustedEdge`; `ClientIpResolverTests.Resolve_IgnoresForgedForwardedForHeader`; `AuthRateLimitFlowTests.Forgot_ForgedForwardedFor_DoesNotBypassIpLimit` |
+| Единый `429` + `Retry-After`; UI ограничиваемых операций объясняет ожидание и снимает pending | `AuthRateLimitFlowTests.Login_IsRateLimited_ByEmail_WithRetryAfter`, `Register_IsRateLimited_ByIp`, `Reset_IsRateLimited_ByIp`; фронтенд-хелперы `Retry-After`/`rateLimitMessage` в `useCooldown.js` |
+| Память лимитера ограничена; устаревшие окна удаляются; конкуренция безопасна; порядок «IP → операция» | `RateLimiterTests.TryConsume_RejectsNewKeysWhenFull_ButKeepsTrackedOnes`, `TryConsume_AtCapacity_FreesExpiredWindowsForNewKeys`, `RemoveExpired_DropsOnlyStaleWindows`, `TryConsume_IsThreadSafe_UnderContention`, `UniqueEmailStream_KeepsMemoryBounded`; `AuthRateLimitPolicyTests.Check_WhenIpLimited_DoesNotCreateNewIdentityKey` |
+| Значения лимитов документированы и валидируются без секретов | `AuthRateLimitOptionsTests.Read_AppliesEnvironmentOverrides`, `Read_WithNonPositiveValue_ThrowsWithoutSecrets`, `Read_WithNonNumericValue_Throws` |
+| Одна реплика без Redis; масштабирование — отдельное ограничение | `DocumentationTests.test_readme_documents_rate_limit_proxy_trust_and_single_replica` |
+
+Итог: deploy-suite прибавил 3 структурных теста (`ProxyTrustTests` × 2 + расширенный `DocumentationTests`); backend fast — новые `RateLimiterTests`/`AuthRateLimitTests`/`ForwardedHeaderConfigurationTests`/`AuthRateLimitOptionsTests`. Ограничения: реальный Caddy/TLS и Docker daemon не запускаются — доверие проверяется на уровне middleware и поставляемых Compose; фронтенд проверяется сборкой `vite build`, без e2e-браузера.

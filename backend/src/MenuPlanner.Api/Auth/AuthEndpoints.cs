@@ -35,12 +35,26 @@ public static class AuthEndpoints
         EmailSender emailSender,
         EmailVerificationService verification,
         ILogger<EmailSender> logger,
+        AuthRateLimitOptions rateLimits,
+        FixedWindowRateLimiter limiter,
         TimeProvider clock,
         HttpContext http)
     {
         var email = request.Email?.Trim().ToLowerInvariant() ?? "";
         if (!EmailRegex.IsMatch(email))
             return Results.BadRequest(new ErrorDto("Некорректный email."));
+
+        var limited = AuthRateLimitPolicy.Check(
+            limiter,
+            scope: "register",
+            ip: ClientIpResolver.Resolve(http),
+            perIp: rateLimits.RegisterPerIpPerHour,
+            perIdentity: rateLimits.RegisterPerEmailPerHour,
+            identity: email,
+            window: TimeSpan.FromHours(1),
+            now: clock.GetUtcNow().UtcDateTime);
+        if (limited is not null)
+            return limited;
 
         var password = request.Password ?? "";
         if (password.Length < PasswordPolicy.MinLength)
@@ -83,10 +97,26 @@ public static class AuthEndpoints
         LoginRequest request,
         AppDbContext db,
         IPasswordHasher<User> passwordHasher,
-        JwtTokenService tokenService)
+        JwtTokenService tokenService,
+        AuthRateLimitOptions rateLimits,
+        FixedWindowRateLimiter limiter,
+        TimeProvider clock,
+        HttpContext http)
     {
         var email = request.Email?.Trim().ToLowerInvariant() ?? "";
         var password = request.Password ?? "";
+
+        var limited = AuthRateLimitPolicy.Check(
+            limiter,
+            scope: "login",
+            ip: ClientIpResolver.Resolve(http),
+            perIp: rateLimits.LoginPerIpPerMinute,
+            perIdentity: rateLimits.LoginPerEmailPerMinute,
+            identity: email,
+            window: TimeSpan.FromMinutes(1),
+            now: clock.GetUtcNow().UtcDateTime);
+        if (limited is not null)
+            return limited;
 
         var user = await db.Users.SingleOrDefaultAsync(u => u.Email == email);
         if (user is null)

@@ -23,7 +23,8 @@ services:
       - backend
       - frontend
     networks:
-      - edge
+      edge:
+        ipv4_address: 172.29.0.10
     restart: unless-stopped
     deploy:
       resources:
@@ -102,6 +103,9 @@ services:
       PHOTOS_DIR: /app/photos
       SHARE_BASE_URL: "${SHARE_BASE_URL-}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      # X-Forwarded-* принимаются только от Caddy (172.29.0.10): backend не
+      # публикует порт, а прямой внутренний запрос не подделает IP семьи.
+      TRUSTED_PROXY_ADDRESSES: "172.29.0.10"
     volumes:
       - photos_data:/app/photos
     cap_drop:
@@ -159,4 +163,7 @@ volumes:
 
 networks:
   edge:
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
   internal:

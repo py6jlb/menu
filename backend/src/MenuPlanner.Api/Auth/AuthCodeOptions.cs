@@ -15,4 +15,22 @@ public sealed class AuthCodeOptions
     public int LockDurationDays { get; set; } = DefaultLockDurationDays;
     public int ResendCooldownMinutes { get; set; } = DefaultResendCooldownMinutes;
     public int ResendRateLimitPerHour { get; set; } = DefaultResendRateLimitPerHour;
+
+    /// <summary>Проверяет значения на старте понятной ошибкой без секретов.</summary>
+    public void Validate()
+    {
+        RequirePositive(nameof(MaxAttempts), MaxAttempts);
+        RequirePositive(nameof(LockDurationDays), LockDurationDays);
+        if (ResendCooldownMinutes < 0)
+            throw new InvalidOperationException(
+                "Конфигурация: AuthCode:ResendCooldownMinutes не может быть отрицательным.");
+        RequirePositive(nameof(ResendRateLimitPerHour), ResendRateLimitPerHour);
+    }
+
+    private static void RequirePositive(string name, int value)
+    {
+        if (value <= 0)
+            throw new InvalidOperationException(
+                $"Конфигурация: AuthCode:{name} должен быть положительным.");
+    }
 }

@@ -7,8 +7,6 @@ namespace MenuPlanner.Api.Auth;
 
 public static class PasswordResetEndpoints
 {
-    private const string EmailKeyPrefix = "password-reset:email:";
-    private const string IpKeyPrefix = "password-reset:ip:";
     private const string NeutralMessage =
         "Если аккаунт существует и почта подтверждена, отправлен код.";
 
@@ -34,17 +32,17 @@ public static class PasswordResetEndpoints
         HttpContext http)
     {
         var email = request.Email?.Trim().ToLowerInvariant() ?? "";
-        var now = clock.GetUtcNow().UtcDateTime;
-        var window = TimeSpan.FromHours(1);
-        var ip = ClientIpResolver.Resolve(http);
-        var allowedByEmail = limiter.TryConsume(
-            EmailKeyPrefix + email, options.ResendRateLimitPerHour, window, now);
-        var allowedByIp = limiter.TryConsume(
-            IpKeyPrefix + ip, options.ResendRateLimitPerHour, window, now);
-        if (!allowedByEmail || !allowedByIp)
-            return Results.Json(
-                new ErrorDto("Слишком много запросов. Попробуйте позже."),
-                statusCode: StatusCodes.Status429TooManyRequests);
+        var limited = AuthRateLimitPolicy.Check(
+            limiter,
+            scope: "password-reset",
+            ip: ClientIpResolver.Resolve(http),
+            perIp: options.ResendRateLimitPerHour,
+            perIdentity: options.ResendRateLimitPerHour,
+            identity: email,
+            window: TimeSpan.FromHours(1),
+            now: clock.GetUtcNow().UtcDateTime);
+        if (limited is not null)
+            return limited;
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
         if (user is not null && user.IsEmailVerified)
@@ -73,15 +71,31 @@ public static class PasswordResetEndpoints
     private static async Task<IResult> ResetPasswordAsync(
         ResetPasswordRequest request,
         AppDbContext db,
-        PasswordResetService reset)
+        PasswordResetService reset,
+        AuthRateLimitOptions rateLimits,
+        FixedWindowRateLimiter limiter,
+        TimeProvider clock,
+        HttpContext http)
     {
+        var email = request.Email?.Trim().ToLowerInvariant() ?? "";
+        var limited = AuthRateLimitPolicy.Check(
+            limiter,
+            scope: "password-reset-submit",
+            ip: ClientIpResolver.Resolve(http),
+            perIp: rateLimits.ResetPerIpPerHour,
+            perIdentity: rateLimits.ResetPerEmailPerHour,
+            identity: email,
+            window: TimeSpan.FromHours(1),
+            now: clock.GetUtcNow().UtcDateTime);
+        if (limited is not null)
+            return limited;
+
         var newPassword = request.NewPassword ?? "";
         if (newPassword.Length < PasswordPolicy.MinLength)
             return Results.BadRequest(new ErrorDto(PasswordPolicy.TooShortMessage));
         if (!string.Equals(newPassword, request.NewPasswordConfirm, StringComparison.Ordinal))
             return Results.BadRequest(new ErrorDto("Пароли не совпадают."));
 
-        var email = request.Email?.Trim().ToLowerInvariant() ?? "";
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
         if (user is null || !user.IsEmailVerified)
             return InvalidCode();

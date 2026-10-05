@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../stores/auth'
 import { apiJson } from '../api/client'
+import { rateLimitMessage } from '../composables/useCooldown'
 
 const router = useRouter()
 const { setSession } = useAuth()
@@ -23,6 +24,8 @@ async function submit() {
     if (response.status === 201) {
       setSession(data.token, data.user)
       router.push({ name: 'verify' })
+    } else if (response.status === 429) {
+      error.value = rateLimitMessage(response, data)
     } else if (response.status === 409) {
       error.value = data?.error || 'Этот email уже зарегистрирован.'
     } else {

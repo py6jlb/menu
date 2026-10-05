@@ -46,6 +46,16 @@ _Avoid_: OTP, Токен, Секрет
 _Код_: `AuthCode.Attempts`, `User.VerificationAttempts`, `User.LockedUntil`.
 _Avoid_: Lockout, Бан, Блокировка входа
 
+**Ограничение запросов**:
+Счётчик частоты операций аутентификации (вход, регистрация, сброс пароля, коды, разблокировка) по IP и по операции/email/пользователю. Отказ — `429` с `Retry-After`. Хранится в памяти одной реплики, число ключей и срок окон ограничены. См. ADR-0010.
+_Код_: `FixedWindowRateLimiter`, `AuthRateLimitPolicy`, `AuthRateLimitOptions`.
+_Avoid_: Throttling, Троттлинг, Rate limit
+
+**Доверенный прокси**:
+Адрес/сеть, от которого принимаются `X-Forwarded-*` для определения клиентского IP. Сырой `X-Forwarded-For` не доверяется; в prod доверен край Caddy, в dev — nginx-вход. См. ADR-0010.
+_Код_: `ForwardedHeaderConfiguration`, `ClientIpResolver`, `TRUSTED_PROXY_ADDRESSES`.
+_Avoid_: Reverse proxy, Балансировщик
+
 ### Семья
 
 **Семья**:
