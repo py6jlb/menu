@@ -225,3 +225,31 @@ Compose `config` экранирует все `$` как `$$` при сериал
 4. Диагностика и таймауты: **RED** — при провале логи/состояния не сохранялись, ожидание не ограничивалось явно. После `smoke-diagnostics.log`/`deploy-diagnostics.log`, `SMOKE_HTTP_TIMEOUT_SECONDS` и `READY_TIMEOUT_SECONDS` — **GREEN**.
 
 Итог: deploy-suite — **75 тестов GREEN** (62 прежних + 13); `bash -n deploy/*.sh` и контейнерный Shellcheck `smoke.sh`/`remote-deploy.sh`/`config.sh` — чисто; backend fast — **267 passed, 20 skipped**, Postgres-suite — **24 passed**. Ограничения: реальный край (Caddy+TLS), Docker daemon и публичный DNS не запускаются; край эмулируется файлами, проверяются вызовы `wget` на публичной границе, коды и отсутствие ложного успеха. Frontend build не запускался в worktree (нет `node_modules`); исходники фронтенда не менялись.
+
+## Тикет 44: безопасный production-запуск и ресурсный бюджет
+
+`test_production_hardening.py` — структурные проверки поставляемых артефактов без Docker daemon: Compose dev/prod, `backend/Dockerfile`, systemd-units, `backup.sh`/`restore-drill.sh`/`bootstrap.sh`. Плюс `SmokeProductionModeTests` в `test_smoke.py` и backend `ProductionConfigurationTests` (WebApplicationFactory). Все секреты вымышленные.
+
+| Критерий | Проверка |
+|---|---|
+| Production отклоняет HTTP-адрес, отсутствие почты и placeholder-секреты понятной ошибкой | `ProductionConfigurationTests`: `Production_WithoutHttpsPublicUrl_IsRejected`, `Production_WithoutMail_IsRejected`, `Production_WithoutFrom_IsRejected`, `Production_WithKnownPlaceholderJwtSecret_IsRejected_WithoutRevealingValue`, `Factory_ProductionWithoutHttps_FailsFast_WithClearMessage` |
+| Проверка не раскрывает значения; длина JWT — не единственная проверка шаблона | `Production_WithKnownPlaceholderJwtSecret_IsRejected_WithoutRevealingValue` (`DoesNotContain(secret)`), `Production_WithPlaceholderDbPassword_IsRejected_WithoutRevealingValue`; детекция известных значений/токенов, не только `Length < 32` |
+| Лабораторный HTTP/письма в лог — только явно, не выдаётся за production | `LabMode_ExplicitlyAllowsHttpAndLoggingMail`, `SmokeProductionModeTests.test_http_without_explicit_lab_mode_is_rejected` (запрос не уходит), `test_domain_mode_is_allowed_in_production` |
+| Backend от непривилегированного пользователя; PHOTOS_DIR подготовлен; фото можно писать/читать/копировать/удалять | `BackendImageHardeningTests.test_runtime_runs_as_non_root_user`, `test_photos_dir_prepared_for_service_user`; образ запущен с named volume — `uid=1654(app)`, `touch/cp/cat/rm` в `/app/photos` проходят |
+| Минимальные capabilities и `no-new-privileges` там, где совместимо; исходящий SMTP доступен | `ProdComposeExternalPortsTests.test_services_carry_no_new_privileges`, `test_backend_and_caddy_have_minimal_capabilities`, `test_backend_can_reach_outbound_smtp`; `DevComposeLoopbackTests.test_dev_backend_is_unprivileged_and_opt_in_lab` |
+| Ресурсный бюджет; backup/drill ограничены, учитывают место под архивы/журналы | `ResourceBudgetTests.test_backup_service_bounds_auxiliary_operation`, `test_backup_and_drill_bound_memory_and_require_free_space`, `test_backup_checks_space_before_quiescing_writer`, `test_drill_checks_space_before_downloading_set`; `DocumentationTests` |
+| Плановый reboot не пересекается с копированием | `ResourceBudgetTests.test_reboot_does_not_intersect_backup_window` (02:30 + ≤10 мин < 04:30) |
+| Dev-порты на loopback; prod публикует только ожидаемые порты | `DevComposeLoopbackTests.test_all_dev_ports_are_bound_to_loopback`, `ProdComposeExternalPortsTests.test_only_caddy_publishes_expected_external_ports` |
+| Размеры VPS и ограничения — проверяемые требования, а не обещания | `DocumentationTests.test_readme_documents_budget_and_access`; таблица бюджета в `deploy/README.md` |
+
+### TDD evidence (тикет 44)
+
+1. Production-конфигурация: **RED** — `ProductionConfigurationTests` не компилировался (класса не было). После `ProductionConfiguration.Read` и раннего вызова в `Program.cs` — **GREEN**. Промежуточно **RED**: `ConfigureAppConfiguration` в `ApiFactory` не успевает до старта (валидация читает конфигурацию раньше) — 187 падений; после `UseSetting`-хука и явного `DEPLOYMENT_MODE=lab` в тестовых фабриках — **GREEN**.
+2. Placeholder-секреты: **RED** — принимался dev-default `dev-only-secret-change-me-in-production-0123456789abcdef` (проходил только по длине); после известного списка/токен-детекции — **GREEN** без печати значения.
+3. Непривилегированный образ: **RED** — runtime работал `root`, `/app/photos` root-owned. Первая правка падала на сборке (`group 'app' already exists`: в `aspnet:10.0` пользователь `app` уже есть); после `USER app` и `chown` — **GREEN**. Образ собран и запущен с named volume: `id` → `uid=1654(app)`; запись/копирование/чтение/удаление в `/app/photos` проходят.
+4. Capabilities: **RED** — `docker-compose.prod.yml` не ограничивал capabilities. После `cap_drop: ALL` (backend, caddy), `NET_BIND_SERVICE` (caddy) и `no-new-privileges` — **GREEN** структурно; Compose `config --quiet` валиден.
+5. Ресурсный бюджет: **RED** — у backup/drill не было проверки места и лимита памяти, reboot 04:00 пересекался с окном backup 03:30. После `BACKUP_MIN_FREE_MB`/`DRILL_MIN_FREE_MB`, `--memory`, `MemoryMax`/`CPUQuota`, таймера 02:30 и reboot 04:30 — **GREEN**.
+6. Loopback: **RED** — dev-порты публиковались на `0.0.0.0`. После `127.0.0.1:` — **GREEN**.
+7. Smoke: **RED** — HTTP-smoke проходил без явного lab. После guard в `smoke.sh` — **GREEN**, при production HTTP запрос к краю не отправляется.
+
+Итог: deploy-suite — **110 тестов GREEN** (17 новых: 15 `test_production_hardening.py` + 2 `SmokeProductionModeTests`); backend fast — **286 passed, 21 skipped** (19 новых `ProductionConfigurationTests`); `bash -n deploy/*.sh` и контейнерный Shellcheck `config.sh`/`backup-lib.sh`/`backup.sh`/`restore-drill.sh`/`smoke.sh`/`bootstrap.sh` — чисто. Ограничения: реальные Caddy/TLS, systemd и Docker daemon в suite не запускаются; capabilities и non-root проверены структурно, а непривилегированный образ дополнительно запущен вручную с named volume. Frontend build и Postgres-suite в этом прогоне не запускались; `restore-drill.sh` получил `DEPLOYMENT_MODE=lab` для временного релиза.

@@ -23,6 +23,32 @@ backup_sha256() {
   sha256sum "$1" | cut -d' ' -f1
 }
 
+# backup_require_free_space <path> <min-mb>: достаточно ли места для архива.
+# Проверка до вспомогательной операции: заполненный диск не приводит к отказу.
+backup_require_free_space() {
+  local path="$1" min="$2" available
+  available="$(df -Pm "$path" 2>/dev/null | awk 'NR==2 {print $4}')"
+  if [[ ! "$available" =~ ^[0-9]+$ ]]; then
+    printf 'Ресурсы: не удалось определить свободное место в %s\n' "$path" >&2
+    return 1
+  fi
+  if [ "$available" -lt "$min" ]; then
+    printf 'Ресурсы: свободно %s МБ в %s, нужно минимум %s МБ\n' \
+      "$available" "$path" "$min" >&2
+    return 1
+  fi
+}
+
+# backup_size_valid <value>: ограничение памяти/размера в стиле Docker (512m, 1g).
+backup_size_valid() {
+  [[ "$1" =~ ^[0-9]+[bkmgBKMG]?$ ]]
+}
+
+# backup_positive_int_valid <value>: целое без знака и без нуля.
+backup_positive_int_valid() {
+  [[ "$1" =~ ^[1-9][0-9]*$ ]]
+}
+
 # backup_set_valid <id>: id из перечисления хранилища перед подстановкой в путь.
 backup_set_valid() {
   [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{6,}Z$ ]]

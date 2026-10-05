@@ -35,9 +35,17 @@ SMOKE_HTTP_TIMEOUT_SECONDS="${SMOKE_HTTP_TIMEOUT_SECONDS:-10}"
 
 # ":80" или пусто — Caddy слушает HTTP локально; реальный домен — внешний HTTPS
 # с сертификатом Let's Encrypt, то есть проверяется именно публичный путь.
+# HTTP без домена — только явный лабораторный режим (DEPLOYMENT_MODE=lab):
+# production-проверка не должна выдавать лабораторную установку за готовую.
 DOMAIN="${DOMAIN-}"
+DEPLOYMENT_MODE="${DEPLOYMENT_MODE-production}"
 case "$DOMAIN" in
-  ""|:*) EDGE_BASE="http://localhost" ;;
+  ""|:*)
+    if [ "$DEPLOYMENT_MODE" != "lab" ]; then
+      printf '[smoke] DOMAIN=%s — HTTP без домена допустим только в lab (DEPLOYMENT_MODE=lab)\n' "$DOMAIN" >&2
+      exit 1
+    fi
+    EDGE_BASE="http://localhost" ;;
   *)
     [[ "$DOMAIN" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || die "Некорректный DOMAIN"
     EDGE_BASE="https://$DOMAIN"

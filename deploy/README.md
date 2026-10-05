@@ -138,7 +138,7 @@ SMTP_PASSWORD=пробел $HOME ${SMTP_USER} $$ # "двойные" 'одина�
 | Область | Разрешённые ключи |
 |---|---|
 | Локально (`deploy/local.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `VPS_HOST`, `VPS_USER`, `VPS_SSH_PORT`, `APP_DIR` |
-| Сервер (`/opt/menu/server.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_FROM_NAME`, `SMTP_ENABLE_STARTTLS`, `DOMAIN`, `SHARE_BASE_URL`, `BACKUP_REMOTE`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `COMPOSE_FILE`, `DRILL_CONTAINER` |
+| Сервер (`/opt/menu/server.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DEPLOYMENT_MODE`, `PUBLIC_BASE_URL`, `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_FROM_NAME`, `SMTP_ENABLE_STARTTLS`, `DOMAIN`, `SHARE_BASE_URL`, `BACKUP_REMOTE`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `COMPOSE_FILE`, `DRILL_CONTAINER` |
 
 | Скрипт | Обязательно до внешних действий |
 |---|---|
@@ -191,7 +191,37 @@ Prod-Compose одновременно передаёт `DB_*` **и** `Connection
 
 ## Порты
 
-Наружу открыты только `80`/`443` (Caddy) и SSH. `db`, `backend`, `frontend` доступны только внутри compose-сети.
+Наружу открыты только `80`/`443` (Caddy) и SSH. `db`, `backend`, `frontend` доступны только внутри compose-сети. В prod-Compose опубликованы ровно эти порты Caddy (`80:80`, `443:443`, `443:443/udp`); `db`, `backend`, `frontend` и `otel-collector` не публикуют портов. Dev-Compose (`docker-compose.yml`) привязывает свои порты к loopback: `127.0.0.1:5432` (db), `127.0.0.1:8080` (backend), `127.0.0.1:8081` (frontend), поэтому локальный стек не слушает внешние интерфейсы.
+
+## Production-конфигурация, пользователь и capabilities
+
+Backend проверяет конфигурацию на старте. Режим задаёт `DEPLOYMENT_MODE`:
+
+- **`production`** (по умолчанию, если переменная не задана) требует `PUBLIC_BASE_URL` вида `https://<домен>`, непустые `SMTP_HOST` и `SMTP_FROM`, а также случайные не-шаблонные `JWT_SECRET` (≥32 символа), `DB_PASSWORD` (≥12) и `SMTP_PASSWORD`. Известные dev/placeholder-значения (`dev-only-secret-…`, `change-me-strong`, `menu`, `postgres`, слова `secret`/`password`/`test`/`local`/… в составе) отклоняются понятной ошибкой. Значения секретов в ошибке не печатаются.
+- **`lab`** — явный лабораторный режим: допускает HTTP-адрес и письма в лог. Включается только явно (`DEPLOYMENT_MODE=lab`); см. `docker-compose.yml`. Лабораторная установка не выдаётся за production: `smoke.sh` отказывается проверять HTTP-край без `DEPLOYMENT_MODE=lab`.
+
+Backend в образе работает от встроенного непривилегированного пользователя `app` (uid 1654 в `aspnet:10.0`). `PHOTOS_DIR=/app/photos` создаётся в образе под этим пользователем, поэтому named volume наследует владельца и загрузка/чтение/копирование/удаление фото работают (проверено запуском образа с named volume: `id` — `app`, запись/копирование/чтение/удаление в `/app/photos` проходят). Capabilities минимизированы: `backend` и `otel-collector` — `cap_drop: ALL`; `caddy` — `cap_drop: ALL` + `NET_BIND_SERVICE`; всем рабочим контейнерам добавлен `security_opt: no-new-privileges:true`. Эти ограничения не трогают исходящий трафик: backend остаётся в обычной сети и может открывать исходящее SMTP-соединение. `db` и `frontend` получают только `no-new-privileges` — их штатные entrypoint'ы требуют capabilities смены пользователя.
+
+При первом запуске dev-стека после перехода backend на непривилегированного пользователя уже существующий root-owned volume фото не даст писать: пересоздай его разово (`docker compose down -v`), новый volume унаследует `app:app` из образа. Production-стенд обновляется штатным деплоем; volume `photos_data` уже принадлежит нужному пользователю, если создан этим образом. Для стенда, поднятого прежним root-образом, выполни разово (пока backend остановлен): `docker run --rm -v menu-planner_photos_data:/data alpine chown -R 1654:1654 /data`.
+
+## Ресурсный бюджет
+
+Размер VPS и лимиты — проверяемые требования, а не универсальные обещания; конкретные значения подтверждаются измерением на стенде (`docker stats`, `df -h`, `systemctl show`, `last_drill_seconds`/`last_full_backup_at` в `backup-state`).
+
+| Ресурс | Требование |
+|---|---|
+| VPS | ≥2 vCPU, ≥2 ГБ RAM + 2 ГБ swap (`SWAP_SIZE` bootstrap), ≥40 ГБ свободного диска |
+| caddy | 128 МБ (`deploy.resources.limits.memory`) |
+| db | 1 ГБ |
+| otel-collector | 256 МБ |
+| backend | 1 ГБ |
+| frontend | 128 МБ |
+| backup (systemd) | `MemoryMax=1G`, `CPUQuota=50%`, `Nice=10`, `IOSchedulingClass=idle` |
+| backup/drill tmp | `BACKUP_MIN_FREE_MB` / `DRILL_MIN_FREE_MB` (default 1024 МБ) проверяются до операции |
+| архивы фото | `BACKUP_MEMORY_LIMIT`/`DRILL_MEMORY_LIMIT` (default 512 МБ) на вспомогательные контейнеры |
+| журналы | json-file `max-size=10m`, `max-file=3` на контейнер; OTel-файл ротируется за 3 дня |
+
+Сумма `deploy.resources.limits.memory` укладывается в память VPS с запасом; лишнее уходит в swap. `backup.sh` проверяет свободное место в `TMP` до остановки backend, `restore-drill.sh` — до скачивания набора; при нехватке места вспомогательная операция не начинается и не приводит к OOM или исчерпанию диска. Таймер backup (02:30 + случайная задержка ≤10 мин) не пересекается с автоматическим reboot за security-обновления (04:30, `bootstrap.sh`): окно копирования заканчивается до reboot, а `MemoryMax`/`CPUQuota` не дают backup вытеснить приложение.
 
 ## Бэкапы
 
@@ -213,7 +243,7 @@ Prod-Compose одновременно передаёт `DB_*` **и** `Connection
 
 ### RPO/RTO
 
-- **RPO** — время с прошлого полного backup. Таймер запускает backup ежедневно в 03:30 (`Persistent=true`, случайная задержка до 10 минут). Худший случай — около суток плюс длительность запуска; фактическое значение берётся из `last_full_backup_at` в `backup-state`. Гарантированного RPO нет: он зависит от запуска таймера и доступности хранилища.
+- **RPO** — время с прошлого полного backup. Таймер запускает backup ежедневно в 02:30 (`Persistent=true`, случайная задержка до 10 минут) — окно заканчивается до планового reboot в 04:30. Худший случай — около суток плюс длительность запуска; фактическое значение берётся из `last_full_backup_at` в `backup-state`. Гарантированного RPO нет: он зависит от запуска таймера и доступности хранилища.
 - **RTO** — время drill от скачивания набора до ответа закреплённого релиза. Измеряется каждым drill и сохраняется в `last_drill_seconds`; зависит от размера данных, сети и хоста. Конкретное число заранее не обещается.
 
 ### Установка на сервере

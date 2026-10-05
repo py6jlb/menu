@@ -2,7 +2,9 @@
 Description=Menu planner: ежедневный бэкап
 
 [Timer]
-OnCalendar=*-*-* 03:30:00
+# Окно 02:30–02:40. Плановый reboot за security-обновления настроен на 04:30
+# (bootstrap.sh), поэтому копирование не пересекается с reboot.
+OnCalendar=*-*-* 02:30:00
 Persistent=true
 RandomizedDelaySec=10m
 

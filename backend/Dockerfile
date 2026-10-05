@@ -10,9 +10,16 @@ RUN dotnet publish -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
+# Backend работает от встроенного непривилегированного пользователя app
+# (uid 1654 в образе aspnet:10.0). PHOTOS_DIR создаётся заранее и принадлежит
+# ему: named volume наследует владельца каталога образа.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=build /app/publish .
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/photos \
+    && chown -R app:app /app
+COPY --from=build --chown=app:app /app/publish .
+RUN chown -R app:app /app/photos
+USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "MenuPlanner.Api.dll"]
