@@ -33,6 +33,9 @@ public class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Дополнительные interceptor'ы, подключаемые к <see cref="AppDbContext"/>.</summary>
     public List<IInterceptor> Interceptors { get; } = new();
 
+    /// <summary>Подменить сервисы поверх регистраций приложения (например, транспорт писем).</summary>
+    public Action<IServiceCollection>? ConfigureTestServices { get; set; }
+
     public async Task VerifyUserAsync(string email)
     {
         using var scope = Services.CreateScope();
@@ -87,6 +90,8 @@ public class ApiFactory : WebApplicationFactory<Program>
                 foreach (var interceptor in Interceptors)
                     options.AddInterceptors(interceptor);
             });
+
+            ConfigureTestServices?.Invoke(services);
         });
     }
 

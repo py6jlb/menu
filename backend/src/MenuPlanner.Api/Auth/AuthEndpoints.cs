@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
@@ -33,6 +34,7 @@ public static class AuthEndpoints
         JwtTokenService tokenService,
         EmailSender emailSender,
         EmailVerificationService verification,
+        ILogger<EmailSender> logger,
         AuthRateLimitOptions rateLimits,
         FixedWindowRateLimiter limiter,
         TimeProvider clock,
@@ -74,7 +76,17 @@ public static class AuthEndpoints
         await db.SaveChangesAsync();
 
         var code = await verification.IssueInitialCodeAsync(user);
-        await emailSender.SendVerificationCodeAsync(email, code);
+        try
+        {
+            await emailSender.SendVerificationCodeAsync(email, code, http.RequestAborted);
+        }
+        catch (EmailDeliveryException failure)
+        {
+            EmailDeliveryFailure.LogSafe(logger, failure);
+            return Results.Json(
+                new ErrorDto(EmailDeliveryFailure.UserMessage),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
 
         return Results.Json(
             new AuthResponse(tokenService.CreateToken(user), UserDto.From(user)),

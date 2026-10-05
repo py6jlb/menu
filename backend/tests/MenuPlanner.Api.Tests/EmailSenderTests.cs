@@ -15,11 +15,17 @@ public sealed class EmailSenderTests
     {
         public List<EmailMessage> Sent { get; } = new();
 
-        public Task SendAsync(EmailMessage message)
+        public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
         {
             Sent.Add(message);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FailingTransport : IEmailTransport
+    {
+        public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default) =>
+            throw new EmailDeliveryException(EmailFailureReason.Connection, "SocketException");
     }
 
     [Fact]
@@ -53,5 +59,18 @@ public sealed class EmailSenderTests
         Assert.Contains("парол", message.Subject, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("654321", message.HtmlBody);
         Assert.Contains("<!DOCTYPE html>", message.HtmlBody);
+    }
+
+    [Fact]
+    public async Task SendVerificationCodeAsync_WhenTransportFails_PropagatesFailure()
+    {
+        var sender = new EmailSender(TestOptions, new FailingTransport());
+
+        var error = await Assert.ThrowsAsync<EmailDeliveryException>(
+            () => sender.SendVerificationCodeAsync("user@example.com", "123456"));
+
+        Assert.Equal(EmailFailureReason.Connection, error.Reason);
+        Assert.DoesNotContain("123456", error.Message);
+        Assert.DoesNotContain("user@example.com", error.Message);
     }
 }

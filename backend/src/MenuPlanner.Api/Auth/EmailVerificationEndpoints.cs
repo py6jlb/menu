@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
@@ -24,6 +25,7 @@ public static class EmailVerificationEndpoints
         AppDbContext db,
         EmailVerificationService verification,
         EmailSender emailSender,
+        ILogger<EmailSender> logger,
         AuthCodeOptions options,
         FixedWindowRateLimiter limiter,
         TimeProvider clock,
@@ -52,7 +54,8 @@ public static class EmailVerificationEndpoints
         var result = await verification.ResendAsync(user);
         return result.Outcome switch
         {
-            ResendEmailOutcome.Sent => await SendAsync(emailSender, user.Email, result.Code!),
+            ResendEmailOutcome.Sent => await SendAsync(
+                emailSender, logger, user.Email, result.Code!, http.RequestAborted),
             ResendEmailOutcome.AlreadyVerified => Results.Conflict(new ErrorDto("Почта уже подтверждена.")),
             ResendEmailOutcome.TooSoon => RateLimitResults.TooManyRequests(
                 result.RetryAfterSeconds,
@@ -85,9 +88,25 @@ public static class EmailVerificationEndpoints
         };
     }
 
-    private static async Task<IResult> SendAsync(EmailSender emailSender, string email, string code)
+    private static async Task<IResult> SendAsync(
+        EmailSender emailSender,
+        ILogger<EmailSender> logger,
+        string email,
+        string code,
+        CancellationToken cancellationToken)
     {
-        await emailSender.SendVerificationCodeAsync(email, code);
+        try
+        {
+            await emailSender.SendVerificationCodeAsync(email, code, cancellationToken);
+        }
+        catch (EmailDeliveryException failure)
+        {
+            EmailDeliveryFailure.LogSafe(logger, failure);
+            return Results.Json(
+                new ErrorDto(EmailDeliveryFailure.UserMessage),
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
         return Results.Ok();
     }
 

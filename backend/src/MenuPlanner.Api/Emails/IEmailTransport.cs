@@ -2,5 +2,5 @@ namespace MenuPlanner.Api.Emails;
 
 public interface IEmailTransport
 {
-    Task SendAsync(EmailMessage message);
+    Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default);
 }

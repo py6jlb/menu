@@ -342,7 +342,7 @@ internal sealed class RecordingEmailTransport : IEmailTransport
         }
     }
 
-    public Task SendAsync(EmailMessage message)
+    public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         lock (_gate)
             _emails.Add(message);

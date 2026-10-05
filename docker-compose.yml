@@ -34,7 +34,9 @@ services:
       SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
       SMTP_FROM: "${SMTP_FROM:-}"
       SMTP_FROM_NAME: "${SMTP_FROM_NAME:-Меню для домохозяек}"
-      SMTP_ENABLE_STARTTLS: "${SMTP_ENABLE_STARTTLS:-true}"
+      SMTP_SECURITY: "${SMTP_SECURITY:-starttls}"
+      SMTP_TIMEOUT_SECONDS: "${SMTP_TIMEOUT_SECONDS:-10}"
+      EMAIL_TRANSPORT: "${EMAIL_TRANSPORT:-}"
       PHOTOS_DIR: /app/photos
       SHARE_BASE_URL: "${SHARE_BASE_URL:-}"
       # X-Forwarded-* принимаются только от nginx-контейнера (172.28.0.10):

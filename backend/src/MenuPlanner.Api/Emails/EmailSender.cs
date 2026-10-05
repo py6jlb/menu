@@ -11,17 +11,20 @@ public sealed class EmailSender
         _transport = transport;
     }
 
-    public Task SendVerificationCodeAsync(string to, string code) =>
-        SendAsync(to, EmailTemplates.Verification(code));
+    public Task SendVerificationCodeAsync(
+        string to, string code, CancellationToken cancellationToken = default) =>
+        SendAsync(to, EmailTemplates.Verification(code), cancellationToken);
 
-    public Task SendPasswordResetCodeAsync(string to, string code) =>
-        SendAsync(to, EmailTemplates.PasswordReset(code));
+    public Task SendPasswordResetCodeAsync(
+        string to, string code, CancellationToken cancellationToken = default) =>
+        SendAsync(to, EmailTemplates.PasswordReset(code), cancellationToken);
 
-    private Task SendAsync(string to, (string Subject, string HtmlBody) letter) =>
+    private Task SendAsync(
+        string to, (string Subject, string HtmlBody) letter, CancellationToken cancellationToken) =>
         _transport.SendAsync(new EmailMessage(
             to,
             _options.From,
             _options.FromName,
             letter.Subject,
-            letter.HtmlBody));
+            letter.HtmlBody), cancellationToken);
 }
