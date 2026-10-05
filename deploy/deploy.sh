@@ -64,6 +64,9 @@ if [ -f "$MANIFEST" ]; then
     printf 'Релиз: конфигурации checkout не совпадают с manifest %s\n' "$TAG" >&2
     exit 1
   fi
+else
+  printf 'Релиз: manifest %s не найден — хэши не сверяются, checkout прибит к коммиту\n' \
+    "$TAG" >&2
 fi
 
 TARGET="$VPS_USER@$VPS_HOST"

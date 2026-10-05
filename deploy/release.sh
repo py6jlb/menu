@@ -98,6 +98,15 @@ release_manifest() {
   } > "$out"
 }
 
+# release_image_digest <image> [<docker-inspect-template>]
+# Дайджест образа; "unknown", если Docker его не знает (локальная сборка без push).
+release_image_digest() {
+  local image="$1" template="${2-index .RepoDigests 0}" value
+  value="$(docker image inspect --format "{{$template}}" "$image" 2>/dev/null || true)"
+  [ -n "$value" ] || value="unknown"
+  printf '%s' "$value"
+}
+
 # release_manifest_field <manifest> <key>: первое строковое значение поля.
 release_manifest_field() {
   local manifest="$1" key="$2"
@@ -111,17 +120,12 @@ release_manifest_field() {
     }' "$manifest"
 }
 
-# release_manifest_config_hash <manifest> <path>: хэш файла из manifest или пусто.
-release_manifest_config_hash() {
-  release_manifest_field "$1" "$2"
-}
-
 # release_verify_config <manifest> <hashesFile>: сверить версии конфигурации.
 release_verify_config() {
   local manifest="$1" hashes="$2" file hash expected
   while IFS=' ' read -r file hash; do
     [ -n "$file" ] || continue
-    expected="$(release_manifest_config_hash "$manifest" "$file")"
+    expected="$(release_manifest_field "$manifest" "$file")"
     if [ -z "$expected" ] || [ "$expected" != "$hash" ]; then
       printf 'Релиз: конфигурация «%s» не соответствует manifest\n' "$file" >&2
       return 1

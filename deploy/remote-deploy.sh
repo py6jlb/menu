@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Серверная часть деплоя. Секреты остаются на сервере.
 #   remote-deploy.sh <git-sha> [<commit>]
-# Без аргумента тег берётся из /opt/menu/current-release (повторный запуск).
+# Тег обязателен; повторный штатный запуск того же релиза — ./deploy/compose.sh up -d
+# (он читает pinned-тег из /opt/menu/current-release).
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 # shellcheck disable=SC1091
@@ -20,17 +21,10 @@ config_image_tag "$TAG"
 export IMAGE_TAG="$TAG"
 config_server
 
-image_digest() {
-  local value
-  value="$(docker image inspect --format "{{$1}}" "$2" 2>/dev/null || true)"
-  [ -n "$value" ] || value="unknown"
-  printf '%s' "$value"
-}
-
 write_release_state() {
   local backend_digest frontend_digest hashes built_at
-  backend_digest="$(image_digest "index .RepoDigests 0" "$DOCKERHUB_USER/menu-backend:$TAG")"
-  frontend_digest="$(image_digest "index .RepoDigests 0" "$DOCKERHUB_USER/menu-frontend:$TAG")"
+  backend_digest="$(release_image_digest "$DOCKERHUB_USER/menu-backend:$TAG")"
+  frontend_digest="$(release_image_digest "$DOCKERHUB_USER/menu-frontend:$TAG")"
 
   built_at=""
   if [ -f "$APP_DIR/deploy/release.json" ]; then

@@ -23,13 +23,9 @@ config_require DOCKERHUB_USER
 PUBLISH=0
 case "${1-}" in
   --publish) PUBLISH=1 ;;
-  "")        PUBLISH="${PUBLISH_ENV-0}" ;;
+  "")        ;;
   *)         printf 'Использование: %s [--publish]\n' "$0" >&2; exit 1 ;;
 esac
-if [ "$PUBLISH" != 0 ] && [ "$PUBLISH" != 1 ]; then
-  printf 'Использование: %s [--publish]\n' "$0" >&2
-  exit 1
-fi
 
 log() { printf '\033[1;32m[build-push]\033[0m %s\n' "$*"; }
 
@@ -75,21 +71,19 @@ log "Сборка образов ($TAG)"
 docker build -t "$BACKEND_IMAGE:$TAG" backend
 docker build -t "$FRONTEND_IMAGE:$TAG" frontend
 
-image_digest() {
-  docker image inspect --format "{{${1}}}" "$2" 2>/dev/null || printf 'unknown'
-}
-
 if [ "$PUBLISH" -eq 1 ]; then
   log "Публикация в Docker Hub"
+  docker tag "$BACKEND_IMAGE:$TAG" "$BACKEND_IMAGE:latest"
+  docker tag "$FRONTEND_IMAGE:$TAG" "$FRONTEND_IMAGE:latest"
   docker push "$BACKEND_IMAGE:$TAG"
   docker push "$BACKEND_IMAGE:latest"
   docker push "$FRONTEND_IMAGE:$TAG"
   docker push "$FRONTEND_IMAGE:latest"
-  BACKEND_DIGEST="$(image_digest "index .RepoDigests 0" "$BACKEND_IMAGE:$TAG")"
-  FRONTEND_DIGEST="$(image_digest "index .RepoDigests 0" "$FRONTEND_IMAGE:$TAG")"
+  BACKEND_DIGEST="$(release_image_digest "$BACKEND_IMAGE:$TAG")"
+  FRONTEND_DIGEST="$(release_image_digest "$FRONTEND_IMAGE:$TAG")"
 else
-  BACKEND_DIGEST="$(image_digest ".Id" "$BACKEND_IMAGE:$TAG")"
-  FRONTEND_DIGEST="$(image_digest ".Id" "$FRONTEND_IMAGE:$TAG")"
+  BACKEND_DIGEST="$(release_image_digest "$BACKEND_IMAGE:$TAG" ".Id")"
+  FRONTEND_DIGEST="$(release_image_digest "$FRONTEND_IMAGE:$TAG" ".Id")"
 fi
 
 HASHES="$(mktemp)"
@@ -99,7 +93,6 @@ release_config_hashes "$ROOT" > "$HASHES"
 mkdir -p "$RELEASE_DIR"
 release_manifest "$MANIFEST" "$COMMIT" "$TAG" "$(release_built_at)" \
   "$BACKEND_DIGEST" "$FRONTEND_DIGEST" "$HASHES"
-cp "$MANIFEST" "$RELEASE_DIR/current.json"
 
 log "Manifest: $MANIFEST"
 if [ "$PUBLISH" -eq 0 ]; then

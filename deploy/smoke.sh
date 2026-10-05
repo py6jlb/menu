@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Smoke на стенде: выбранный релиз запущен, его образы совпадают с release.json,
-# живой путь отвечает, отсутствующий статический asset даёт 404, SPA-маршрут работает.
+# Smoke на стенде: выбранный релиз запущен, его образы и тег совпадают с release.json,
+# повторный Compose берёт pinned-тег, живой путь отвечает, отсутствующий asset даёт 404,
+# SPA-маршрут работает.
 #
 #   /opt/menu/deploy/smoke.sh
 
@@ -20,20 +21,27 @@ die() { printf '\033[1;31m[smoke]\033[0m %s\n' "$*" >&2; exit 1; }
 MANIFEST="$APP_DIR/release.json"
 [ -f "$MANIFEST" ] || die "Нет $MANIFEST — сначала штатный деплой"
 
-image_digest() {
-  docker image inspect --format '{{index .RepoDigests 0}}' "$1" 2>/dev/null || true
-}
+manifest_tag="$(release_manifest_field "$MANIFEST" tag)"
+[ "$manifest_tag" = "$TAG" ] || die "Manifest описывает тег $manifest_tag, выбран $TAG"
 
 log "Идентичность manifest ($TAG)"
 backend_expected="$(release_manifest_field "$MANIFEST" backendDigest)"
 frontend_expected="$(release_manifest_field "$MANIFEST" frontendDigest)"
-backend_actual="$(image_digest "$DOCKERHUB_USER/menu-backend:$TAG")"
-frontend_actual="$(image_digest "$DOCKERHUB_USER/menu-frontend:$TAG")"
-[ -n "$backend_actual" ] || die "Образ backend не найден локально"
-[ -n "$frontend_actual" ] || die "Образ frontend не найден локально"
+backend_actual="$(release_image_digest "$DOCKERHUB_USER/menu-backend:$TAG")"
+frontend_actual="$(release_image_digest "$DOCKERHUB_USER/menu-frontend:$TAG")"
+[ "$backend_actual" != "unknown" ] || die "Образ backend не найден локально"
+[ "$frontend_actual" != "unknown" ] || die "Образ frontend не найден локально"
 [ "$backend_actual" = "$backend_expected" ] || die "Дайджест backend не совпал с manifest"
 [ "$frontend_actual" = "$frontend_expected" ] || die "Дайджест frontend не совпал с manifest"
 log "Образы совпадают с manifest"
+
+log "Повторный Compose берёт pinned-тег"
+images="$(menu_compose config --images)"
+for expected_image in "$DOCKERHUB_USER/menu-backend:$TAG" "$DOCKERHUB_USER/menu-frontend:$TAG"; do
+  printf '%s\n' "$images" | grep -qx "$expected_image" \
+    || die "Compose не использует $expected_image"
+done
+log "Compose прибит к $TAG"
 
 log "Проверка живого пути"
 menu_compose exec -T caddy wget -qO- http://backend:8080/health 2>/dev/null \

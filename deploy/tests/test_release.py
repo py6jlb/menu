@@ -102,7 +102,7 @@ class ReleaseLibraryTests(unittest.TestCase):
                 f'release_manifest "{manifest}" c t 2026-01-01T00:00:00Z sha256:b sha256:f '
                 f'"{root}/hashes.txt"', cwd=root)
             read = run_bash(
-                f'printf "%s" "$(release_manifest_config_hash "{manifest}" deploy/Caddyfile)"',
+                f'printf "%s" "$(release_manifest_field "{manifest}" deploy/Caddyfile)"',
                 cwd=root)
             self.assertEqual(read.stdout, "aabbcc")
 
@@ -132,6 +132,34 @@ class ReleaseStructureTests(unittest.TestCase):
         self.assertIn("location ^~ /assets/", nginx)
         self.assertIn("try_files $uri =404;", nginx)
         self.assertIn("try_files $uri $uri/ /index.html;", nginx)
+
+    def test_used_base_images_are_in_pinned_list(self):
+        declared = run_bash("release_base_images").stdout.split()
+        self.assertIn("node:24-alpine", declared)
+        self.assertIn("nginx:1.27-alpine", declared)
+
+        used = set()
+        for name in ("backend/Dockerfile", "frontend/Dockerfile"):
+            for line in (ROOT / name).read_text().splitlines():
+                if line.startswith("FROM "):
+                    used.add(line.split()[1])
+        for name in ("docker-compose.yml", "docker-compose.prod.yml"):
+            for line in (ROOT / name).read_text().splitlines():
+                stripped = line.strip()
+                if stripped.startswith("image:") and "${" not in stripped:
+                    used.add(stripped.split(":", 1)[1].strip().strip('"'))
+
+        for image in sorted(used):
+            self.assertIn(image, declared, f"{image} не закреплён в release_base_images")
+
+    def test_smoke_and_publish_gate_structure(self):
+        smoke = (ROOT / "deploy/smoke.sh").read_text()
+        self.assertIn("release_manifest_field", smoke)
+        self.assertIn("config --images", smoke)
+
+        build = (ROOT / "deploy/build-push.sh").read_text()
+        self.assertNotIn("PUBLISH_ENV", build)
+        self.assertIn("--publish", build)
 
 
 class ReleaseBuildTests(unittest.TestCase):
@@ -192,7 +220,6 @@ class ReleaseBuildTests(unittest.TestCase):
         body = json.loads(manifest.read_text())
         self.assertEqual(body["tag"], "abc123")
         self.assertTrue(body["backendDigest"])
-        self.assertTrue((self.root / "deploy/release/current.json").exists())
 
     def test_publish_pushes_and_records_registry_digests(self):
         result = subprocess.run(["bash", str(self.root / "deploy/build-push.sh"), "--publish"],

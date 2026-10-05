@@ -20,8 +20,9 @@ if command -v shellcheck >/dev/null 2>&1; then shellcheck deploy/*.sh; fi
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/app:ro -w /app \
-  koalaman/shellcheck:stable deploy/config.sh deploy/backup.sh deploy/build-push.sh \
-  deploy/deploy.sh deploy/compose.sh deploy/remote-deploy.sh deploy/restore-drill.sh
+  koalaman/shellcheck:stable deploy/config.sh deploy/release.sh deploy/backup.sh \
+  deploy/build-push.sh deploy/deploy.sh deploy/compose.sh deploy/remote-deploy.sh \
+  deploy/restore-drill.sh deploy/smoke.sh
 ```
 
 Targeted runtime-тесты требуют Docker daemon и SDK-контейнер (SDK на хост не устанавливается):
@@ -87,7 +88,7 @@ Compose `config` экранирует все `$` как `$$` при сериал
 2. Rollback: **RED**, 6 legacy-кейсов через публичный entrypoint сохраняли старый `localhost/menu` вместо effective-конфигурации; настоящий Compose не передавал `ConnectionStrings__Default`. После Bash ADO.NET-сериализации и восстановления legacy-ключа в prod YAML — **GREEN**, все 26 targeted backend-тестов и Compose checks. Проверяются обычный пароль, двойные/одинарные кавычки, крайние пробелы, `;`, `\`, `$`, `#` без реальной БД.
 3. Контейнерный Shellcheck: **RED**, SC1007 и SC2086; после явного `COMPOSE_ENV_FILES=''` и кавычек вокруг tar-аргумента — **GREEN**, exit 0 на всех семи изменённых deploy-скриптах. Backup-семантика не менялась.
 
-Текущий итог: Python deploy-suite — **15 тестов GREEN**, backend targeted suite — **26 тестов GREEN**; bash syntax и контейнерный Shellcheck проходят.
+Текущий итог на момент тикета 36: Python deploy-suite — **15 тестов GREEN**, backend targeted suite — **26 тестов GREEN**; bash syntax и контейнерный Shellcheck проходят. Актуальное число тестов (с тикетом 38) — в разделе ниже.
 
 Ограничения проверки: стек не запускается; фактическая доступность/аутентификация Postgres, валидность SMTP/JWT, реальный SSH и установленный на VPS Compose не проверяются. Literal-гарантия строки подключения проверена reparsing Npgsql в runtime-adapter. Тикет не меняет поведение восстановления без `$1`, атомарность backup, release pinning, TLS или readiness.
 
@@ -105,7 +106,7 @@ Compose `config` экранирует все `$` как `$$` при сериал
 ### TDD evidence (тикет 38)
 
 1. Dirty-check: **RED** — `release_require_clean_tree` отсутствовала, build-push собирал с изменениями; после allowlist-проверки **GREEN**.
-2. Manifest: **RED** — `release_manifest_config_hash` падал на пути с `/` (sed expression), сверка конфигурации не работала; после awk-разбора **GREEN**.
+2. Manifest: **RED** — `release_manifest_field` падал на пути с `/` (sed expression), сверка конфигурации не работала; после awk-разбора **GREEN**.
 3. Entrypoints: **RED** — build-push/deploy игнорировали чистоту дерева, тестовый checkout считался грязным из-за `bin/`; после `release_require_clean_tree` и gitignore-фикстуры **GREEN**.
 4. Publish-гейт: **RED** — build-push всегда пушил; после `--publish` **GREEN**, manifest фиксирует registry-дайджесты.
 5. Структурные гарантии: **RED** — `node:18` и `npm install`, отсутствие 404-asset; после `node:24-alpine` + `npm ci` и nginx-правила **GREEN**.
