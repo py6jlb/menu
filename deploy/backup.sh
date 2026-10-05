@@ -75,9 +75,10 @@ upload() {
 
 # Независимое подтверждение доставки: copyto мог завершиться успешно без объекта.
 verify_upload() {
-  local file dir
-  for file in "$STAMP.sql.gz" "$STAMP.tar.gz"; do
-    if [ "$file" = "$STAMP.sql.gz" ]; then dir=db; else dir=photos; fi
+  local spec dir file
+  for spec in "db:$STAMP.sql.gz" "photos:$STAMP.tar.gz"; do
+    dir="${spec%%:*}"
+    file="${spec#*:}"
     if ! rclone lsf "$BACKUP_REMOTE/$dir/" --files-only 2>/dev/null | grep -qx "$file"; then
       die "Проверка выгрузки: $dir/$file не найден в $BACKUP_REMOTE"
     fi

@@ -372,6 +372,14 @@ class InstallBackupTests(BackupFixture):
         self.assertIn("rclone", result.stderr)
         self.assertEqual(self.calls_of("systemctl"), [])
 
+    def test_unreadable_backup_script_is_rejected(self):
+        (self.root / "deploy/backup.sh").chmod(0o000)
+        result = self.run_script("install-backup.sh")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("backup.sh", result.stderr)
+        self.assertFalse(self.units.exists())
+        self.assertEqual(self.calls_of("systemctl"), [])
+
 
 class DocumentationTests(unittest.TestCase):
     def test_readme_describes_delivered_install_without_checkout(self):

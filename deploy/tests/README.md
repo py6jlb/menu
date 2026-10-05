@@ -120,7 +120,7 @@ Compose `config` экранирует все `$` как `$$` при сериал
 | Критерий | Проверка |
 |---|---|
 | Доставленные инструменты и units; установка без checkout | `test_readme_describes_delivered_install_without_checkout`, `test_backup_drill_scripts_are_delivered`, `test_installs_renders_and_enables_units` |
-| Пользователь службы, права, расположение rclone и доступ к remote | `test_unconfigured_remote_is_rejected`, `test_missing_rclone_is_rejected`, `test_installs_renders_and_enables_units` (рендер `User=`, `WorkingDirectory=`, `ExecStart=`) |
+| Пользователь службы, права, расположение rclone и доступ к remote | `test_unconfigured_remote_is_rejected`, `test_missing_rclone_is_rejected`, `test_unreadable_backup_script_is_rejected`, `test_installs_renders_and_enables_units` (рендер `User=`, `WorkingDirectory=`, `ExecStart=`) |
 | Timer включён, следующий запуск виден | `test_installs_renders_and_enables_units` (`daemon-reload`, `enable --now menu-backup.timer`) |
 | Сбой dump/архивации/хранилища/upload → ненулевой код, нет «Готово» | `test_dump_failure_...`, `test_archive_failure_...`, `test_missing_backend_container_...`, `test_missing_photos_volume_...`, `test_upload_failure_...`, `test_upload_without_remote_object_...`, `test_storage_listing_error_...` |
 | Запуск восстановления без аргумента; отсутствие `$1` не прерывает | `test_runs_without_argument_and_verifies_remote_set`, `test_explicit_empty_argument_is_treated_as_missing` |

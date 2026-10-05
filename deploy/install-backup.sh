@@ -9,10 +9,14 @@ set -euo pipefail
 # что rclone настроен для пользователя службы. Идемпотентно: повторный запуск
 # обновляет units и повторно включает timer.
 #
-# Переменные (env или /opt/menu/server.conf):
+# Переменные (env; BACKUP_REMOTE также из /opt/menu/server.conf):
 #   BACKUP_REMOTE      rclone-remote (обязателен)
 #   DEPLOY_USER        пользователь службы (menu)
+#   RCLONE_BIN         исполняемый файл rclone (rclone)
 #   SYSTEMD_UNIT_DIR   каталог units (/etc/systemd/system; override — тестовый шов)
+#
+# DEPLOY_USER, RCLONE_BIN и SYSTEMD_UNIT_DIR — окружение процесса, не ключи
+# server.conf: whitelist серверных ключей их не принимает.
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
@@ -28,6 +32,7 @@ SERVICE="menu-backup.service"
 TIMER="menu-backup.timer"
 
 log() { printf '\033[1;32m[install-backup]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[install-backup]\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31m[install-backup]\033[0m %s\n' "$*" >&2; exit 1; }
 
 if [ "$UNIT_DIR" = "/etc/systemd/system" ]; then
@@ -41,11 +46,15 @@ fi
 config_require BACKUP_REMOTE
 
 command -v "$RCLONE_BIN" >/dev/null 2>&1 || die "rclone не установлен: apt-get install -y rclone"
+command -v docker >/dev/null 2>&1 || die "docker не установлен"
 id -u "$DEPLOY_USER" >/dev/null 2>&1 || die "Пользователь $DEPLOY_USER не существует"
 
-# Имя remote — до первого ':'; BACKUP_REMOTE=remote:bucket/prefix.
-remote="${BACKUP_REMOTE%%:*}"
-[ -n "$remote" ] || die "BACKUP_REMOTE должен быть вида remote:bucket"
+# server.conf содержит секреты; служба должна его читать.
+if [ -f "$APP_DIR/server.conf" ]; then
+  chown "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR/server.conf" \
+    || die "Не удалось передать $APP_DIR/server.conf пользователю $DEPLOY_USER"
+  chmod 600 "$APP_DIR/server.conf"
+fi
 
 run_as_user() {
   if [ "$(id -un)" = "$DEPLOY_USER" ]; then
@@ -56,6 +65,22 @@ run_as_user() {
     sudo -u "$DEPLOY_USER" -H -- "$@"
   fi
 }
+
+# Служба должна читать библиотеку и запускать backup.sh от своего имени.
+for file in "$APP_DIR/deploy/config.sh" "$APP_DIR/deploy/backup.sh" "$APP_DIR/server.conf"; do
+  [ -e "$file" ] || continue
+  run_as_user test -r "$file" || die "Пользователь $DEPLOY_USER не читает $file"
+done
+run_as_user test -x "$APP_DIR/deploy/backup.sh" \
+  || die "Пользователь $DEPLOY_USER не запускает $APP_DIR/deploy/backup.sh"
+
+if ! id -nG "$DEPLOY_USER" | tr ' ' '\n' | grep -qx docker; then
+  warn "Пользователь $DEPLOY_USER не в группе docker — служба не сможет управлять контейнерами"
+fi
+
+# Имя remote — до первого ':'; BACKUP_REMOTE=remote:bucket/prefix.
+remote="${BACKUP_REMOTE%%:*}"
+[ -n "$remote" ] || die "BACKUP_REMOTE должен быть вида remote:bucket"
 
 # Доступ к remote проверяется от имени службы: root-настройки rclone службе не видны.
 remotes="$(run_as_user "$RCLONE_BIN" listremotes 2>/dev/null || true)"
@@ -80,12 +105,6 @@ render_unit() {
 install -d -m 755 "$UNIT_DIR"
 render_unit "$APP_DIR/deploy/systemd/$SERVICE" "$UNIT_DIR/$SERVICE"
 install -m 644 "$APP_DIR/deploy/systemd/$TIMER" "$UNIT_DIR/$TIMER"
-
-# server.conf содержит секреты и должен читаться службой.
-if [ -f "$APP_DIR/server.conf" ]; then
-  chown "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR/server.conf"
-  chmod 600 "$APP_DIR/server.conf"
-fi
 
 systemctl daemon-reload
 systemctl enable --now "$TIMER"

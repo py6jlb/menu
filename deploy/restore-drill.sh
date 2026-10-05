@@ -14,7 +14,7 @@ set -euo pipefail
 #   BACKUP_REMOTE     rclone-remote (обязателен)
 #   POSTGRES_DB       имя БД, как в дампе (menu_planner)
 #   POSTGRES_USER     роль-владелец объектов, как в дампе (menu)
-#   POSTGRES_PASSWORD пароль временной роли (drill-only)
+#   DRILL_PASSWORD    пароль временной роли (drill-only; продовый секрет не используется)
 #   DRILL_CONTAINER   префикс имени временного контейнера (menu-restore-drill)
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,9 +26,10 @@ config_load "$APP_DIR/server.conf" server || exit 1
 config_require BACKUP_REMOTE
 
 # Те же значения, что у backup.sh: настройки роли/БД совпадают с дампом.
+# Пароль временной роли не берём из прода: pg_dump plain не содержит паролей ролей.
 POSTGRES_DB="${POSTGRES_DB-menu_planner}"
 POSTGRES_USER="${POSTGRES_USER-menu}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-drill-only}"
+DRILL_PASSWORD="${DRILL_PASSWORD:-drill-only}"
 
 log() { printf '\033[1;32m[restore-drill]\033[0m %s\n' "$*"; }
 die() { printf '\033[1;31m[restore-drill]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -60,7 +61,7 @@ log "Запуск временной Postgres в изолированном ко
 docker run -d --name "$DRILL_CONTAINER" --network none \
   -e POSTGRES_DB="$POSTGRES_DB" \
   -e POSTGRES_USER="$POSTGRES_USER" \
-  -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  -e POSTGRES_PASSWORD="$DRILL_PASSWORD" \
   postgres:16 >/dev/null
 
 for _ in $(seq 1 30); do

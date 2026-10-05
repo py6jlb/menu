@@ -107,7 +107,7 @@ SMTP_PASSWORD=пробел $HOME ${SMTP_USER} $$ # "двойные" 'одина�
 | `remote-deploy.sh`, `compose.sh` | непустые `DOCKERHUB_USER`, `POSTGRES_PASSWORD`, `JWT_SECRET`; у remote ещё тег-аргумент |
 | `backup.sh` | те же Compose-параметры и непустой `BACKUP_REMOTE`; корректные сроки хранения |
 | `restore-drill.sh` | непустой `BACKUP_REMOTE` |
-| `install-backup.sh` | непустой `BACKUP_REMOTE`; существующий `DEPLOY_USER` и rclone-remote, настроенный для него |
+| `install-backup.sh` | непустой `BACKUP_REMOTE`; существующий пользователь службы (`DEPLOY_USER`, env) и rclone-remote, настроенный для него |
 
 Defaults показаны в примерах и Compose. `BACKUP_KEEP_DAILY`/`BACKUP_KEEP_WEEKLY` — целые 1–9999 без ведущих нулей: произвольный текст не допускается в bash-арифметику. Операционные SSH-настройки ограничены: `VPS_HOST` — DNS/IPv4 (буквы, цифры, точки, дефисы), `VPS_USER` — обычный Unix-login, `VPS_SSH_PORT` — цифры, `APP_DIR` — абсолютный путь из букв/цифр, `/`, `.`, `_`, `-`. IPv6 и пути с пробелами для локальной доставки не поддерживаются. Это ограничения адресов/путей; текстовые SMTP/JWT-значения читаются буквально.
 
