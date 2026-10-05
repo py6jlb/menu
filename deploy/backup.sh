@@ -5,7 +5,7 @@ set -euo pipefail
 #
 #   /opt/menu/deploy/backup.sh
 #
-# Переменные (env или /opt/menu/.env):
+# Переменные (env или /opt/menu/server.conf):
 #   BACKUP_REMOTE     rclone-remote, например "myremote:bucket/menu" (обязателен)
 #   BACKUP_KEEP_DAILY число дневных копий (7)
 #   BACKUP_KEEP_WEEKLY число недельных копий (4)
@@ -15,14 +15,22 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 
 # shellcheck disable=SC1091
-[ -f .env ] && set -a && . ./.env && set +a
+. "$APP_DIR/deploy/config.sh"
+config_server
+config_require BACKUP_REMOTE
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-BACKUP_REMOTE="${BACKUP_REMOTE:?Задай BACKUP_REMOTE (env или .env)}"
-BACKUP_KEEP_DAILY="${BACKUP_KEEP_DAILY:-7}"
-BACKUP_KEEP_WEEKLY="${BACKUP_KEEP_WEEKLY:-4}"
-POSTGRES_DB="${POSTGRES_DB:-menu_planner}"
-POSTGRES_USER="${POSTGRES_USER:-menu}"
+BACKUP_KEEP_DAILY="${BACKUP_KEEP_DAILY-7}"
+BACKUP_KEEP_WEEKLY="${BACKUP_KEEP_WEEKLY-4}"
+POSTGRES_DB="${POSTGRES_DB-menu_planner}"
+POSTGRES_USER="${POSTGRES_USER-menu}"
+
+# Значения участвуют в bash-арифметике: произвольный текст там небезопасен.
+for key in BACKUP_KEEP_DAILY BACKUP_KEEP_WEEKLY; do
+  if [[ ! "${!key}" =~ ^[1-9][0-9]{0,3}$ ]]; then
+    printf 'Конфигурация: %s должен быть целым от 1 до 9999 без ведущих нулей\n' "$key" >&2
+    exit 1
+  fi
+done
 
 STAMP="$(date +%F)"
 WEEKDAY="$(date +%u)"
@@ -36,7 +44,7 @@ trap cleanup EXIT
 
 dump_database() {
   log "Дамп БД $POSTGRES_DB"
-  docker compose -f "$COMPOSE_FILE" exec -T db \
+  menu_compose exec -T db \
     pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" | gzip > "$TMP/db-$STAMP.sql.gz"
   [ -s "$TMP/db-$STAMP.sql.gz" ] || die "Дамп пуст"
 }
@@ -44,12 +52,12 @@ dump_database() {
 archive_photos() {
   log "Архив фото"
   local backend_id photos_volume
-  backend_id="$(docker compose -f "$COMPOSE_FILE" ps -q backend)"
+  backend_id="$(menu_compose ps -q backend)"
   [ -n "$backend_id" ] || die "Контейнер backend не запущен"
   photos_volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/photos"}}{{.Name}}{{end}}{{end}}' "$backend_id")"
   [ -n "$photos_volume" ] || die "Не найден volume с фото"
   docker run --rm -v "$photos_volume":/data:ro -v "$TMP":/backup alpine:3.20 \
-    tar czf /backup/photos-$STAMP.tar.gz -C /data .
+    tar czf "/backup/photos-$STAMP.tar.gz" -C /data .
 }
 
 upload() {

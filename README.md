@@ -48,6 +48,11 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/
 
 Порядок и переменные — в [`deploy/README.md`](deploy/README.md):
 
+Настройки скриптов: локально `deploy/local.conf`, на сервере `/opt/menu/server.conf`
+(отдельные шаблоны в `deploy/`). Это literal-данные `KEY=value`, не shell source;
+окружение имеет приоритет, включая явно пустые значения. Серверные ручные операции
+Compose выполняются через `./deploy/compose.sh`, чтобы избежать автозагрузки `.env`.
+
 ```bash
 sudo SSH_PUBLIC_KEY='ssh-ed25519 ...' ./deploy/bootstrap.sh   # настройка сервера
 ./deploy/build-push.sh                                        # тесты, сборка, push в Docker Hub
@@ -74,7 +79,7 @@ npm run dev
 
 ## Конфигурация backend
 
-- Строка подключения: env `ConnectionStrings__Default` (или `DB_CONNECTION_STRING`), при отсутствии — дефолт `Host=localhost;...` в `appsettings.json`.
+- Подключение БД: при заданном `DB_HOST` используется structured-набор `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` через `NpgsqlConnectionStringBuilder` (так работает prod-Compose, сохраняя literal-пароли). Без `DB_HOST` прежний приоритет: `ConnectionStrings:Default` (env `ConnectionStrings__Default` или JSON-default с `Host=db`) → `DB_CONNECTION_STRING` → fallback с `Host=localhost`. Dev-Compose и EF factory сохраняют прежние overrides без `DB_HOST`. Подробности и defaults — в [`deploy/README.md`](deploy/README.md#literal-параметры-подключения-backend).
 - При старте применяются EF Core миграции (`MigrateAsync`) — схема БД обновляется автоматически. Новую миграцию генерируют из корня через SDK-контейнер:
 
   ```bash

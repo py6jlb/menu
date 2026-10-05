@@ -12,10 +12,11 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 
 # shellcheck disable=SC1091
-[ -f .env ] && set -a && . ./.env && set +a
+. "$APP_DIR/deploy/config.sh"
+config_load "$APP_DIR/server.conf" server
+config_require BACKUP_REMOTE
 
-BACKUP_REMOTE="${BACKUP_REMOTE:?Задай BACKUP_REMOTE (env или .env)}"
-DRILL_CONTAINER="${DRILL_CONTAINER:-menu-restore-drill}"
+DRILL_CONTAINER="${DRILL_CONTAINER-menu-restore-drill}"
 DRILL_PASSWORD="drill-only"
 
 log() { printf '\033[1;32m[restore-drill]\033[0m %s\n' "$*"; }

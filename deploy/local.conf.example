@@ -1,0 +1,9 @@
+# Локальная публикация и доставка: скопировать в deploy/local.conf (chmod 600).
+# Серверных секретов здесь нет. KEY=value, значение буквально, без кавычек-обёрток.
+DOCKERHUB_USER=your-dockerhub-login
+# IMAGE_TAG не задан: build-push использует короткий git-sha.
+# IMAGE_TAG=abc123
+VPS_HOST=
+VPS_USER=menu
+VPS_SSH_PORT=8822
+APP_DIR=/opt/menu

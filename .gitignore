@@ -8,6 +8,12 @@ dist/
 
 # Env
 .env
+local.conf
+server.conf
+
+# Python
+__pycache__/
+*.py[cod]
 
 # IDE / OS
 .idea/
