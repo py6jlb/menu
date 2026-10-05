@@ -179,10 +179,40 @@ class ResourceBudgetTests(unittest.TestCase):
                         "окно backup пересекается с плановым reboot")
 
 
+class ProxyTrustTests(unittest.TestCase):
+    def test_prod_trusts_only_the_caddy_edge(self):
+        prod = (ROOT / "docker-compose.prod.yml").read_text()
+        backend = service_block(prod, "backend")
+        caddy = service_block(prod, "caddy")
+        self.assertIn('TRUSTED_PROXY_ADDRESSES: "172.29.0.10"', backend)
+        self.assertIn("ipv4_address: 172.29.0.10", caddy)
+        self.assertIn("subnet: 172.29.0.0/24", prod)
+
+    def test_dev_trusts_only_the_nginx_entry(self):
+        dev = (ROOT / "docker-compose.yml").read_text()
+        backend = service_block(dev, "backend")
+        frontend = service_block(dev, "frontend")
+        self.assertIn('TRUSTED_PROXY_ADDRESSES: "172.28.0.10"', backend)
+        self.assertIn("ipv4_address: 172.28.0.10", frontend)
+        self.assertIn("subnet: 172.28.0.0/24", dev)
+
+
 class DocumentationTests(unittest.TestCase):
     def test_readme_documents_budget_and_access(self):
         readme = (ROOT / "deploy/README.md").read_text()
         for marker in ("Ресурсный бюджет", "127.0.0.1", "DEPLOYMENT_MODE"):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, readme)
+
+    def test_readme_documents_rate_limit_proxy_trust_and_single_replica(self):
+        readme = (ROOT / "deploy/README.md").read_text()
+        for marker in (
+            "TRUSTED_PROXY_ADDRESSES",
+            "Caddy",
+            "одну реплику",
+            "Retry-After",
+            "Redis",
+        ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, readme)
 

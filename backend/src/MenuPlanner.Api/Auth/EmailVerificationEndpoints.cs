@@ -9,9 +9,6 @@ namespace MenuPlanner.Api.Auth;
 
 public static class EmailVerificationEndpoints
 {
-    private const string EmailKeyPrefix = "verify-resend:email:";
-    private const string IpKeyPrefix = "verify-resend:ip:";
-
     public static IEndpointRouteBuilder MapEmailVerificationEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/auth");
@@ -40,23 +37,26 @@ public static class EmailVerificationEndpoints
         if (user.IsEmailVerified)
             return Results.Conflict(new ErrorDto("Почта уже подтверждена."));
 
-        var window = TimeSpan.FromHours(1);
-        var ip = ClientIpResolver.Resolve(http);
-        var allowedByEmail = limiter.TryConsume(EmailKeyPrefix + user.Email, options.ResendRateLimitPerHour, window, now);
-        var allowedByIp = limiter.TryConsume(IpKeyPrefix + ip, options.ResendRateLimitPerHour, window, now);
-        if (!allowedByEmail || !allowedByIp)
-            return Results.Json(
-                new ErrorDto("Слишком много запросов. Попробуйте позже."),
-                statusCode: StatusCodes.Status429TooManyRequests);
+        var limited = AuthRateLimitPolicy.Check(
+            limiter,
+            scope: "verify-resend",
+            ip: ClientIpResolver.Resolve(http),
+            perIp: options.ResendRateLimitPerHour,
+            perIdentity: options.ResendRateLimitPerHour,
+            identity: user.Email,
+            window: TimeSpan.FromHours(1),
+            now: now);
+        if (limited is not null)
+            return limited;
 
         var result = await verification.ResendAsync(user);
         return result.Outcome switch
         {
             ResendEmailOutcome.Sent => await SendAsync(emailSender, user.Email, result.Code!),
             ResendEmailOutcome.AlreadyVerified => Results.Conflict(new ErrorDto("Почта уже подтверждена.")),
-            ResendEmailOutcome.TooSoon => Results.Json(
-                new ErrorDto($"Повторная отправка будет доступна через {result.RetryAfterSeconds} сек."),
-                statusCode: StatusCodes.Status429TooManyRequests),
+            ResendEmailOutcome.TooSoon => RateLimitResults.TooManyRequests(
+                result.RetryAfterSeconds,
+                $"Повторная отправка будет доступна через {result.RetryAfterSeconds} сек."),
             _ => Locked()
         };
     }

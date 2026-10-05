@@ -8,6 +8,24 @@ export function parseCooldownSeconds(message) {
 }
 
 /**
+ * Секунды ожидания из заголовка `Retry-After`; запасной путь — текст ошибки.
+ * Заголовок приоритетнее: он единый для всех ограничиваемых операций.
+ */
+export function retryAfterSeconds(response, data) {
+  const header = response?.headers?.get?.('Retry-After')
+  const fromHeader = Number(header)
+  if (Number.isFinite(fromHeader) && fromHeader > 0) return Math.floor(fromHeader)
+  return parseCooldownSeconds(data?.error)
+}
+
+/** Понятное сообщение об ограничении; объясняет срок повтора. */
+export function rateLimitMessage(response, data) {
+  const seconds = retryAfterSeconds(response, data)
+  if (seconds > 0) return `Слишком много запросов. Повторите через ${seconds} сек.`
+  return data?.error || 'Слишком много запросов. Попробуйте позже.'
+}
+
+/**
  * Обратный отсчёт до повторной отправки кода: общий секундный таймер и метка `m:ss`.
  */
 export function useCooldown() {

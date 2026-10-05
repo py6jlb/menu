@@ -3,7 +3,8 @@ import { ref, computed } from 'vue'
 import { forgotPassword, resetPassword } from '../api/auth'
 import {
   RESEND_COOLDOWN_SECONDS,
-  parseCooldownSeconds,
+  rateLimitMessage,
+  retryAfterSeconds,
   useCooldown
 } from '../composables/useCooldown'
 
@@ -44,9 +45,9 @@ async function requestCode() {
         data?.message || 'Если аккаунт существует и почта подтверждена, отправлен код.'
       startCooldown(RESEND_COOLDOWN_SECONDS)
     } else if (response.status === 429) {
-      const seconds = parseCooldownSeconds(data?.error)
+      const seconds = retryAfterSeconds(response, data)
       if (seconds) startCooldown(seconds)
-      forgotError.value = data?.error || 'Слишком много запросов. Попробуйте позже.'
+      forgotError.value = rateLimitMessage(response, data)
     } else {
       forgotError.value = data?.error || 'Не удалось отправить код.'
     }
@@ -75,6 +76,8 @@ async function submitReset() {
       resetDone.value = true
     } else if (response.status === 400 && data?.code) {
       resetError.value = RESET_CODE_ERRORS[data.code] || data.error || 'Неверный или истёкший код.'
+    } else if (response.status === 429) {
+      resetError.value = rateLimitMessage(response, data)
     } else if (response.status === 423) {
       resetError.value = data?.error || 'Слишком много неверных попыток. Запросите новый код.'
     } else {

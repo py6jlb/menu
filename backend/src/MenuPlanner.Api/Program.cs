@@ -1,6 +1,5 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -49,7 +48,10 @@ builder.Services.AddSingleton<EmailSender>();
 
 var authCodeOptions = ReadAuthCodeOptions(builder.Configuration);
 builder.Services.AddSingleton(authCodeOptions);
-builder.Services.AddSingleton<FixedWindowRateLimiter>();
+var authRateLimitOptions = AuthRateLimitOptions.Read(builder.Configuration);
+builder.Services.AddSingleton(authRateLimitOptions);
+builder.Services.AddSingleton(services =>
+    new FixedWindowRateLimiter(services.GetRequiredService<AuthRateLimitOptions>().MaxTrackedKeys));
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddSingleton<IAuthCodeGenerator, RandomAuthCodeGenerator>();
 builder.Services.AddScoped<AuthCodeLifecycle>();
@@ -105,13 +107,12 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-var forwardedHeaders = new ForwardedHeadersOptions
-{
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-};
-forwardedHeaders.KnownIPNetworks.Clear();
-forwardedHeaders.KnownProxies.Clear();
-app.UseForwardedHeaders(forwardedHeaders);
+// X-Forwarded-* принимаются только когда задан доверенный прокси. Без него
+// middleware не подключается вовсе: пустой список известных прокси в ASP.NET
+// Core трактуется как «доверять всем», что позволило бы подделать IP.
+var forwardedHeaders = ForwardedHeaderConfiguration.Build(app.Configuration);
+if (ForwardedHeaderConfiguration.HasTrustedProxies(forwardedHeaders))
+    app.UseForwardedHeaders(forwardedHeaders);
 
 app.Services.GetRequiredService<PhotoStorage>();
 
@@ -195,6 +196,7 @@ static AuthCodeOptions ReadAuthCodeOptions(ConfigurationManager configuration)
     if (int.TryParse(configuration["AUTH_CODE_RESEND_RATE_LIMIT_PER_HOUR"], out var rateLimit))
         options.ResendRateLimitPerHour = rateLimit;
 
+    options.Validate();
     return options;
 }
 
