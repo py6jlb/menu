@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Identity;
 using MenuPlanner.Api.Domain;
 
@@ -41,12 +42,11 @@ public static class AuthCodeService
 
     public static void Burn(AuthCode stored) => stored.Used = true;
 
-    public static string GenerateCode(Random? random = null)
+    public static string GenerateCode()
     {
-        var rng = random ?? Random.Shared;
         var code = new char[CodeLength];
         for (var i = 0; i < CodeLength; i++)
-            code[i] = (char)('0' + rng.Next(10));
+            code[i] = (char)('0' + RandomNumberGenerator.GetInt32(10));
         return new string(code);
     }
 

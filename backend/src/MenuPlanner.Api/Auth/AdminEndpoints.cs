@@ -1,7 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
@@ -27,13 +26,15 @@ public static class AdminEndpoints
         UnlockUserRequest request,
         ClaimsPrincipal principal,
         AppDbContext db,
-        FixedWindowRateLimiter limiter)
+        FixedWindowRateLimiter limiter,
+        EmailVerificationService verification,
+        TimeProvider clock)
     {
         var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
         if (!Guid.TryParse(subject, out var adminId))
             return Results.Unauthorized();
 
-        var now = DateTime.UtcNow;
+        var now = clock.GetUtcNow().UtcDateTime;
         if (!limiter.TryConsume(UnlockRateKeyPrefix + adminId, UnlockRateLimitPerMinute, UnlockRateWindow, now))
             return Results.Json(
                 new ErrorDto("Слишком много запросов. Попробуйте позже."),
@@ -44,8 +45,7 @@ public static class AdminEndpoints
         if (user is null)
             return Results.NotFound(new ErrorDto("Пользователь не найден."));
 
-        AuthCodeService.ResetAttempts(user);
-        await db.SaveChangesAsync();
+        await verification.UnlockAsync(user);
 
         return Results.Ok(new MessageDto("Пользователь разблокирован."));
     }

@@ -19,12 +19,11 @@ public sealed class AuthCodeTests
     }
 
     [Fact]
-    public void GenerateCode_WithSeededRandom_IsDeterministic()
+    public void GenerateCode_ProducesVariedCodes()
     {
-        var first = AuthCodeService.GenerateCode(new Random(42));
-        var second = AuthCodeService.GenerateCode(new Random(42));
+        var codes = Enumerable.Range(0, 20).Select(_ => AuthCodeService.GenerateCode()).ToHashSet();
 
-        Assert.Equal(first, second);
+        Assert.True(codes.Count > 1, "Криптографическая генерация не должна повторять один код.");
     }
 
     [Fact]

@@ -28,3 +28,6 @@ public sealed record UserDto(Guid Id, string Email, string Role, bool IsEmailVer
 public sealed record AuthResponse(string Token, UserDto User);
 
 public sealed record ErrorDto(string Error);
+
+/// <summary>Ошибка ввода кода подтверждения: машиночитаемый код плюс русский текст.</summary>
+public sealed record VerifyErrorDto(string Error, string Code);

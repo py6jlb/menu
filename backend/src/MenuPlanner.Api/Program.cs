@@ -8,6 +8,7 @@ using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
@@ -43,6 +44,9 @@ builder.Services.AddSingleton<EmailSender>();
 var authCodeOptions = ReadAuthCodeOptions(builder.Configuration);
 builder.Services.AddSingleton(authCodeOptions);
 builder.Services.AddSingleton<FixedWindowRateLimiter>();
+builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
+builder.Services.AddSingleton<IAuthCodeGenerator, RandomAuthCodeGenerator>();
+builder.Services.AddScoped<EmailVerificationService>();
 
 builder.Services.AddSingleton(services => new ShareOptions
 {
