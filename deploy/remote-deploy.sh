@@ -21,6 +21,16 @@ config_image_tag "$TAG"
 export IMAGE_TAG="$TAG"
 config_server
 
+READY_TIMEOUT_SECONDS="${READY_TIMEOUT_SECONDS:-180}"
+if [[ ! "$READY_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'READY_TIMEOUT_SECONDS должен быть целым > 0\n' >&2
+  exit 1
+fi
+
+diagnose() {
+  diagnose_to "$APP_DIR/deploy-diagnostics.log" "Deploy readiness failure"
+}
+
 write_release_state() {
   local backend_digest frontend_digest hashes built_at
   backend_digest="$(release_image_digest "$DOCKERHUB_USER/menu-backend:$TAG")"
@@ -46,16 +56,25 @@ write_release_state() {
 menu_compose pull
 menu_compose up -d --remove-orphans
 
-echo "Проверка /health..."
-for _ in $(seq 1 30); do
+echo "Проверка /ready (до ${READY_TIMEOUT_SECONDS}s, с учётом миграций)..."
+ready=0
+for _ in $(seq 1 "$READY_TIMEOUT_SECONDS"); do
   if menu_compose exec -T caddy \
-      wget -qO- http://backend:8080/health 2>/dev/null | grep -q '"status":"ok"'; then
-    echo "health ok"
-    write_release_state
-    echo "release manifest: $APP_DIR/release.json"
-    exit 0
+      wget -q -T 2 -O - http://backend:8080/ready 2>/dev/null \
+      | grep -q '"status":"ready"'; then
+    ready=1
+    break
   fi
-  sleep 2
+  sleep 1
 done
-echo "health не поднялся за 60 сек" >&2
-exit 1
+
+if [ "$ready" -ne 1 ]; then
+  diagnose
+  echo "readiness не поднялась за ${READY_TIMEOUT_SECONDS} сек" >&2
+  exit 1
+fi
+
+echo "ready ok"
+write_release_state
+echo "release manifest: $APP_DIR/release.json"
+exit 0

@@ -50,6 +50,26 @@ public sealed class PostgresDatabase : IAsyncDisposable
 
     public AppDbContext CreateContext() => new(CreateOptions());
 
+    /// <summary>Снимает БД, эмулируя недоступность базы для readiness.</summary>
+    public async Task DropAsync()
+    {
+        NpgsqlConnection.ClearPool(new NpgsqlConnection(ConnectionString));
+        await ExecuteAdminAsync($"DROP DATABASE IF EXISTS \"{_databaseName}\" WITH (FORCE)");
+    }
+
+    /// <summary>Возвращает БД под тем же именем — готовность без рестарта процесса.</summary>
+    public async Task RecreateAsync() =>
+        await ExecuteAdminAsync($"CREATE DATABASE \"{_databaseName}\"");
+
+    private async Task ExecuteAdminAsync(string sql)
+    {
+        await using var connection = new NpgsqlConnection(_adminConnectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
