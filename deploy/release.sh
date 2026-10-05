@@ -31,7 +31,9 @@ release_config_files() {
     deploy/compose.sh \
     deploy/release.sh \
     deploy/backup-lib.sh \
+    deploy/deploy-lib.sh \
     deploy/remote-deploy.sh \
+    deploy/rollback.sh \
     deploy/backup.sh \
     deploy/restore-drill.sh \
     deploy/smoke.sh
@@ -72,12 +74,13 @@ release_built_at() {
   date -u +%Y-%m-%dT%H:%M:%SZ
 }
 
-# release_manifest <out> <commit> <tag> <builtAt> <backendDigest> <frontendDigest> <hashesFile>
+# release_manifest <out> <commit> <tag> <builtAt> <backendDigest> <frontendDigest> <hashesFile> [<recoverySet>]
 # Значения ограничены безопасным алфавитом (sha, тег, ISO-время, дайджест, hex),
 # поэтому JSON собирается printf без экранирования произвольного текста.
+# recoverySet — id complete-набора, привязанного к рискованному обновлению.
 release_manifest() {
   local out="$1" commit="$2" tag="$3" built_at="$4" backend_digest="$5" \
-        frontend_digest="$6" hashes="$7" first=1 file hash
+        frontend_digest="$6" hashes="$7" recovery_set="${8-}" first=1 file hash
   {
     printf '{\n'
     printf '  "commit": "%s",\n' "$commit"
@@ -85,6 +88,9 @@ release_manifest() {
     printf '  "builtAt": "%s",\n' "$built_at"
     printf '  "backendDigest": "%s",\n' "$backend_digest"
     printf '  "frontendDigest": "%s",\n' "$frontend_digest"
+    if [ -n "$recovery_set" ]; then
+      printf '  "recoverySet": "%s",\n' "$recovery_set"
+    fi
     printf '  "config": {'
     while IFS=' ' read -r file hash; do
       [ -n "$file" ] || continue

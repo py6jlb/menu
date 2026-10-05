@@ -200,5 +200,7 @@ backup_prune "$BACKUP_REMOTE" "/weekly" "$((BACKUP_KEEP_WEEKLY * 7))" "$PROTECT"
 
 backup_state_set "$BACKUP_STATE_FILE" last_full_backup "$SET_ID"
 backup_state_set "$BACKUP_STATE_FILE" last_full_backup_at "$CREATED_AT"
+# Схема последнего набора нужна откату, чтобы привязать точку к обновлению.
+backup_state_set "$BACKUP_STATE_FILE" last_full_backup_schema "$SCHEMA"
 
 log "Готово: набор $SET_ID (release $RELEASE, схема $SCHEMA, рецептов $RECIPES)"

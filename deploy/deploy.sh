@@ -4,7 +4,11 @@ set -euo pipefail
 # Деплой на VPS: доставка конфигураций выпускаемого коммита и рестарт на прибитом теге.
 #
 #   ./deploy/deploy.sh <git-sha>
-#   ./deploy/deploy.sh <предыдущий-sha>   # откат
+#   ./deploy/deploy.sh <git-sha> --schema-change   # рискованная миграция схемы
+#
+# Простая замена образа откатывает только код и НЕ возвращает старую схему.
+# Совместимый откат кода и recovery из complete-набора — /opt/menu/deploy/rollback.sh
+# (см. deploy/README.md, раздел «Проверка и откат»).
 #
 # Тег — реальный commit: конфигурации берутся из выпускаемого среза (чистый
 # checkout на этом коммите), а не из произвольного рабочего дерева.
@@ -26,9 +30,14 @@ config_load "$ROOT/deploy/local.conf" local
 
 TAG="${1:-}"
 if [ -z "$TAG" ]; then
-  echo "Использование: $0 <git-sha>" >&2
+  echo "Использование: $0 <git-sha> [--schema-change]" >&2
   exit 1
 fi
+DEPLOY_MODE="${2-}"
+case "$DEPLOY_MODE" in
+  ""|"--schema-change") ;;
+  *) printf 'Использование: %s <git-sha> [--schema-change]\n' "$0" >&2; exit 1 ;;
+esac
 config_image_tag "$TAG"
 
 config_require VPS_HOST
@@ -79,7 +88,8 @@ scp -P "$VPS_SSH_PORT" docker-compose.prod.yml "$TARGET:$APP_DIR/docker-compose.
 scp -P "$VPS_SSH_PORT" deploy/Caddyfile "$TARGET:$APP_DIR/Caddyfile"
 scp -P "$VPS_SSH_PORT" deploy/otel-collector.yaml "$TARGET:$APP_DIR/otel-collector.yaml"
 scp -P "$VPS_SSH_PORT" deploy/config.sh deploy/compose.sh deploy/release.sh \
-  deploy/backup-lib.sh deploy/remote-deploy.sh deploy/backup.sh deploy/restore-drill.sh \
+  deploy/backup-lib.sh deploy/deploy-lib.sh deploy/remote-deploy.sh deploy/rollback.sh \
+  deploy/backup.sh deploy/restore-drill.sh \
   deploy/install-backup.sh deploy/smoke.sh "$TARGET:$APP_DIR/deploy/"
 scp -P "$VPS_SSH_PORT" deploy/systemd/menu-backup.service deploy/systemd/menu-backup.timer \
   "$TARGET:$APP_DIR/deploy/systemd/"
@@ -89,6 +99,9 @@ fi
 [ -z "$HASHES" ] || rm -f "$HASHES"
 
 log "Рестарт на теге $TAG ($COMMIT)"
-ssh -p "$VPS_SSH_PORT" "$TARGET" "bash '$APP_DIR/deploy/remote-deploy.sh' '$TAG' '$COMMIT'"
+ssh -p "$VPS_SSH_PORT" "$TARGET" "bash '$APP_DIR/deploy/remote-deploy.sh' '$TAG' '$COMMIT' $DEPLOY_MODE"
 
-log "Готово. Откат: ./deploy/deploy.sh <предыдущий-sha>"
+log "Готово. Откат кода: /opt/menu/deploy/rollback.sh (схема не откатывается)."
+if [ "$DEPLOY_MODE" = "--schema-change" ]; then
+  log "Схема менялась: откат — только recovery через /opt/menu/deploy/rollback.sh --yes"
+fi

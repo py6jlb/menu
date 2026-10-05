@@ -253,3 +253,32 @@ Compose `config` экранирует все `$` как `$$` при сериал
 7. Smoke: **RED** — HTTP-smoke проходил без явного lab. После guard в `smoke.sh` — **GREEN**, при production HTTP запрос к краю не отправляется.
 
 Итог: deploy-suite — **110 тестов GREEN** (17 новых: 15 `test_production_hardening.py` + 2 `SmokeProductionModeTests`); backend fast — **286 passed, 21 skipped** (19 новых `ProductionConfigurationTests`); `bash -n deploy/*.sh` и контейнерный Shellcheck `config.sh`/`backup-lib.sh`/`backup.sh`/`restore-drill.sh`/`smoke.sh`/`bootstrap.sh` — чисто. Ограничения: реальные Caddy/TLS, systemd и Docker daemon в suite не запускаются; capabilities и non-root проверены структурно, а непривилегированный образ дополнительно запущен вручную с named volume. Frontend build и Postgres-suite в этом прогоне не запускались; `restore-drill.sh` получил `DEPLOYMENT_MODE=lab` для временного релиза.
+
+## Тикет 41: откат с учётом совместимости схемы
+
+`test_rollback.py` использует то же изолированное окружение (подменённые `docker`/`rclone`, remote — локальный каталог), что и тикеты 39–40, и проверяет серверные `remote-deploy.sh`/`rollback.sh` и библиотеку `deploy/deploy-lib.sh`. Recovery-набор — настоящий complete-набор, снятый `backup.sh` в изолированный remote; БД и фото восстанавливаются на подменённых адаптерах. Реальные VPS, Docker daemon, Postgres и rclone не используются, секреты вымышленные.
+
+| Критерий | Проверка |
+|---|---|
+| Два явных пути: code-only при совместимой схеме и recovery при несовместимой | `test_compatible_rollback_replaces_image_without_touching_schema`, `test_recovery_restores_data_photos_then_previous_release`, `test_code_only_is_forbidden_when_schema_incompatible` |
+| Простая замена образа не возвращает схему; оператор предупреждён | `test_compatible_rollback_replaces_image_without_touching_schema` (нет `rclone copyto`, нет `DROP SCHEMA`, вывод про schema/forward-only) |
+| Свежая recovery-точка для `--schema-change`; backup ID привязан к обновлению | `test_risky_schema_change_creates_fresh_recovery_point` (`recovery-point.SET/FOR_RELEASE/FROM_RELEASE/SCHEMA`, `complete/<id>`, `release.json.recoverySet`) |
+| Обычный (не рискованный) деплой не оставляет recovery-точку | `test_code_only_deploy_does_not_leave_recovery_point` |
+| В recovery: изменения остановлены → данные/фото восстановлены → прежний release → проверка доступа | `test_recovery_restores_data_photos_then_previous_release` (порядок индексов `stop` < `DROP SCHEMA` < восстановление фото < `up`; readiness и `401` на `/api/recipes`) |
+| Оператору сообщены последствия для данных после точки; запись не продолжается | `test_recovery_requires_explicit_confirmation_and_warns_about_data_loss` (set id, «потерян», `--yes`, ничего не тронуто до подтверждения) |
+| Параллельные деплои/откаты сериализованы | `test_parallel_operation_is_blocked_by_lock` (`flock` на `deploy.lock`, `DEPLOY_LOCK_TIMEOUT=0`, до Docker не доходит) |
+| Прерванная операция оставляет диагностируемое состояние current/previous | `test_interrupted_deploy_leaves_diagnosable_state` (`deploy-intent.TAG/MODE`, `current-release` не переключён) |
+| Прерванный рискованный деплой всё равно требует recovery | `test_interrupted_risky_deploy_still_requires_recovery` (`deploy-intent.TAG` → привязанный set, `DROP SCHEMA`, цель из `FROM_RELEASE`) |
+| Startup migrate/forward-only; down-миграции не откат | `test_down_migrations_are_not_used_as_rollback`, `test_adr_notes_down_migrations_are_not_implicit_rollback` |
+| Инструкция и доставка согласованы | `test_readme_documents_both_paths_lock_and_manual_check`, `test_deploy_delivers_rollback_scripts`, `test_release_config_covers_rollback_scripts` |
+
+### TDD evidence (тикет 41)
+
+1. Code-only: **RED** — простого пути не было, `rollback.sh` отсутствовал; после выбора по отсутствию `recovery-point`, предупреждения о forward-only и деплоя прежнего образа — **GREEN**.
+2. Recovery-точка: **RED** — `--schema-change` не снимал набор и не связывал ID с релизом; после `backup.sh` до переключения, `recovery-point` и `release.json.recoverySet` — **GREEN**.
+3. Полный recovery: **RED** — не было остановки записей, восстановления БД/фото и проверки доступа; после `stop backend` → checksum-проверка набора → `DROP SCHEMA`/дамп → замена фото → прежний release → `/ready`+`401` — **GREEN**. Первый прогон также **RED** на `release_manifest_field` при отсутствующем `release.json` (пустой commit после отката) — после guard — **GREEN**.
+4. Подтверждение и последствия: **RED** — recovery шёл без явного согласия; после требования `--yes`/`ROLLBACK_ASSUME_YES` и сообщения о потере данных после точки — **GREEN**.
+5. Lock и диагностика: **RED** — параллельная операция могла начаться; после `flock` на `deploy.lock`, `deploy-intent` и `previous-release` только после успешной readiness — **GREEN**.
+6. Документация: **RED** — README/ADR описывали откат как «деплой предыдущего sha»; после разделов о code-only/recovery, lock, данных после точки и ручной проверки на стенде — **GREEN**.
+
+Итог: deploy-suite — **125 тестов GREEN** (110 прежних + 15 новых `test_rollback.py`); `bash -n deploy/*.sh` и контейнерный Shellcheck `deploy-lib.sh`/`rollback.sh`/`remote-deploy.sh`/`deploy.sh`/`release.sh` — чисто. Ограничения: реальный VPS, Docker daemon, Postgres, rclone-remote и Caddy не запускаются; проверяются вызовы, порядок, коды и состояния на публичных границах. Фактическое время восстановления и поведение записи в окне остановки — измеряются на изолированном стенде (раздел «Ручная проверка на изолированном стенде» в `deploy/README.md`).
