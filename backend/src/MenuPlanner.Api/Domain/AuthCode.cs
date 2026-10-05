@@ -16,4 +16,5 @@ public sealed class AuthCode
     public DateTime CreatedAt { get; set; }
     public DateTime ExpiresAt { get; set; }
     public bool Used { get; set; }
+    public int Attempts { get; set; }
 }

@@ -98,4 +98,29 @@ public static class AuthCodeService
         user.VerificationAttempts = 0;
         user.LockedUntil = null;
     }
+
+    /// <summary>
+    /// Учитывает неверную попытку в рамках конкретного challenge. Счётчик живёт
+    /// на коде, а не на пользователе: по достижении лимита закрывается именно
+    /// этот код, аккаунт не блокируется. Возвращает <c>true</c>, если challenge
+    /// закрыт (в том числе если был закрыт/потреблён ранее).
+    /// </summary>
+    public static bool RecordChallengeAttempt(AuthCode stored, int maxAttempts)
+    {
+        if (stored.Used)
+            return true;
+
+        stored.Attempts++;
+        if (stored.Attempts >= maxAttempts)
+        {
+            Burn(stored);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Challenge закрыт исчерпанием попыток (а не успешным потреблением).</summary>
+    public static bool IsClosedByAttempts(AuthCode stored, int maxAttempts) =>
+        stored.Used && stored.Attempts >= maxAttempts;
 }

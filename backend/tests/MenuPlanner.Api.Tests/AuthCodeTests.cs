@@ -165,6 +165,42 @@ public sealed class AuthCodeTests
         Assert.Null(user.LockedUntil);
     }
 
+    [Fact]
+    public void RecordChallengeAttempt_ClosesChallengeAtMaxAttempts()
+    {
+        var stored = NewCode(_hasher, "123456");
+
+        for (var i = 0; i < AuthCodeService.MaxAttempts - 1; i++)
+            Assert.False(AuthCodeService.RecordChallengeAttempt(stored, AuthCodeService.MaxAttempts));
+
+        Assert.False(stored.Used);
+
+        Assert.True(AuthCodeService.RecordChallengeAttempt(stored, AuthCodeService.MaxAttempts));
+        Assert.True(stored.Used);
+        Assert.Equal(AuthCodeService.MaxAttempts, stored.Attempts);
+        Assert.True(AuthCodeService.IsClosedByAttempts(stored, AuthCodeService.MaxAttempts));
+    }
+
+    [Fact]
+    public void IsClosedByAttempts_FalseForSuccessfullyConsumedCode()
+    {
+        var stored = NewCode(_hasher, "123456");
+        AuthCodeService.RecordChallengeAttempt(stored, AuthCodeService.MaxAttempts);
+        AuthCodeService.Burn(stored);
+
+        Assert.False(AuthCodeService.IsClosedByAttempts(stored, AuthCodeService.MaxAttempts));
+    }
+
+    [Fact]
+    public void RecordChallengeAttempt_ReturnsClosed_ForAlreadyUsedCode()
+    {
+        var stored = NewCode(_hasher, "123456");
+        AuthCodeService.Burn(stored);
+
+        Assert.True(AuthCodeService.RecordChallengeAttempt(stored, AuthCodeService.MaxAttempts));
+        Assert.Equal(0, stored.Attempts);
+    }
+
     private static AuthCode NewCode(IPasswordHasher<User> hasher, string code)
     {
         var now = DateTime.UtcNow;

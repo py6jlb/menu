@@ -150,8 +150,9 @@ public sealed class EmailVerificationServiceTests
         var db = new AppDbContext(options);
         var clock = new FakeTimeProvider(Start);
         var generator = new QueueCodeGenerator(codes);
+        var hasher = new PasswordHasher<User>();
         var service = new EmailVerificationService(
-            db, new PasswordHasher<User>(), new AuthCodeOptions(), generator, clock);
+            new AuthCodeLifecycle(db, hasher, generator), hasher, new AuthCodeOptions(), clock);
         return (service, db, clock, generator);
     }
 

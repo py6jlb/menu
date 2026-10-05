@@ -115,7 +115,7 @@ public sealed class PasswordResetFlowTests
     }
 
     [Fact]
-    public async Task RequestPasswordReset_WhileLocked_ReturnsNeutral_AndDoesNotSend()
+    public async Task RequestPasswordReset_AfterFiveWrongAttempts_IsNotLockedOut_AndSendsNewCode()
     {
         using var factory = new AuthApiFactory()
             .WithConfig("AUTH_CODE_RESEND_COOLDOWN_MINUTES", "0");
@@ -126,12 +126,16 @@ public sealed class PasswordResetFlowTests
 
         await RequestPasswordResetAsync(client, email);
         for (var i = 0; i < 5; i++)
-            await ResetAsync(client, email, "000000", "newsecret1");
+            Assert.Equal(HttpStatusCode.BadRequest,
+                (await ResetAsync(client, email, "000000", "newsecret1")).StatusCode);
 
         var resetRequest = await RequestPasswordResetAsync(client, email);
 
         Assert.Equal(HttpStatusCode.OK, resetRequest.StatusCode);
-        Assert.Single(ResetEmails(factory));
+        Assert.Equal(
+            NeutralMessage,
+            (await resetRequest.Content.ReadFromJsonAsync<MessageDto>())!.Message);
+        Assert.Equal(2, ResetEmails(factory).Count());
     }
 
     [Fact]
@@ -161,21 +165,60 @@ public sealed class PasswordResetFlowTests
     }
 
     [Fact]
-    public async Task Reset_AfterFiveWrongAttempts_Locks_EvenForCorrectCode()
+    public async Task Reset_AfterFiveWrongAttempts_ClosesChallenge_AndNewCodeWorks()
     {
-        using var factory = new AuthApiFactory();
+        using var factory = new AuthApiFactory()
+            .WithConfig("AUTH_CODE_RESEND_COOLDOWN_MINUTES", "0");
         using var client = factory.CreateClient();
         var email = $"reset-wrong-{Guid.NewGuid():N}@example.com";
         await RegisterAsync(client, email);
         await factory.VerifyUserAsync(email);
         await RequestPasswordResetAsync(client, email);
-        var code = ResetCodeFrom(factory);
+        var oldCode = ResetCodeFrom(factory);
 
         for (var i = 0; i < 4; i++)
-            Assert.Equal(HttpStatusCode.BadRequest, (await ResetAsync(client, email, "000000", "newsecret1")).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest,
+                (await ResetAsync(client, email, "000000", "newsecret1")).StatusCode);
 
-        Assert.Equal(HttpStatusCode.Locked, (await ResetAsync(client, email, "000000", "newsecret1")).StatusCode);
-        Assert.Equal(HttpStatusCode.Locked, (await ResetAsync(client, email, code, "newsecret1")).StatusCode);
+        var closed = await ResetAsync(client, email, "000000", "newsecret1");
+        Assert.Equal(HttpStatusCode.BadRequest, closed.StatusCode);
+        var closedError = await closed.Content.ReadFromJsonAsync<ResetErrorDto>();
+        Assert.NotNull(closedError);
+        Assert.Equal("closed", closedError.Code);
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await ResetAsync(client, email, oldCode, "newsecret1")).StatusCode);
+
+        await RequestPasswordResetAsync(client, email);
+        var newCode = ResetCodeFrom(factory);
+        Assert.Equal(HttpStatusCode.OK, (await ResetAsync(client, email, newCode, "newsecret1")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Reset_WithoutChallenge_DoesNotLockAccount_ForFiveRequests()
+    {
+        using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        var email = $"reset-nochallenge-{Guid.NewGuid():N}@example.com";
+        const string password = "secret1";
+        await RegisterAsync(client, email, password);
+        await factory.VerifyUserAsync(email);
+
+        for (var i = 0; i < 5; i++)
+        {
+            var result = await ResetAsync(client, email, "000000", "newsecret1");
+            Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
+            var error = await result.Content.ReadFromJsonAsync<ResetErrorDto>();
+            Assert.NotNull(error);
+            Assert.Equal("invalid", error.Code);
+        }
+
+        // Пароль не менялся, аккаунт не заблокирован для восстановления.
+        await RequestPasswordResetAsync(client, email);
+        var code = ResetCodeFrom(factory);
+        Assert.Equal(HttpStatusCode.OK, (await ResetAsync(client, email, code, "newsecret2")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "newsecret2" })).StatusCode);
     }
 
     [Fact]

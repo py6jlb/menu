@@ -31,3 +31,6 @@ public sealed record ErrorDto(string Error);
 
 /// <summary>Ошибка ввода кода подтверждения: машиночитаемый код плюс русский текст.</summary>
 public sealed record VerifyErrorDto(string Error, string Code);
+
+/// <summary>Ошибка ввода кода сброса: машиночитаемый код плюс русский текст.</summary>
+public sealed record ResetErrorDto(string Error, string Code);

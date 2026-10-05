@@ -134,7 +134,7 @@ public sealed class PostgresEmailVerificationTests : PostgresTestBase
     }
 
     private static EmailVerificationService NewService(AppDbContext db, AuthCodeOptions options, IAuthCodeGenerator generator) =>
-        new(db, Hasher, options, generator, new FakeTimeProvider(FixedNow));
+        new(new AuthCodeLifecycle(db, Hasher, generator), Hasher, options, new FakeTimeProvider(FixedNow));
 
     private async Task<User> SeedUserWithCodeAsync(string code, DateTime createdAt)
     {

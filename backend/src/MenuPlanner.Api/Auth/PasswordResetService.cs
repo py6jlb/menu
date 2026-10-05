@@ -1,0 +1,149 @@
+using Microsoft.AspNetCore.Identity;
+using MenuPlanner.Api.Auth.Codes;
+using MenuPlanner.Api.Domain;
+
+namespace MenuPlanner.Api.Auth;
+
+public enum PasswordResetRequestOutcome
+{
+    Sent,
+    TooSoon,
+    NotEligible
+}
+
+public readonly record struct PasswordResetRequestResult(
+    PasswordResetRequestOutcome Outcome, string? Code, int RetryAfterSeconds);
+
+public enum PasswordResetOutcome
+{
+    Reset,
+    InvalidCode,
+    ExpiredCode,
+    CodeAlreadyUsed,
+    ChallengeClosed
+}
+
+public readonly record struct PasswordResetResult(PasswordResetOutcome Outcome, User? User);
+
+/// <summary>
+/// Предметный модуль восстановления пароля: владеет выдачей reset-кода (cooldown,
+/// срок действия, единственный действующий challenge) и одной защищённой
+/// операцией «потребить код + записать новый хэш пароля + увеличить версию
+/// токенов». Endpoint только транслирует результат в HTTP.
+///
+/// Отличие от подтверждения почты: reset — анонимная операция, поэтому неверные
+/// попытки считаются на конкретном challenge (<see cref="AuthCode.Attempts"/>),
+/// а при исчерпании лимита закрывается только этот код. Аккаунт не блокируется,
+/// и посторонний, знающий email, не может навязать длительный lockout запросами
+/// без действующего кода. Атомарность обеспечивает <see cref="AuthCodeLifecycle"/>.
+/// </summary>
+public sealed class PasswordResetService
+{
+    private readonly AuthCodeLifecycle _codes;
+    private readonly IPasswordHasher<User> _hasher;
+    private readonly AuthCodeOptions _options;
+    private readonly TimeProvider _clock;
+
+    public PasswordResetService(
+        AuthCodeLifecycle codes,
+        IPasswordHasher<User> hasher,
+        AuthCodeOptions options,
+        TimeProvider clock)
+    {
+        _codes = codes;
+        _hasher = hasher;
+        _options = options;
+        _clock = clock;
+    }
+
+    /// <summary>
+    /// Запрашивает выдачу кода сброса. Нейтральность ответа обеспечивает endpoint;
+    /// модуль лишь сообщает, отправили ли код, и остаток cooldown.
+    /// </summary>
+    public async Task<PasswordResetRequestResult> RequestAsync(
+        User user, CancellationToken ct = default)
+    {
+        var now = Now;
+        await using var tx = await _codes.BeginCriticalSectionAsync(user, ct);
+
+        if (!user.IsEmailVerified)
+        {
+            await _codes.SaveAndCommitAsync(tx, ct);
+            return new PasswordResetRequestResult(PasswordResetRequestOutcome.NotEligible, null, 0);
+        }
+
+        var cooldown = TimeSpan.FromMinutes(_options.ResendCooldownMinutes);
+        var latest = await _codes.LatestAsync(user.Id, AuthCodeType.Reset, ct);
+        if (cooldown > TimeSpan.Zero && latest is not null)
+        {
+            var elapsed = now - latest.CreatedAt;
+            if (elapsed < cooldown)
+            {
+                var left = (int)Math.Ceiling((cooldown - elapsed).TotalSeconds);
+                await _codes.SaveAndCommitAsync(tx, ct);
+                return new PasswordResetRequestResult(PasswordResetRequestOutcome.TooSoon, null, left);
+            }
+        }
+
+        var code = await _codes.IssueAsync(user.Id, AuthCodeType.Reset, now, ct);
+        await _codes.SaveAndCommitAsync(tx, ct);
+        return new PasswordResetRequestResult(PasswordResetRequestOutcome.Sent, code, 0);
+    }
+
+    /// <summary>
+    /// Потребляет действующий reset-код и меняет пароль одной операцией:
+    /// код помечается использованным, записывается новый хэш, инкрементируется
+    /// <see cref="User.TokenVersion"/>. Неверная попытка относится только к
+    /// действующему challenge и никогда не блокирует аккаунт.
+    /// </summary>
+    public async Task<PasswordResetResult> ResetAsync(
+        User user, string code, string newPassword, CancellationToken ct = default)
+    {
+        var now = Now;
+        await using var tx = await _codes.BeginCriticalSectionAsync(user, ct);
+
+        var stored = await _codes.LatestAsync(user.Id, AuthCodeType.Reset, ct);
+        if (stored is null)
+        {
+            await _codes.SaveAndCommitAsync(tx, ct);
+            return new PasswordResetResult(PasswordResetOutcome.InvalidCode, null);
+        }
+
+        if (AuthCodeService.IsClosedByAttempts(stored, _options.MaxAttempts))
+        {
+            await _codes.SaveAndCommitAsync(tx, ct);
+            return new PasswordResetResult(PasswordResetOutcome.ChallengeClosed, null);
+        }
+
+        var check = AuthCodeService.Check(_hasher, stored, code, now);
+        if (check == CodeCheckResult.Ok)
+        {
+            AuthCodeService.Burn(stored);
+            user.PasswordHash = _hasher.HashPassword(user, newPassword);
+            user.TokenVersion++;
+            await _codes.SaveAndCommitAsync(tx, ct);
+            return new PasswordResetResult(PasswordResetOutcome.Reset, user);
+        }
+
+        if (check == CodeCheckResult.Invalid)
+        {
+            AuthCodeService.RecordChallengeAttempt(stored, _options.MaxAttempts);
+            var outcome = AuthCodeService.IsClosedByAttempts(stored, _options.MaxAttempts)
+                ? PasswordResetOutcome.ChallengeClosed
+                : PasswordResetOutcome.InvalidCode;
+            await _codes.SaveAndCommitAsync(tx, ct);
+            return new PasswordResetResult(outcome, null);
+        }
+
+        // Истёкший или уже потреблённый код не является действующим challenge:
+        // попытка не засчитывается и аккаунт не блокируется.
+        await _codes.SaveAndCommitAsync(tx, ct);
+        return new PasswordResetResult(
+            check == CodeCheckResult.Expired
+                ? PasswordResetOutcome.ExpiredCode
+                : PasswordResetOutcome.CodeAlreadyUsed,
+            null);
+    }
+
+    private DateTime Now => _clock.GetUtcNow().UtcDateTime;
+}
