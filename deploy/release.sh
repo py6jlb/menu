@@ -30,6 +30,7 @@ release_config_files() {
     deploy/config.sh \
     deploy/compose.sh \
     deploy/release.sh \
+    deploy/backup-lib.sh \
     deploy/remote-deploy.sh \
     deploy/backup.sh \
     deploy/restore-drill.sh \
