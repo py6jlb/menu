@@ -91,9 +91,9 @@ services:
     volumes:
       - photos_data:/app/photos
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      test: ["CMD", "curl", "-fsS", "-m", "5", "http://127.0.0.1:8080/health"]
       interval: 10s
-      timeout: 5s
+      timeout: 6s
       retries: 5
       start_period: 30s
     depends_on:

@@ -13,6 +13,7 @@ using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
 using MenuPlanner.Api.Families;
+using MenuPlanner.Api.Health;
 using MenuPlanner.Api.Ingredients;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes;
@@ -28,6 +29,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddSingleton<PhotoStorage>();
+
+builder.Services.AddSingleton(ReadinessOptions.FromConfiguration(builder.Configuration));
+builder.Services.AddScoped<IDatabaseReadinessProbe, DatabaseReadinessProbe>();
 
 var jwtOptions = ReadJwtOptions(builder.Configuration);
 builder.Services.AddSingleton(jwtOptions);
@@ -109,6 +113,8 @@ app.Services.GetRequiredService<PhotoStorage>();
 
 app.MapGet("/health", () => Results.Json(
     new { status = "ok", service = "menu-planner-api" }));
+
+app.MapGet("/ready", ReadinessEndpoint.GetReadinessAsync);
 
 app.MapAuthEndpoints();
 app.MapEmailVerificationEndpoints();

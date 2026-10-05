@@ -90,3 +90,15 @@ menu_compose() {
   ConnectionStrings__Default="$legacy" COMPOSE_DISABLE_ENV_FILE=true COMPOSE_ENV_FILES='' docker compose \
     --env-file /dev/null -f "${COMPOSE_FILE-docker-compose.prod.yml}" "$@"
 }
+
+# diagnose_to <log-file> <header>: сохранить состояние контейнеров и последние
+# логи Compose для разбора провала деплоя или smoke. Секретов не печатает.
+diagnose_to() {
+  local log="$1" header="$2"
+  {
+    printf '%s at %s\n' "$header" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    menu_compose ps 2>&1 || true
+    menu_compose logs --no-color --tail=200 2>&1 || true
+  } > "$log" 2>&1 || true
+  printf 'Диагностика: %s\n' "$log" >&2
+}

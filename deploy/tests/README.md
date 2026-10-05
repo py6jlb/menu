@@ -202,3 +202,26 @@ Compose `config` экранирует все `$` как `$$` при сериал
 Итог: deploy-suite — **80 тестов GREEN** (включая 18 новых `test_bootstrap.py`); `bash -n deploy/*.sh` и контейнерный Shellcheck (включая `bootstrap.sh`) — чисто.
 
 Ограничения: автоматизированный suite не запускает настоящий sshd, systemd, Docker, ufw и fail2ban — проверяются публичные швы под подменёнными адаптерами. Реальный сценарий «два последовательных прогона на чистой временной VM + неверный SSH-конфиг, после которого работают ключевой вход, административный путь и Compose» — **ручная проверка на стенде**, описанная в `deploy/README.md` (разделы «Bootstrap: повторяемость и доступ» и «Аварийный доступ»); в этом окружении VM нет.
+
+## Тикет 42: готовность и проверка публичного пути
+
+`test_smoke.py` дополняет изолированный suite: транспорт `docker` — исполняемый adapter, который эмулирует `image inspect`, `compose config --images`, `compose exec caddy wget`, `compose ps/logs`. Край (Caddy + frontend + backend) эмулируется каталогом `EDGE_DIR`: путь URL отображается в файл, `.status` задаёт код ответа. Реальный Docker daemon, сеть, TLS и БД не запускаются; все секреты вымышленные.
+
+| Критерий | Проверка |
+|---|---|
+| Дешёвый liveness сохранён; readiness проверяет БД и не раскрывает секреты | backend `HealthReadinessTests` (6 тестов): `/health` при недоступной БД, `/ready` 200/503, тело без строки подключения/текста исключения; `PostgresReadinessTests` на настоящем Postgres |
+| Недоступная БД → отрицательная readiness; возвращение — без рестарта | `HealthReadinessTests.Ready_Recovers_WhenDatabaseReturns_WithoutRestart`, `Ready_TimesOut_WithBoundedWait`, `PostgresReadinessTests.Ready_TracksDatabaseAvailability_WithoutRestart` (DROP/CREATE настоящей БД) |
+| Healthcheck контейнера не только TCP; временная неготовность не рестартит | `docker-compose.prod.yml` использует `curl .../health`; `restart: unless-stopped`; проверяется структурно (`test_smoke.py` + существующий `test_used_base_images_are_in_pinned_list`) |
+| Проверка деплоя через край: readiness, SPA, asset, безопасный серверный запрос; домен — внешний HTTPS | `test_healthy_release_passes_through_edge`, `test_domain_mode_uses_external_https`, `test_http_timeout_is_bounded` |
+| Сломанный маршрут Caddy / отсутствующий frontend / asset / недоступная БД проваливают проверку | `test_broken_api_route_is_not_success`, `test_broken_ready_route_is_not_success`, `test_missing_frontend_fails`, `test_missing_asset_fails`, `test_unavailable_database_fails_and_collects_diagnostics` |
+| Ограниченное ожидание с учётом миграций; при провале сохраняются состояния/логи | `RemoteDeployTests.test_readiness_gates_release_state` (ждёт `/ready`, default 180 c), `test_unready_database_fails_bounded_with_diagnostics`, `test_invalid_timeout_is_rejected_before_edge`; `smoke-diagnostics.log`/`deploy-diagnostics.log` |
+| UI после временного отказа не требует ручного удаления данных/сессии | `FrontendResilienceTests.test_transient_failure_does_not_discard_session` (`clearSession()` только по 401, без `localStorage` в API-клиенте) |
+
+### TDD evidence (тикет 42)
+
+1. Backend readiness: **RED** — namespace `MenuPlanner.Api.Health` и `IDatabaseReadinessProbe` отсутствовали, `HealthReadinessTests` не компилировался. После probe/endpoint с linked-CTS timeout и безопасным ответом — **GREEN**, 6 тестов.
+2. Реальная БД: **RED** — недоступность БД эмулировалась только подменённым probe. После `PostgresReadinessTests` с `DROP DATABASE ... FORCE` / `CREATE DATABASE` настоящей БД — **GREEN**, 24 теста Postgres-suite (включая восстановление без рестарта процесса).
+3. Smoke через край: **RED** — старый `smoke.sh` делал внутренний `http://backend:8080/health` и использовал необъявленный `TAG` (`unbound variable`). После маршрута `/ready` в Caddy, выбора тега из `IMAGE_TAG` и четырёх проверок через caddy-контейнер — **GREEN**, 13 тестов `test_smoke.py`.
+4. Диагностика и таймауты: **RED** — при провале логи/состояния не сохранялись, ожидание не ограничивалось явно. После `smoke-diagnostics.log`/`deploy-diagnostics.log`, `SMOKE_HTTP_TIMEOUT_SECONDS` и `READY_TIMEOUT_SECONDS` — **GREEN**.
+
+Итог: deploy-suite — **75 тестов GREEN** (62 прежних + 13); `bash -n deploy/*.sh` и контейнерный Shellcheck `smoke.sh`/`remote-deploy.sh`/`config.sh` — чисто; backend fast — **267 passed, 20 skipped**, Postgres-suite — **24 passed**. Ограничения: реальный край (Caddy+TLS), Docker daemon и публичный DNS не запускаются; край эмулируется файлами, проверяются вызовы `wget` на публичной границе, коды и отсутствие ложного успеха. Frontend build не запускался в worktree (нет `node_modules`); исходники фронтенда не менялись.
