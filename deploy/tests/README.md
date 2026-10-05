@@ -148,8 +148,9 @@ Compose `config` экранирует все `$` как `$$` при сериал
 | Manifest: время, release, схема, контрольные суммы БД/фото | `test_each_run_creates_unique_set_and_manifest` |
 | Complete-отметка только после доставки всех частей | `test_complete_marker_only_after_all_parts_delivered`, `test_interrupted_run_does_not_create_false_complete` |
 | Выбор последней копии и ротация по целым complete-наборам | `test_selection_ignores_incomplete_latest`, `test_rotation_handles_whole_sets_and_protects_verified` |
-| Ротация сохраняет последнюю проверенную точку | `test_rotation_handles_whole_sets_and_protects_verified` |
+| Ротация сохраняет последнюю проверенную точку | `test_rotation_handles_whole_sets_and_protects_verified`, `test_drill_failure_keeps_last_verified_point_protected` |
 | Согласование записей БД и удаления/замены фото (короткое окно) | `test_snapshot_quiesces_writer_around_copy` |
+| Полный недельный набор (копия целого набора) | `test_sunday_creates_complete_weekly_set` |
 | Drill: checksum, БД+фото в изоляции, история миграций, контрольные рецепты/планы | `test_drill_rejects_checksum_mismatch_before_containers`, `test_drill_rejects_incompatible_schema`, `test_drill_rejects_mismatched_reference_counts`, `test_runs_without_argument_and_verifies_remote_set` |
 | Каждый путь фото в восстановленной БД разрешается | `test_drill_resolves_every_photo_path` |
 | Несовместимый набор / отсутствующий архив / повреждённый SQL → ошибка | `test_drill_rejects_incompatible_schema`, `test_missing_photos_archive_is_not_success`, `test_corrupt_dump_is_rejected_before_container_start` |
@@ -162,9 +163,9 @@ Compose `config` экранирует все `$` как `$$` при сериал
 1. Уникальность набора: **RED** — старый `STAMP=$(date +%F)` перезаписывал набор того же дня (второй запуск не давал второй complete-маркер); после `backup_set_id` с наносекундами — **GREEN**.
 2. Complete-отметка: **RED** — «Готово» печаталось после `verify_upload`, но признака пригодности точки не было; после публикации `complete/<id>` только после проверки всех частей — **GREEN**, сбой второго upload не создаёт ложный complete.
 3. Выбор точки: **RED** — drill брал «последний дамп + последний архив фото» независимо; после выбора по `complete/<id>` (незавершённый набор игнорируется) — **GREEN**.
-4. Ротация: **RED** — чистка шла по каждому каталогу отдельно, могла оставить сироту и удалить проверенную точку; после `backup_prune` по целым наборам с защитой `last_drill_result=ok` — **GREEN**.
+4. Ротация: **RED** — чистка шла по каждому каталогу отдельно, могла оставить сироту и удалить проверенную точку; после `backup_prune` по целым наборам с защитой `last_drill_ok_set` (провал drill защиту не снимает) — **GREEN**.
 5. Согласование БД/фото: **RED** — при замене/удалении фото во время копирования БД и архив могли разойтись; после quiesce backend вокруг снятия — **GREEN** (`test_snapshot_quiesces_writer_around_copy`).
 6. Drill: **RED** — не сверялись sha256, схема, контрольные рецепты/планы и пути фото, не запускался релиз; после проверок и запуска `menu-backend:<release>` — **GREEN**.
-7. Состояние и RPO/RTO: **RED** — результат drill нигде не сохранялся; после `backup-state` (`last_full_backup*`, `last_drill_*`, `last_drill_seconds`) — **GREEN**; RPO/RTO описаны как измеряемые, без гарантированных чисел.
+7. Состояние и RPO/RTO: **RED** — результат drill нигде не сохранялся; после `backup-state` (`last_full_backup*`, `last_drill_*`, `last_drill_ok_set`, `last_drill_seconds`) — **GREEN**; RPO/RTO описаны как измеряемые, без гарантированных чисел.
 
-Итог: deploy-suite — **61 тест GREEN**; `bash -n deploy/*.sh` и контейнерный Shellcheck (включая `backup-lib.sh`) — чисто. Ограничения: реальные Postgres/rclone-remote/Docker daemon, S3-семантика, фактическое время восстановления и поведение Caddy в окне quiesce не запускаются; проверяются вызовы на публичных границах, коды и состояния. Запуск закреплённого релиза в изоляции проверен на уровне вызова `docker run` и health-пробы.
+Итог: deploy-suite — **62 теста GREEN**; `bash -n deploy/*.sh` и контейнерный Shellcheck (включая `backup-lib.sh`) — чисто. Ограничения: реальные Postgres/rclone-remote/Docker daemon, S3-семантика, фактическое время восстановления и поведение Caddy в окне quiesce не запускаются; проверяются вызовы на публичных границах, коды и состояния. Запуск закреплённого релиза в изоляции проверен на уровне вызова `docker run` и health-пробы.

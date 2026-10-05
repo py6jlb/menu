@@ -38,6 +38,11 @@ backup_name_valid() {
   [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]]
 }
 
+# backup_number_valid <value>: целое без знака.
+backup_number_valid() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
+
 # backup_json_string <manifest> <key>: первое строковое значение поля.
 backup_json_string() {
   local manifest="$1" key="$2"

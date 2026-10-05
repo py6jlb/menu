@@ -126,7 +126,7 @@ class CompleteSetTests(BackupFixture):
         self.seed_set(old_a)
         self.seed_set(old_b)
         state = Path(self.env["BACKUP_STATE_FILE"])
-        state.write_text(f"last_drill_set={verified}\nlast_drill_result=ok\n")
+        state.write_text(f"last_drill_ok_set={verified}\nlast_drill_result=ok\n")
 
         result = self.run_script("backup.sh")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -163,6 +163,26 @@ class CompleteSetTests(BackupFixture):
         self.assertLess(stop, dump, "backend не остановлен до дампа")
         self.assertLess(stop, archive, "backend не остановлен до архива фото")
         self.assertLess(archive, start, "backend запущен до конца архивации")
+
+    def test_sunday_creates_complete_weekly_set(self):
+        date_adapter = r'''#!/usr/bin/env python3
+import os, subprocess, sys
+args = sys.argv[1:]
+if args == ["+%u"] and os.environ.get("FAKE_WEEKDAY"):
+    print(os.environ["FAKE_WEEKDAY"])
+    sys.exit(0)
+sys.exit(subprocess.call(["/usr/bin/date", *args]))
+'''
+        path = self.bin / "date"
+        path.write_text(date_adapter)
+        path.chmod(0o755)
+        result = self.run_script("backup.sh", {"FAKE_WEEKDAY": "7"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        set_id = self.complete_ids()[0]
+        for name, suffix in (("db", ".sql.gz"), ("photos", ".tar.gz"),
+                             ("manifests", ".json"), ("complete", "")):
+            self.assertTrue((self.remote / "weekly" / name / f"{set_id}{suffix}").exists(),
+                            f"недельный набор неполный: {name}")
 
 
 class CompleteDrillTests(BackupFixture):
@@ -224,15 +244,20 @@ class CompleteDrillTests(BackupFixture):
         state = self.env["BACKUP_STATE_FILE"]
         self.assertEqual(read_state(state, "last_drill_result"), "ok")
         self.assertEqual(read_state(state, "last_drill_set"), "2026-01-01T000000000000000Z")
+        self.assertEqual(read_state(state, "last_drill_ok_set"), "2026-01-01T000000000000000Z")
         self.assertTrue(read_state(state, "last_drill_seconds").isdigit())
 
-    def test_drill_failure_is_recorded_in_state(self):
+    def test_drill_failure_keeps_last_verified_point_protected(self):
+        state = Path(self.env["BACKUP_STATE_FILE"])
+        state.write_text("last_drill_ok_set=2025-12-01T000000000000000Z\n")
         self.write_complete_set()
         result = self.run_script("restore-drill.sh", {"DOCKER_MODE": "sql-fail"})
         self.assertNotEqual(result.returncode, 0)
-        state = self.env["BACKUP_STATE_FILE"]
         self.assertEqual(read_state(state, "last_drill_result"), "fail")
         self.assertEqual(read_state(state, "last_drill_set"), "2026-01-01T000000000000000Z")
+        self.assertEqual(read_state(state, "last_drill_ok_set"),
+                         "2025-12-01T000000000000000Z",
+                         "провал drill снял защиту прежней проверенной точки")
 
     def test_drill_without_complete_set_fails(self):
         result = self.run_script("restore-drill.sh")

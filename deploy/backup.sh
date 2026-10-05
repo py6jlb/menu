@@ -120,7 +120,7 @@ read_db_state() {
   [ -n "$SCHEMA" ] || die "Не удалось прочитать схему БД (история миграций пуста)"
   [[ "$SCHEMA" =~ ^[A-Za-z0-9_]+$ ]] || die "Некорректная схема БД"
   for value in "$RECIPES" "$WEEK_PLANS" "$PLAN_ENTRIES"; do
-    [[ "$value" =~ ^[0-9]+$ ]] || die "Не удалось прочитать контрольные объёмы БД"
+    backup_number_valid "$value" || die "Не удалось прочитать контрольные объёмы БД"
   done
 }
 
@@ -178,11 +178,8 @@ if [ "$WEEKDAY" -eq 7 ]; then
 fi
 
 # Ротация целых наборов. Последняя успешно проверенная drill-точка не удаляется,
-# даже если по дате попала в чистку.
-PROTECT=""
-if [ "$(backup_state_get "$BACKUP_STATE_FILE" last_drill_result)" = "ok" ]; then
-  PROTECT="$(backup_state_get "$BACKUP_STATE_FILE" last_drill_set)"
-fi
+# даже если по дате попала в чистку; провал более позднего drill её не снимает.
+PROTECT="$(backup_state_get "$BACKUP_STATE_FILE" last_drill_ok_set)"
 backup_prune "$BACKUP_REMOTE" "" "$BACKUP_KEEP_DAILY" "$PROTECT" \
   || die "Чистка дневных наборов завершилась ошибкой"
 backup_prune "$BACKUP_REMOTE" "/weekly" "$((BACKUP_KEEP_WEEKLY * 7))" "$PROTECT" \

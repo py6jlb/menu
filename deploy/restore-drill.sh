@@ -58,6 +58,12 @@ cleanup() {
   backup_state_set "$BACKUP_STATE_FILE" last_drill_at "$finished" 2>/dev/null || true
   backup_state_set "$BACKUP_STATE_FILE" last_drill_result "$result" 2>/dev/null || true
   backup_state_set "$BACKUP_STATE_FILE" last_drill_seconds "$elapsed" 2>/dev/null || true
+  # Последняя успешно проверенная точка хранится отдельно, чтобы провалившийся
+  # drill не снял защиту с прежнего проверенного набора.
+  if [ "$result" = "ok" ]; then
+    backup_state_set "$BACKUP_STATE_FILE" last_drill_ok_set "$SET_ID" 2>/dev/null || true
+    backup_state_set "$BACKUP_STATE_FILE" last_drill_ok_at "$finished" 2>/dev/null || true
+  fi
   docker rm -f -v "$DRILL_CONTAINER" "$RELEASE_CONTAINER" >/dev/null 2>&1 || true
   docker network rm "$DRILL_NET" >/dev/null 2>&1 || true
   rm -rf "$TMP"
@@ -92,7 +98,7 @@ backup_sha_valid "$DB_SHA" || die "Некорректная контрольна
 backup_sha_valid "$PHOTOS_SHA" || die "Некорректная контрольная сумма архива фото в наборе"
 [[ "$SCHEMA" =~ ^[A-Za-z0-9_]+$ ]] || die "Некорректная схема в наборе"
 for value in "$RECIPES" "$WEEK_PLANS" "$PLAN_ENTRIES"; do
-  [[ "$value" =~ ^[0-9]+$ ]] || die "Некорректные контрольные объёмы в наборе"
+  backup_number_valid "$value" || die "Некорректные контрольные объёмы в наборе"
 done
 config_image_tag "$RELEASE" || die "Некорректный release в наборе"
 
