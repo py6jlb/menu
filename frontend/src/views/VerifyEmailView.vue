@@ -17,6 +17,12 @@ const error = ref('')
 const success = ref('')
 const pending = ref(false)
 
+const CODE_ERRORS = {
+  invalid: 'Неверный код. Проверьте и попробуйте снова.',
+  expired: 'Срок действия кода истёк. Запросите новый код.',
+  used: 'Этот код уже использован. Запросите новый код.'
+}
+
 const resendPending = ref(false)
 const resendError = ref('')
 const resendMessage = ref('')
@@ -37,11 +43,13 @@ async function submit() {
       success.value = 'Почта уже подтверждена.'
     } else if (response.status === 423) {
       error.value = data?.error || 'Слишком много неверных попыток. Попробуйте позже.'
+    } else if (response.status === 400 && data?.code) {
+      error.value = CODE_ERRORS[data.code] || data.error || 'Неверный код. Проверьте и попробуйте снова.'
     } else {
-      error.value = data?.error || 'Неверный или истёкший код.'
+      error.value = data?.error || 'Неверный код. Проверьте и попробуйте снова.'
     }
   } catch (err) {
-    error.value = err.message || 'Сервер недоступен.'
+    error.value = 'Не удалось связаться с сервером. Проверьте соединение и попробуйте снова.'
   } finally {
     pending.value = false
   }

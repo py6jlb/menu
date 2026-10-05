@@ -1,8 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
@@ -27,17 +25,18 @@ public static class EmailVerificationEndpoints
     private static async Task<IResult> ResendVerificationAsync(
         ClaimsPrincipal principal,
         AppDbContext db,
-        IPasswordHasher<User> hasher,
+        EmailVerificationService verification,
         EmailSender emailSender,
         AuthCodeOptions options,
         FixedWindowRateLimiter limiter,
+        TimeProvider clock,
         HttpContext http)
     {
         var user = await CurrentUserAsync(principal, db);
         if (user is null)
             return Results.Unauthorized();
 
-        var now = DateTime.UtcNow;
+        var now = clock.GetUtcNow().UtcDateTime;
         if (user.IsEmailVerified)
             return Results.Conflict(new ErrorDto("Почта уже подтверждена."));
 
@@ -50,81 +49,55 @@ public static class EmailVerificationEndpoints
                 new ErrorDto("Слишком много запросов. Попробуйте позже."),
                 statusCode: StatusCodes.Status429TooManyRequests);
 
-        AuthCodeService.ClearExpiredLock(user, now);
-        if (AuthCodeService.IsLocked(user, now))
-            return Locked();
-
-        var latest = await LatestVerifyCodeAsync(db, user.Id);
-
-        var cooldown = TimeSpan.FromMinutes(options.ResendCooldownMinutes);
-        if (latest is not null && now - latest.CreatedAt < cooldown)
+        var result = await verification.ResendAsync(user);
+        return result.Outcome switch
         {
-            var left = (int)Math.Ceiling((cooldown - (now - latest.CreatedAt)).TotalSeconds);
-            return Results.Json(
-                new ErrorDto($"Повторная отправка будет доступна через {left} сек."),
-                statusCode: StatusCodes.Status429TooManyRequests);
-        }
-
-        var code = await AuthCodeIssuer.IssueAsync(db, hasher, user.Id, AuthCodeType.Verify, now);
-        await emailSender.SendVerificationCodeAsync(user.Email, code);
-        return Results.Ok();
+            ResendEmailOutcome.Sent => await SendAsync(emailSender, user.Email, result.Code!),
+            ResendEmailOutcome.AlreadyVerified => Results.Conflict(new ErrorDto("Почта уже подтверждена.")),
+            ResendEmailOutcome.TooSoon => Results.Json(
+                new ErrorDto($"Повторная отправка будет доступна через {result.RetryAfterSeconds} сек."),
+                statusCode: StatusCodes.Status429TooManyRequests),
+            _ => Locked()
+        };
     }
 
     private static async Task<IResult> VerifyEmailAsync(
         VerifyEmailRequest request,
         ClaimsPrincipal principal,
         AppDbContext db,
-        IPasswordHasher<User> hasher,
-        AuthCodeOptions options)
+        EmailVerificationService verification)
     {
         var user = await CurrentUserAsync(principal, db);
         if (user is null)
             return Results.Unauthorized();
 
-        var now = DateTime.UtcNow;
-        if (user.IsEmailVerified)
-            return Results.Conflict(new ErrorDto("Почта уже подтверждена."));
-
-        AuthCodeService.ClearExpiredLock(user, now);
-        if (AuthCodeService.IsLocked(user, now))
-            return Locked();
-
-        var stored = await LatestVerifyCodeAsync(db, user.Id);
-
-        var code = request.Code?.Trim() ?? "";
-        var result = stored is null
-            ? CodeCheckResult.Invalid
-            : AuthCodeService.Check(hasher, stored, code, now);
-
-        if (result == CodeCheckResult.Ok)
+        var result = await verification.VerifyAsync(user, request.Code?.Trim() ?? "");
+        return result.Outcome switch
         {
-            AuthCodeService.Burn(stored!);
-            user.IsEmailVerified = true;
-            user.EmailVerifiedAt = now;
-            AuthCodeService.ResetAttempts(user);
-            await db.SaveChangesAsync();
-            return Results.Json(UserDto.From(user));
-        }
-
-        AuthCodeService.RecordFailedAttempt(
-            user, now, options.MaxAttempts, TimeSpan.FromDays(options.LockDurationDays));
-        await db.SaveChangesAsync();
-
-        return AuthCodeService.IsLocked(user, now)
-            ? Locked()
-            : Results.BadRequest(new ErrorDto("Неверный или истёкший код."));
+            VerifyEmailOutcome.Verified => Results.Json(UserDto.From(result.User!)),
+            VerifyEmailOutcome.AlreadyVerified => Results.Conflict(new ErrorDto("Почта уже подтверждена.")),
+            VerifyEmailOutcome.Locked => Locked(),
+            VerifyEmailOutcome.ExpiredCode => BadCode(
+                "Срок действия кода истёк. Запросите новый код.", "expired"),
+            VerifyEmailOutcome.CodeAlreadyUsed => BadCode(
+                "Этот код уже использован. Запросите новый код.", "used"),
+            _ => BadCode("Неверный код. Проверьте и попробуйте снова.", "invalid")
+        };
     }
+
+    private static async Task<IResult> SendAsync(EmailSender emailSender, string email, string code)
+    {
+        await emailSender.SendVerificationCodeAsync(email, code);
+        return Results.Ok();
+    }
+
+    private static IResult BadCode(string message, string code) =>
+        Results.BadRequest(new VerifyErrorDto(message, code));
 
     private static IResult Locked() =>
         Results.Json(
             new ErrorDto("Слишком много неверных попыток. Попробуйте позже."),
             statusCode: StatusCodes.Status423Locked);
-
-    private static Task<AuthCode?> LatestVerifyCodeAsync(AppDbContext db, Guid userId) =>
-        db.AuthCodes
-            .Where(c => c.UserId == userId && c.Type == AuthCodeType.Verify)
-            .OrderByDescending(c => c.CreatedAt)
-            .FirstOrDefaultAsync();
 
     private static async Task<User?> CurrentUserAsync(ClaimsPrincipal principal, AppDbContext db)
     {

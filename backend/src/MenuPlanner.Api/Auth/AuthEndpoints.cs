@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
@@ -32,7 +31,9 @@ public static class AuthEndpoints
         AppDbContext db,
         IPasswordHasher<User> passwordHasher,
         JwtTokenService tokenService,
-        EmailSender emailSender)
+        EmailSender emailSender,
+        EmailVerificationService verification,
+        TimeProvider clock)
     {
         var email = request.Email?.Trim().ToLowerInvariant() ?? "";
         if (!EmailRegex.IsMatch(email))
@@ -51,14 +52,13 @@ public static class AuthEndpoints
             Email = email,
             PasswordHash = passwordHasher.HashPassword(null!, password),
             Role = isFirstUser ? UserRole.Admin : UserRole.User,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = clock.GetUtcNow().UtcDateTime
         };
 
         db.Users.Add(user);
         await db.SaveChangesAsync();
 
-        var code = await AuthCodeIssuer.IssueAsync(
-            db, passwordHasher, user.Id, AuthCodeType.Verify, DateTime.UtcNow);
+        var code = await verification.IssueInitialCodeAsync(user);
         await emailSender.SendVerificationCodeAsync(email, code);
 
         return Results.Json(

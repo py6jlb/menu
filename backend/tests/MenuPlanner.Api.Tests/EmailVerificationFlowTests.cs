@@ -2,10 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Codes;
+using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Emails;
 
 namespace MenuPlanner.Api.Tests;
@@ -153,6 +156,65 @@ public sealed class EmailVerificationFlowTests
         Assert.Equal(HttpStatusCode.Locked, resend.StatusCode);
     }
 
+    [Fact]
+    public async Task Verify_WithWrongCode_ReturnsInvalidMarker()
+    {
+        using var factory = new AuthApiFactory().WithGenerator(new QueueCodeGenerator("111111"));
+        using var client = factory.CreateClient();
+        var token = await RegisterAsync(client, $"verify-invalid-{Guid.NewGuid():N}@example.com");
+
+        var wrong = await PostVerifyAsync(client, token, "000000");
+
+        Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
+        var error = await wrong.Content.ReadFromJsonAsync<VerifyErrorDto>();
+        Assert.NotNull(error);
+        Assert.Equal("invalid", error.Code);
+        Assert.Contains("Неверный код", error.Error);
+    }
+
+    [Fact]
+    public async Task Verify_AfterLifetime_ReturnsExpiredMarker_WithManagedTime()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        using var factory = new AuthApiFactory()
+            .WithGenerator(new QueueCodeGenerator("222222"))
+            .WithClock(clock);
+        using var client = factory.CreateClient();
+        var token = await RegisterAsync(client, $"verify-expired-{Guid.NewGuid():N}@example.com");
+
+        clock.Advance(AuthCodeService.VerifyLifetime + TimeSpan.FromMinutes(1));
+        var verify = await PostVerifyAsync(client, token, "222222");
+
+        Assert.Equal(HttpStatusCode.BadRequest, verify.StatusCode);
+        var error = await verify.Content.ReadFromJsonAsync<VerifyErrorDto>();
+        Assert.NotNull(error);
+        Assert.Equal("expired", error.Code);
+        Assert.Contains("истёк", error.Error);
+    }
+
+    [Fact]
+    public async Task Verify_WithConsumedCode_ReturnsUsedMarker()
+    {
+        using var factory = new AuthApiFactory().WithGenerator(new QueueCodeGenerator("333333"));
+        using var client = factory.CreateClient();
+        var token = await RegisterAsync(client, $"verify-used-{Guid.NewGuid():N}@example.com");
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var stored = await db.AuthCodes.SingleAsync();
+            stored.Used = true;
+            await db.SaveChangesAsync();
+        }
+
+        var verify = await PostVerifyAsync(client, token, "333333");
+
+        Assert.Equal(HttpStatusCode.BadRequest, verify.StatusCode);
+        var error = await verify.Content.ReadFromJsonAsync<VerifyErrorDto>();
+        Assert.NotNull(error);
+        Assert.Equal("used", error.Code);
+    }
+
     private static async Task<string> RegisterAsync(HttpClient client, string email)
     {
         var register = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" });
@@ -194,9 +256,25 @@ internal sealed class AuthApiFactory : ApiFactory
 
     public IReadOnlyList<EmailMessage> Emails => Transport.Emails;
 
+    public IAuthCodeGenerator? CodeGenerator { get; private set; }
+
+    public TimeProvider? Clock { get; private set; }
+
     public AuthApiFactory WithConfig(string key, string value)
     {
         _config[key] = value;
+        return this;
+    }
+
+    public AuthApiFactory WithGenerator(IAuthCodeGenerator generator)
+    {
+        CodeGenerator = generator;
+        return this;
+    }
+
+    public AuthApiFactory WithClock(TimeProvider clock)
+    {
+        Clock = clock;
         return this;
     }
 
@@ -224,7 +302,26 @@ internal sealed class AuthApiFactory : ApiFactory
                 ResendCooldownMinutes = IntOf("AUTH_CODE_RESEND_COOLDOWN_MINUTES", AuthCodeOptions.DefaultResendCooldownMinutes),
                 ResendRateLimitPerHour = IntOf("AUTH_CODE_RESEND_RATE_LIMIT_PER_HOUR", AuthCodeOptions.DefaultResendRateLimitPerHour)
             });
+
+            if (Clock is not null)
+            {
+                ReplaceSingleton(services, Clock);
+            }
+
+            if (CodeGenerator is not null)
+            {
+                ReplaceSingleton(services, CodeGenerator);
+            }
         });
+    }
+
+    private static void ReplaceSingleton<T>(IServiceCollection services, T instance)
+        where T : class
+    {
+        var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(T));
+        if (descriptor is not null)
+            services.Remove(descriptor);
+        services.AddSingleton(instance);
     }
 
     private int IntOf(string key, int fallback) =>
