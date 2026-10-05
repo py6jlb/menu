@@ -4,14 +4,16 @@
 
 **Blocked by:** 38 — Воспроизводимый и однозначно идентифицируемый релиз; 39 — Работающая установка резервного копирования.
 
-**Status:** ready-for-agent
+**Status:** resolved (commit b02d92b)
 
-- [ ] Каждый запуск создаёт уникальный набор, не перезаписывающий предыдущую копию в тот же день; manifest содержит время, release, сведения о схеме и контрольные суммы БД/фото.
-- [ ] Complete-отметка публикуется только после успешной доставки всех частей; выбор последней копии и ротация работают с целыми complete-наборами.
-- [ ] На время снятия набора предусмотрено документированное согласование записей БД и удаления/замены фото; допустимо короткое окно запрета изменений с понятным результатом для клиента.
-- [ ] Ротация сохраняет последнюю проверенную точку и не выбирает случайную пару из независимых последних файлов.
-- [ ] Drill проверяет checksum, восстанавливает БД и фото в изолированное окружение, проверяет историю миграций и контрольные рецепты/планы, запускает закреплённый релиз.
-- [ ] Каждый актуальный путь фото в восстановленной БД разрешается; намеренно отсутствующий архив, повреждённый SQL/checksum и несовместимый набор приводят к ошибке.
-- [ ] Проверены замена фото во время копирования и прерывание второго upload: не появляется ложный complete или восстановленная ссылка на потерянный файл.
-- [ ] Сохраняются время последнего полного backup и результат drill; измерено полное время восстановления, ограничения RPO/RTO документированы без неподтверждённых обещаний.
-- [ ] Согласован порядок нового копирования с жизненным циклом фото; проверки не изменяют production-данные.
+- [x] Каждый запуск создаёт уникальный набор, не перезаписывающий предыдущую копию в тот же день; manifest содержит время, release, сведения о схеме и контрольные суммы БД/фото. — `backup_set_id` (наносекунды), `backup_manifest_write`; тест `test_each_run_creates_unique_set_and_manifest`.
+- [x] Complete-отметка публикуется только после успешной доставки всех частей; выбор последней копии и ротация работают с целыми complete-наборами. — `publish_complete` после `verify_objects`; `backup_latest_set`/`backup_prune`; тесты `test_complete_marker_only_after_all_parts_delivered`, `test_selection_ignores_incomplete_latest`.
+- [x] На время снятия набора предусмотрено документированное согласование записей БД и удаления/замены фото; допустимо короткое окно запрета изменений с понятным результатом для клиента. — quiesce backend вокруг дампа/архива (trap возвращает backend), README описывает 5xx и повтор; `test_snapshot_quiesces_writer_around_copy`.
+- [x] Ротация сохраняет последнюю проверенную точку и не выбирает случайную пару из независимых последних файлов. — защита `last_drill_ok_set`; выбор только по `complete/<id>`; `test_rotation_handles_whole_sets_and_protects_verified`, `test_drill_failure_keeps_last_verified_point_protected`.
+- [x] Drill проверяет checksum, восстанавливает БД и фото в изолированное окружение, проверяет историю миграций и контрольные рецепты/планы, запускает закреплённый релиз. — sha256 до контейнеров, `--internal` сеть, `__EFMigrationsHistory`+counts+ссылочная целостность, запуск `menu-backend:<release>`; `test_drill_runs_pinned_release_and_records_result`, `test_drill_rejects_incompatible_schema`, `test_drill_rejects_mismatched_reference_counts`.
+- [x] Каждый актуальный путь фото в восстановленной БД разрешается; намеренно отсутствующий архив, повреждённый SQL/checksum и несовместимый набор приводят к ошибке. — `PhotoPath`-проверка по архиву; `test_drill_resolves_every_photo_path`, `test_missing_photos_archive_is_not_success`, `test_corrupt_dump_is_rejected_before_container_start`, `test_drill_rejects_checksum_mismatch_before_containers`.
+- [x] Проверены замена фото во время копирования и прерывание второго upload: не появляется ложный complete или восстановленная ссылка на потерянный файл. — quiesce исключает замену во время копирования; часть объектов без маркера игнорируется; `test_interrupted_run_does_not_create_false_complete`, `test_drill_resolves_every_photo_path`.
+- [x] Сохраняются время последнего полного backup и результат drill; измерено полное время восстановления, ограничения RPO/RTO документированы без неподтверждённых обещаний. — `backup-state` (`last_full_backup*`, `last_drill_*`, `last_drill_seconds`), раздел RPO/RTO в `deploy/README.md`; `test_backup_state_records_last_full_backup`, `test_drill_runs_pinned_release_and_records_result`.
+- [x] Согласован порядок нового копирования с жизненным циклом фото; проверки не изменяют production-данные. — порядок stop → dump → archive → state → start; drill использует временные контейнеры/сеть и локальные копии, прод не трогает.
+
+**Evidence.** `python3 -B -m unittest discover -s deploy/tests` — 62 теста GREEN; `bash -n deploy/*.sh` — чисто; контейнерный Shellcheck (`koalaman/shellcheck:stable`, включая `deploy/backup-lib.sh`) — exit 0. Ограничения: реальные Postgres/rclone/Docker daemon и фактическое время восстановления в этом окружении не запускались; RPO/RTO описаны как измеряемые, без гарантированных чисел. Code-review: последняя проверенная точка отделена (`last_drill_ok_set`), дубль валидации вынесен в `backup_number_valid`, добавлены тесты недельного набора и защиты при провале drill.

@@ -67,7 +67,8 @@ run_as_user() {
 }
 
 # Служба должна читать библиотеку и запускать backup.sh от своего имени.
-for file in "$APP_DIR/deploy/config.sh" "$APP_DIR/deploy/backup.sh" "$APP_DIR/server.conf"; do
+for file in "$APP_DIR/deploy/config.sh" "$APP_DIR/deploy/backup-lib.sh" \
+            "$APP_DIR/deploy/backup.sh" "$APP_DIR/server.conf"; do
   [ -e "$file" ] || continue
   run_as_user test -r "$file" || die "Пользователь $DEPLOY_USER не читает $file"
 done

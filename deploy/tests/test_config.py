@@ -99,8 +99,9 @@ class EntrypointTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         # Только публичные артефакты: никогда не копируем реальный local.conf/.env.
         for filename in ("config.sh", "release.sh", "compose.sh", "remote-deploy.sh",
-                         "build-push.sh", "deploy.sh", "backup.sh", "restore-drill.sh",
-                         "install-backup.sh", "smoke.sh", "Caddyfile", "otel-collector.yaml",
+                         "build-push.sh", "deploy.sh", "backup-lib.sh", "backup.sh",
+                         "restore-drill.sh", "install-backup.sh", "smoke.sh", "Caddyfile",
+                         "otel-collector.yaml",
                          "systemd/menu-backup.service", "systemd/menu-backup.timer"):
             destination = self.root / "deploy" / filename
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -142,7 +143,10 @@ class EntrypointTests(unittest.TestCase):
                   "JWT_SECRET": "test-jwt", "BACKUP_REMOTE": "test:bucket"}
         cases = [("build-push.sh", {"DOCKERHUB_USER": "example"}, "DOCKERHUB_USER", ()),
                  ("deploy.sh", {"VPS_HOST": "example.test"}, "VPS_HOST", ("abc123",)),
-                 ("restore-drill.sh", {"BACKUP_REMOTE": "test:bucket"}, "BACKUP_REMOTE", ("",))]
+                 ("restore-drill.sh", {"BACKUP_REMOTE": "test:bucket",
+                                       "DOCKERHUB_USER": "example"}, "BACKUP_REMOTE", ("",)),
+                 ("restore-drill.sh", {"BACKUP_REMOTE": "test:bucket",
+                                       "DOCKERHUB_USER": "example"}, "DOCKERHUB_USER", ("",))]
         for script in ("remote-deploy.sh", "compose.sh", "backup.sh"):
             keys = ("DOCKERHUB_USER", "POSTGRES_PASSWORD", "JWT_SECRET")
             if script == "backup.sh":
@@ -172,7 +176,8 @@ class EntrypointTests(unittest.TestCase):
                                   "JWT_SECRET": "jwt-test"}, ("config",)),
                  ("backup.sh", {"DOCKERHUB_USER": "example", "POSTGRES_PASSWORD": "literal$#",
                                  "JWT_SECRET": "jwt-test", "BACKUP_REMOTE": "test:bucket"}, ()),
-                 ("restore-drill.sh", {"BACKUP_REMOTE": "test:bucket"}, ("",))]
+                 ("restore-drill.sh", {"BACKUP_REMOTE": "test:bucket",
+                                       "DOCKERHUB_USER": "example"}, ("",))]
         for script, env, args in cases:
             with self.subTest(script=script):
                 self.calls.unlink(missing_ok=True)
@@ -396,8 +401,8 @@ sys.exit(subprocess.run(["bash", "-c", sys.argv[-1]]).returncode)
                                           "docker-compose.prod.yml", "pull"])
         delivered = [argument for call in calls if call["command"] == "scp"
                      for argument in call["args"][2:-1]]
-        for filename in ("deploy/config.sh", "deploy/compose.sh", "deploy/remote-deploy.sh",
-                         "deploy/backup.sh", "deploy/restore-drill.sh",
+        for filename in ("deploy/config.sh", "deploy/compose.sh", "deploy/backup-lib.sh",
+                         "deploy/remote-deploy.sh", "deploy/backup.sh", "deploy/restore-drill.sh",
                          "deploy/install-backup.sh"):
             self.assertIn(filename, delivered)
             self.assertTrue((remote / filename).exists())

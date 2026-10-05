@@ -3,8 +3,13 @@
 Docker, rclone и systemctl подменены исполняемыми адаптерами в PATH.
 rclone-remote эмулируется локальным каталогом, поэтому выгрузка, список
 объектов и скачивание проверяются без сети и настоящего хранилища.
+
+Начиная с тикета 40 точка восстановления — целый complete-набор
+(db + photos + manifest + маркер complete одного id). Набор без маркера не
+участвует в выборе и ротации, а drill сверяет контрольные суммы и схему.
 """
 import gzip
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -35,6 +40,41 @@ def mapping(target):
     return host
 
 
+def sql_output(sql):
+    schema = os.environ.get("DOCKER_SCHEMA", "20260925134531_Initial")
+    recipes = os.environ.get("DOCKER_RECIPES", "0")
+    plans = os.environ.get("DOCKER_PLANS", "0")
+    entries = os.environ.get("DOCKER_ENTRIES", "0")
+    counts = "|".join([recipes, plans, entries])
+    if "MigrationId" in sql and "Recipes" in sql:
+        return schema + "|" + counts
+    if "MigrationId" in sql:
+        return schema
+    if "PhotoPath" in sql:
+        return os.environ.get("DOCKER_PHOTO_PATHS", "")
+    if "left join" in sql:
+        return os.environ.get("DOCKER_ORPHANS", "0")
+    if "Recipes" in sql and "count" in sql:
+        return counts
+    if "information_schema.tables" in sql:
+        return "12"
+    return ""
+
+
+def run_psql(rest):
+    if "-c" in rest:
+        sql = rest[rest.index("-c") + 1]
+        out = sql_output(sql)
+        if out:
+            sys.stdout.write(out + "\n")
+        sys.exit(0)
+    sys.stdin.buffer.read()
+    if mode == "sql-fail":
+        sys.stderr.write('ERROR: relation "x" does not exist\n')
+        sys.exit(3)
+    sys.exit(0)
+
+
 if args and args[0] == "compose":
     rest = args[args.index("compose") + 1:]
     if "pg_dump" in rest:
@@ -43,6 +83,8 @@ if args and args[0] == "compose":
             sys.exit(2)
         sys.stdout.write("-- dump\nCREATE TABLE t();\n")
         sys.exit(0)
+    if "psql" in rest:
+        run_psql(rest)
     if "ps" in rest and "-q" in rest:
         if mode == "backend-missing":
             sys.exit(0)
@@ -54,6 +96,9 @@ if args and args[0] == "inspect":
     if mode == "no-photos-volume":
         sys.exit(0)
     sys.stdout.write("photosvol\n")
+    sys.exit(0)
+
+if args and args[0] == "network":
     sys.exit(0)
 
 if args and args[0] == "run":
@@ -72,14 +117,7 @@ if args and args[0] == "exec":
     if "pg_isready" in args:
         sys.exit(0)
     if "psql" in args:
-        if "-c" in args:
-            sys.stdout.write("12\n")
-            sys.exit(0)
-        sys.stdin.buffer.read()
-        if mode == "sql-fail":
-            sys.stderr.write("ERROR: relation \"x\" does not exist\n")
-            sys.exit(3)
-        sys.exit(0)
+        run_psql(args)
     sys.exit(0)
 
 if args and args[0] == "rm":
@@ -157,7 +195,8 @@ sys.exit(0)
 
 
 class BackupFixture(unittest.TestCase):
-    SCRIPTS = ("config.sh", "backup.sh", "restore-drill.sh", "install-backup.sh")
+    SCRIPTS = ("config.sh", "backup-lib.sh", "backup.sh", "restore-drill.sh",
+               "install-backup.sh")
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -178,8 +217,8 @@ class BackupFixture(unittest.TestCase):
         self._adapter("systemctl", SYSTEMCTL_ADAPTER)
 
         self.remote = self.root / "remote"
-        (self.remote / "db").mkdir(parents=True)
-        (self.remote / "photos").mkdir(parents=True)
+        for name in ("db", "photos", "manifests", "complete"):
+            (self.remote / name).mkdir(parents=True)
         self.env = {
             "PATH": f"{self.bin}:{os.environ['PATH']}",
             "CALLS": str(self.calls_path),
@@ -188,6 +227,7 @@ class BackupFixture(unittest.TestCase):
             "JWT_SECRET": "test-jwt",
             "BACKUP_REMOTE": "test:bucket",
             "FAKE_REMOTE_DIR": str(self.remote),
+            "BACKUP_STATE_FILE": str(self.root / "backup-state"),
         }
 
     def _adapter(self, name, body):
@@ -207,19 +247,48 @@ class BackupFixture(unittest.TestCase):
         return [json.loads(line)["args"] for line in self.calls_path.read_text().splitlines()
                 if json.loads(line)["command"] == command]
 
-    def write_dump(self, name="2026-01-01.sql.gz"):
-        path = self.remote / "db" / name
-        path.write_bytes(gzip.compress(b"SELECT 1;\n"))
-        return path
+    def write_complete_set(self, set_id="2026-01-01T000000000000000Z", *, schema=None,
+                           recipes=0, plans=0, entries=0, photo_paths=(),
+                           with_photos=True, corrupt_db=False, manifest_schema=None,
+                           db_sha_override=None, photos_sha_override=None):
+        schema = schema or "20260925134531_Initial"
+        db_bytes = b"not a gzip stream" if corrupt_db else gzip.compress(b"SELECT 1;\n")
+        (self.remote / "db" / f"{set_id}.sql.gz").write_bytes(db_bytes)
 
-    def write_photos(self, name="2026-01-01.tar.gz"):
-        path = self.root / name
-        with tarfile.open(path, "w:gz") as archive:
-            payload = self.root / "photo.txt"
-            payload.write_text("photo\n")
-            archive.add(payload, arcname="photo.txt")
-        shutil.copy(path, self.remote / "photos" / name)
-        return path
+        photos_path = self.root / f"photos-{set_id}.tar.gz"
+        payload = self.root / f"payload-{set_id}.txt"
+        payload.write_text("photo\n")
+        with tarfile.open(photos_path, "w:gz") as archive:
+            for name in (photo_paths or ("photo.txt",)):
+                archive.add(payload, arcname=name)
+        photos_bytes = photos_path.read_bytes()
+        if with_photos:
+            (self.remote / "photos" / f"{set_id}.tar.gz").write_bytes(photos_bytes)
+
+        manifest = {
+            "id": set_id,
+            "createdAt": "2026-01-01T00:00:00Z",
+            "release": "abc123",
+            "schema": schema if manifest_schema is None else manifest_schema,
+            "dbName": f"{set_id}.sql.gz",
+            "dbSha256": db_sha_override or hashlib.sha256(db_bytes).hexdigest(),
+            "photosName": f"{set_id}.tar.gz",
+            "photosSha256": photos_sha_override or hashlib.sha256(photos_bytes).hexdigest(),
+            "recipes": recipes,
+            "weekPlans": plans,
+            "planEntries": entries,
+        }
+        (self.remote / "manifests" / f"{set_id}.json").write_text(
+            json.dumps(manifest, indent=2) + "\n")
+        (self.remote / "complete" / set_id).write_text(set_id + "\n")
+        self.env.update({
+            "DOCKER_SCHEMA": schema,
+            "DOCKER_RECIPES": str(recipes),
+            "DOCKER_PLANS": str(plans),
+            "DOCKER_ENTRIES": str(entries),
+            "DOCKER_PHOTO_PATHS": "\n".join(photo_paths),
+        })
+        return db_bytes
 
 
 class BackupFailureTests(BackupFixture):
@@ -230,6 +299,7 @@ class BackupFailureTests(BackupFixture):
         copyto = [call for call in self.calls_of("rclone") if call and call[0] == "copyto"]
         self.assertTrue(any("db/" in " ".join(call) for call in copyto))
         self.assertTrue(any("photos/" in " ".join(call) for call in copyto))
+        self.assertTrue(any("manifests/" in " ".join(call) for call in copyto))
 
     def test_dump_failure_is_nonzero_without_success_log(self):
         result = self.run_script("backup.sh", {"DOCKER_MODE": "pgdump-fail"})
@@ -272,16 +342,15 @@ class BackupFailureTests(BackupFixture):
 
 class RestoreDrillTests(BackupFixture):
     def test_runs_without_argument_and_verifies_remote_set(self):
-        self.write_dump()
-        self.write_photos()
+        self.write_complete_set()
         result = self.run_script("restore-drill.sh")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Drill успешен", result.stdout)
 
         starts = [call for call in self.calls_of("docker") if call[:1] == ["run"] and "postgres:16" in call]
         self.assertEqual(len(starts), 1)
-        self.assertIn("--network", starts[0])
-        self.assertIn("none", starts[0])
+        net = starts[0][starts[0].index("--network") + 1]
+        self.assertNotEqual(net, "none")
         name = starts[0][starts[0].index("--name") + 1]
         self.assertNotEqual(name, "menu-restore-drill")
         self.assertTrue(name.startswith("menu-restore-drill-"))
@@ -291,26 +360,25 @@ class RestoreDrillTests(BackupFixture):
         self.assertTrue(any("-U" in call and call[call.index("-U") + 1] == "menu" for call in psql))
         self.assertTrue(any("-d" in call and call[call.index("-d") + 1] == "menu_planner" for call in psql))
 
+        networks = [call for call in self.calls_of("docker") if call[:1] == ["network"]]
+        self.assertTrue(any(call[1] == "rm" for call in networks))
         cleanup = [call for call in self.calls_of("docker") if call[:1] == ["rm"]]
         self.assertTrue(any("-f" in call and "-v" in call and name in call for call in cleanup))
 
     def test_explicit_empty_argument_is_treated_as_missing(self):
-        self.write_dump()
-        self.write_photos()
+        self.write_complete_set()
         result = self.run_script("restore-drill.sh", args=("",))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("Drill успешен", result.stdout)
 
     def test_sql_error_aborts(self):
-        self.write_dump()
-        self.write_photos()
+        self.write_complete_set()
         result = self.run_script("restore-drill.sh", {"DOCKER_MODE": "sql-fail"})
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("Drill успешен", result.stdout)
 
     def test_configured_database_identity_is_used(self):
-        self.write_dump()
-        self.write_photos()
+        self.write_complete_set()
         (self.root / "server.conf").write_text(
             "POSTGRES_DB=family_db\nPOSTGRES_USER=family_user\n")
         result = self.run_script("restore-drill.sh")
@@ -324,15 +392,14 @@ class RestoreDrillTests(BackupFixture):
         self.assertTrue(any(call[call.index("-d") + 1] == "family_db" for call in psql))
 
     def test_missing_photos_archive_is_not_success(self):
-        self.write_dump()
+        self.write_complete_set(with_photos=False)
         result = self.run_script("restore-drill.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("Drill успешен", result.stdout)
         self.assertIn("фото", result.stderr)
 
     def test_corrupt_dump_is_rejected_before_container_start(self):
-        (self.remote / "db/2026-01-01.sql.gz").write_bytes(b"not a gzip stream")
-        self.write_photos()
+        self.write_complete_set(corrupt_db=True)
         result = self.run_script("restore-drill.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("Drill успешен", result.stdout)
