@@ -228,6 +228,11 @@ class BackupFixture(unittest.TestCase):
             "BACKUP_REMOTE": "test:bucket",
             "FAKE_REMOTE_DIR": str(self.remote),
             "BACKUP_STATE_FILE": str(self.root / "backup-state"),
+            # Малые лимиты: тест не зависит от свободного места хоста.
+            "BACKUP_MIN_FREE_MB": "1",
+            "DRILL_MIN_FREE_MB": "1",
+            "BACKUP_MEMORY_LIMIT": "64m",
+            "DRILL_MEMORY_LIMIT": "64m",
         }
 
     def _adapter(self, name, body):

@@ -1,10 +1,18 @@
 [Unit]
 Description=Menu planner: бэкап БД и фото
-After=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
 Requires=docker.service
 
 [Service]
 Type=oneshot
 User=menu
 WorkingDirectory=/opt/menu
+# Вспомогательная операция не должна уронить приложение: ограничены память, CPU
+# и приоритет ввода-вывода. Согласованное снятие останавливает backend лишь на
+# время дампа и архивации.
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=50%
+MemoryMax=1G
 ExecStart=/opt/menu/deploy/backup.sh

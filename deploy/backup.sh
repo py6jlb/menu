@@ -34,6 +34,10 @@ config_require BACKUP_REMOTE
 
 BACKUP_KEEP_DAILY="${BACKUP_KEEP_DAILY-7}"
 BACKUP_KEEP_WEEKLY="${BACKUP_KEEP_WEEKLY-4}"
+# Ресурсный бюджет вспомогательной операции: место под архивы/журналы и память
+# контейнера архивации. Не задаётся в server.conf — окружение процесса.
+BACKUP_MIN_FREE_MB="${BACKUP_MIN_FREE_MB-1024}"
+BACKUP_MEMORY_LIMIT="${BACKUP_MEMORY_LIMIT-512m}"
 POSTGRES_DB="${POSTGRES_DB-menu_planner}"
 POSTGRES_USER="${POSTGRES_USER-menu}"
 BACKUP_STATE_FILE="${BACKUP_STATE_FILE-$APP_DIR/backup-state}"
@@ -47,12 +51,20 @@ for key in BACKUP_KEEP_DAILY BACKUP_KEEP_WEEKLY; do
     exit 1
   fi
 done
+backup_positive_int_valid "$BACKUP_MIN_FREE_MB" \
+  || die "BACKUP_MIN_FREE_MB должен быть целым > 0"
+backup_size_valid "$BACKUP_MEMORY_LIMIT" \
+  || die "BACKUP_MEMORY_LIMIT должен быть размером вида 512m или 1g"
 
 SET_ID="$(backup_set_id)"
 CREATED_AT="$(backup_utc_now)"
 WEEKDAY="$(date +%u)"
 
 TMP="$(mktemp -d)"
+# Проверка места до остановки backend: нет места — нет вспомогательной операции
+# и нет окна запрета изменений.
+backup_require_free_space "$TMP" "$BACKUP_MIN_FREE_MB" \
+  || die "Недостаточно места для backup-набора"
 QUIESCED=0
 
 resume_backend() {
@@ -89,7 +101,8 @@ dump_database() {
 
 archive_photos() {
   log "Архив фото"
-  docker run --rm -v "$PHOTOS_VOLUME":/data:ro -v "$TMP":/backup alpine:3.20 \
+  docker run --rm --memory "$BACKUP_MEMORY_LIMIT" \
+    -v "$PHOTOS_VOLUME":/data:ro -v "$TMP":/backup alpine:3.20 \
     tar czf /backup/photos.tar.gz -C /data .
   [ -s "$TMP/photos.tar.gz" ] || die "Архив фото пуст"
 }

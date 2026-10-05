@@ -21,6 +21,9 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     public bool AutoVerifyEmailsOnRegistration { get; set; } = true;
 
+    /// <summary>Настройки конкретного теста поверх лабораторных defaults.</summary>
+    public Dictionary<string, string?> Settings { get; } = new();
+
     /// <summary>Имя in-memory базы — общее для дополнительных контекстов в тестах.</summary>
     public string DatabaseName => _databaseName;
 
@@ -43,14 +46,27 @@ public class ApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        // DEPLOYMENT_MODE читается на старте (до применения in-memory defaults),
+        // поэтому лабораторный режим задаётся через UseSetting.
+        builder.UseSetting("DEPLOYMENT_MODE", "lab");
+        foreach (var pair in Settings)
+            if (pair.Value is not null)
+                builder.UseSetting(pair.Key, pair.Value);
 
         builder.ConfigureAppConfiguration((_, config) =>
-            config.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            // Тесты по умолчанию — явный лабораторный режим (HTTP и письма в лог).
+            // Проверки production переопределяют DEPLOYMENT_MODE через Settings.
+            var settings = new Dictionary<string, string?>
             {
                 ["PHOTOS_DIR"] = PhotosDir,
                 ["SMTP_HOST"] = "",
-                ["SHARE_BASE_URL"] = "https://menu.example.com"
-            }));
+                ["SHARE_BASE_URL"] = "https://menu.example.com",
+                ["DEPLOYMENT_MODE"] = "lab"
+            };
+            foreach (var pair in Settings) settings[pair.Key] = pair.Value;
+            config.AddInMemoryCollection(settings);
+        });
 
         builder.ConfigureServices(services =>
         {

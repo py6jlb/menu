@@ -41,12 +41,19 @@ POSTGRES_USER="${POSTGRES_USER-menu}"
 DRILL_PASSWORD="${DRILL_PASSWORD:-drill-only}"
 DRILL_JWT_SECRET="${DRILL_JWT_SECRET:-drill-only-jwt}"
 BACKUP_STATE_FILE="${BACKUP_STATE_FILE-$APP_DIR/backup-state}"
+DRILL_MIN_FREE_MB="${DRILL_MIN_FREE_MB-1024}"
+DRILL_MEMORY_LIMIT="${DRILL_MEMORY_LIMIT-512m}"
 DRILL_CONTAINER="${DRILL_CONTAINER-menu-restore-drill}-$$-$(date +%s%N 2>/dev/null || date +%s)"
 DRILL_NET="${DRILL_CONTAINER}-net"
 RELEASE_CONTAINER="${DRILL_CONTAINER}-release"
 STARTED_AT="$(date +%s)"
 SUCCESS=0
 SET_ID="${1-}"
+
+backup_positive_int_valid "$DRILL_MIN_FREE_MB" \
+  || die "DRILL_MIN_FREE_MB должен быть целым > 0"
+backup_size_valid "$DRILL_MEMORY_LIMIT" \
+  || die "DRILL_MEMORY_LIMIT должен быть размером вида 512m или 1g"
 
 TMP="$(mktemp -d)"
 cleanup() {
@@ -69,6 +76,10 @@ cleanup() {
   rm -rf "$TMP"
 }
 trap cleanup EXIT
+
+# Место под скачанный набор, распакованные фото и временную БД.
+backup_require_free_space "$TMP" "$DRILL_MIN_FREE_MB" \
+  || die "Недостаточно места для проверочного восстановления"
 
 if [ -z "$SET_ID" ]; then
   log "Поиск последнего complete-набора в $BACKUP_REMOTE"
@@ -123,6 +134,7 @@ photos_listing="$(tar tzf "$TMP/photos.tar.gz" | sed -e 's|^\./||' -e 's|/$||' |
 log "Изолированная сеть $DRILL_NET и временная Postgres $DRILL_CONTAINER"
 docker network create --internal "$DRILL_NET" >/dev/null
 docker run -d --name "$DRILL_CONTAINER" --network "$DRILL_NET" \
+  --memory "$DRILL_MEMORY_LIMIT" \
   -e POSTGRES_DB="$POSTGRES_DB" \
   -e POSTGRES_USER="$POSTGRES_USER" \
   -e POSTGRES_PASSWORD="$DRILL_PASSWORD" \
@@ -183,6 +195,7 @@ done <<< "$photo_paths"
 # должны быть no-op, приложение должно ответить на health.
 log "Запуск закреплённого релиза $RELEASE"
 docker run -d --name "$RELEASE_CONTAINER" --network "$DRILL_NET" \
+  --memory "$DRILL_MEMORY_LIMIT" \
   -v "$TMP/photos":/app/photos:ro \
   -e DB_HOST="$DRILL_CONTAINER" \
   -e DB_PORT=5432 \
@@ -191,6 +204,7 @@ docker run -d --name "$RELEASE_CONTAINER" --network "$DRILL_NET" \
   -e DB_PASSWORD="$DRILL_PASSWORD" \
   -e JWT_SECRET="$DRILL_JWT_SECRET" \
   -e PHOTOS_DIR=/app/photos \
+  -e DEPLOYMENT_MODE=lab \
   "$DOCKERHUB_USER/menu-backend:$RELEASE" >/dev/null
 
 for _ in $(seq 1 30); do

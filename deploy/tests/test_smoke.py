@@ -118,6 +118,8 @@ class SmokeHarness(unittest.TestCase):
         self.env = {
             "PATH": f"{self.bin}:{os.environ['PATH']}",
             "CALLS": str(self.calls),
+            # Лабораторный HTTP без домена — только явный DEPLOYMENT_MODE=lab.
+            "DEPLOYMENT_MODE": "lab",
             "DIGESTS": json.dumps({
                 f"example/menu-backend:{self.tag}": self.backend_digest,
                 f"example/menu-frontend:{self.tag}": self.frontend_digest}),
@@ -266,6 +268,23 @@ class SmokeEdgeTests(SmokeHarness):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SMOKE_HTTP_TIMEOUT_SECONDS", result.stderr)
         self.assertEqual(self.wget_urls(), [])
+
+
+class SmokeProductionModeTests(SmokeHarness):
+    def test_http_without_explicit_lab_mode_is_rejected(self):
+        self.healthy_edge()
+        result = self.run_script("smoke.sh", {"DEPLOYMENT_MODE": "production"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("lab", result.stderr)
+        self.assertEqual(self.wget_urls(), [], "HTTP-запрос ушёл до отказа")
+
+    def test_domain_mode_is_allowed_in_production(self):
+        self.healthy_edge()
+        result = self.run_script(
+            "smoke.sh", {"DEPLOYMENT_MODE": "production", "DOMAIN": "menu.example.com"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(all(url.startswith("https://menu.example.com/")
+                            for url in self.wget_urls()))
 
 
 class RemoteDeployTests(SmokeHarness):

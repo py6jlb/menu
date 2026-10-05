@@ -6,17 +6,23 @@
 DOCKERHUB_USER=your-dockerhub-login
 IMAGE_TAG=latest
 
-# Postgres
+# Режим запуска. production (по умолчанию) требует HTTPS-адрес, настроенную почту
+# и случайные секреты. Лабораторный HTTP без писем включается явно: lab.
+DEPLOYMENT_MODE=production
+# Публичный адрес приложения; в production обязателен https://<домен>.
+PUBLIC_BASE_URL=https://menu.example.com
+
+# Postgres (production: случайный пароль, не шаблонный; минимум 12 символов)
 POSTGRES_DB=menu_planner
 POSTGRES_USER=menu
 POSTGRES_PASSWORD=change-me-strong
 
-# JWT (минимум 32 символа)
+# JWT (production: случайный секрет, минимум 32 символа, не шаблонный)
 JWT_SECRET=change-me-min-32-chars-0123456789abcdef
 JWT_ISSUER=menu-planner
 JWT_AUDIENCE=menu-planner-client
 
-# SMTP (пусто — письма пишутся в лог)
+# SMTP (production обязателен; пусто — письма в лог только в lab)
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=
@@ -25,7 +31,7 @@ SMTP_FROM=
 SMTP_FROM_NAME=Меню для домохозяек
 SMTP_ENABLE_STARTTLS=true
 
-# Caddy: ":80" до домена, "example.com" для авто-HTTPS
+# Caddy: ":80" до домена (только lab), "example.com" для авто-HTTPS
 DOMAIN=:80
 
 # Базовый URL для ссылок шаринга (пусто — ссылка отдаётся относительной и

@@ -24,13 +24,15 @@ public sealed class PostgresApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        builder.UseSetting("DEPLOYMENT_MODE", "lab");
 
         builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["PHOTOS_DIR"] = PhotosDir,
                 ["SMTP_HOST"] = "",
-                ["SHARE_BASE_URL"] = "https://menu.example.com"
+                ["SHARE_BASE_URL"] = "https://menu.example.com",
+                ["DEPLOYMENT_MODE"] = "lab"
             }));
 
         builder.ConfigureServices(services =>

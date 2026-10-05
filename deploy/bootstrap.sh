@@ -357,7 +357,8 @@ Unattended-Upgrade::Allowed-Origins {
     "${distro_id}ESM:${distro_codename}-infra-security";
 };
 Unattended-Upgrade::Automatic-Reboot "true";
-Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+# 04:30: не пересекается с окном backup 02:30–02:40 (menu-backup.timer).
+Unattended-Upgrade::Automatic-Reboot-Time "04:30";
 EOF
   cat >"$APT_AUTO_CONF" <<'EOF'
 APT::Periodic::Update-Package-Lists "1";

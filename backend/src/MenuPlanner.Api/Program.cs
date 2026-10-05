@@ -9,6 +9,7 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Codes;
+using MenuPlanner.Api.Configuration;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
@@ -34,6 +35,7 @@ builder.Services.AddSingleton(ReadinessOptions.FromConfiguration(builder.Configu
 builder.Services.AddScoped<IDatabaseReadinessProbe, DatabaseReadinessProbe>();
 
 var jwtOptions = ReadJwtOptions(builder.Configuration);
+builder.Services.AddSingleton(ProductionConfiguration.Read(builder.Configuration, jwtOptions.Secret));
 builder.Services.AddSingleton(jwtOptions);
 builder.Services.AddSingleton<JwtTokenService>();
 

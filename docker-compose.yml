@@ -6,9 +6,11 @@ services:
       POSTGRES_USER: menu
       POSTGRES_PASSWORD: menu
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U menu -d menu_planner"]
       interval: 5s
@@ -21,6 +23,8 @@ services:
       context: ./backend
     environment:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=menu_planner;Username=menu;Password=menu"
+      DEPLOYMENT_MODE: "${DEPLOYMENT_MODE:-lab}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://localhost:8081}"
       JWT_SECRET: "${JWT_SECRET:-dev-only-secret-change-me-in-production-0123456789abcdef}"
       JWT_ISSUER: "${JWT_ISSUER:-menu-planner}"
       JWT_AUDIENCE: "${JWT_AUDIENCE:-menu-planner-client}"
@@ -36,7 +40,11 @@ services:
     volumes:
       - photos_data:/app/photos
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       db:
         condition: service_healthy
@@ -48,7 +56,9 @@ services:
     volumes:
       - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
-      - "8081:80"
+      - "127.0.0.1:8081:80"
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - backend
     restart: unless-stopped
