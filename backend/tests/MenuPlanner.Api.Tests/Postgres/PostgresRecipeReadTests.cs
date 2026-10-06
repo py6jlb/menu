@@ -49,6 +49,54 @@ public sealed class PostgresRecipeReadTests : PostgresTestBase
     }
 
     [PostgresFact]
+    public async Task ReadIngredientSuggestions_DoesNotLoadSteps_AndDoesNotGrowWithExternalCount()
+    {
+        var (recipient1, _) = await SeedAsync(externalCount: 1, chunksPerSource: 3);
+        var first = new CommandRecordingInterceptor();
+        await using (var db = NewContext(first))
+            await Reader(db).ReadIngredientSuggestionsAsync(recipient1.Id, null);
+
+        var (recipient2, _) = await SeedAsync(externalCount: 25, chunksPerSource: 3);
+        var second = new CommandRecordingInterceptor();
+        IReadOnlyList<string> items;
+        await using (var db = NewContext(second))
+            items = await Reader(db).ReadIngredientSuggestionsAsync(recipient2.Id, null);
+
+        Assert.Equal(first.Commands.Count, second.Commands.Count);
+        Assert.NotEmpty(items);
+        Assert.Contains("Продукт 0", items);
+        Assert.DoesNotContain(second.Commands, c => c.Contains("RecipeSteps", StringComparison.Ordinal));
+    }
+
+    [PostgresFact]
+    public async Task ReadIngredientSuggestions_ExcludesBrokenSourceCachedIngredients()
+    {
+        var (recipient, _) = await SeedAsync(externalCount: 1, chunksPerSource: 1);
+
+        await using (var db = Database.CreateContext())
+        {
+            var broken = PostgresData.NewRecipe(recipient.Id, "Сломанный");
+            broken.SourceRecipeId = Guid.NewGuid();
+            broken.Ingredients.Add(new RecipeIngredient
+            {
+                Order = 0,
+                Name = "Устаревшее",
+                Amount = 1,
+                Unit = "g"
+            });
+            db.Recipes.Add(broken);
+            await db.SaveChangesAsync();
+        }
+
+        var commands = new CommandRecordingInterceptor();
+        await using var context = NewContext(commands);
+        var items = await Reader(context).ReadIngredientSuggestionsAsync(recipient.Id, null);
+
+        Assert.DoesNotContain("Устаревшее", items);
+        Assert.Contains("Продукт 0", items);
+    }
+
+    [PostgresFact]
     public async Task ReadDetail_MaterializesSourceContent_UnderLocalIdentity()
     {
         var (recipient, sources) = await SeedAsync(externalCount: 1, chunksPerSource: 4);

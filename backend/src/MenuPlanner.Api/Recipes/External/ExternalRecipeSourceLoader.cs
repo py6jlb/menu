@@ -93,4 +93,24 @@ public sealed class ExternalRecipeSourceLoader
 
         return summaries.ToDictionary(s => s.Id);
     }
+
+    /// <summary>
+    /// Только названия ингредиентов источников, одним скалярным запросом без загрузки
+    /// рецептов, шагов и остальных полей. Для автодополнения, которому нужны лишь строки
+    /// названий и которое само считает частоту и ограничивает выдачу.
+    /// </summary>
+    public async Task<List<string>> LoadIngredientNamesAsync(
+        IEnumerable<Guid> sourceRecipeIds, CancellationToken cancellationToken = default)
+    {
+        var ids = sourceRecipeIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new List<string>();
+
+        return await _db.Recipes
+            .AsNoTracking()
+            .Where(r => ids.Contains(r.Id))
+            .SelectMany(r => r.Ingredients)
+            .Select(i => i.Name)
+            .ToListAsync(cancellationToken);
+    }
 }
