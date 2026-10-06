@@ -1,42 +1,25 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { getSettings, updateSettings } from '../api/settings'
+import { computed, onMounted } from 'vue'
+import { useSettings } from '../composables/useSettings'
 import { useAuth } from '../stores/auth'
+import { MAX_WINDOW_WEEKS, MIN_WINDOW_WEEKS, isValidWindowWeeks } from '../constants/settings'
 
 const { isEmailVerified } = useAuth()
+const {
+  windowWeeks,
+  dirty,
+  loading,
+  saving,
+  loadError,
+  saveError,
+  savedMessage,
+  load,
+  save
+} = useSettings()
 
-const windowWeeks = ref(3)
-const loading = ref(true)
-const error = ref('')
-const saving = ref(false)
-const savedMessage = ref('')
-const saveError = ref('')
-
-async function load() {
-  loading.value = true
-  error.value = ''
-  const { response, data } = await getSettings()
-  if (response.status === 200) {
-    windowWeeks.value = data?.repetitionWindowWeeks ?? 3
-  } else {
-    error.value = data?.error || 'Не удалось загрузить настройки.'
-  }
-  loading.value = false
-}
-
-async function save() {
-  saving.value = true
-  savedMessage.value = ''
-  saveError.value = ''
-  const { response, data } = await updateSettings({ repetitionWindowWeeks: windowWeeks.value })
-  if (response.status === 200) {
-    windowWeeks.value = data?.repetitionWindowWeeks ?? windowWeeks.value
-    savedMessage.value = 'Настройки сохранены.'
-  } else {
-    saveError.value = data?.error || 'Не удалось сохранить настройки.'
-  }
-  saving.value = false
-}
+const canSave = computed(
+  () => !saving.value && isEmailVerified.value && isValidWindowWeeks(windowWeeks.value)
+)
 
 onMounted(load)
 </script>
@@ -48,7 +31,11 @@ onMounted(load)
     </div>
 
     <p v-if="loading" class="loading">Загрузка…</p>
-    <p v-else-if="error" class="error" role="alert">{{ error }}</p>
+
+    <div v-else-if="loadError" class="card">
+      <p class="error" role="alert">{{ loadError }}</p>
+      <button type="button" class="btn" @click="load">Повторить</button>
+    </div>
 
     <div v-else class="card settings-card">
       <p v-if="savedMessage" class="success" role="status">{{ savedMessage }}</p>
@@ -63,13 +50,13 @@ onMounted(load)
         <span>Окно повторяемости блюд (недель)</span>
         <span class="hint">
           Сколько недель учитывается при подсчёте «сколько раз блюдо готовилось».
-          Значение от 1 до 52.
+          Значение от {{ MIN_WINDOW_WEEKS }} до {{ MAX_WINDOW_WEEKS }}.
         </span>
         <input
           v-model.number="windowWeeks"
           type="number"
-          min="1"
-          max="52"
+          :min="MIN_WINDOW_WEEKS"
+          :max="MAX_WINDOW_WEEKS"
           required
           :disabled="!isEmailVerified"
           class="weeks-input"
@@ -86,13 +73,10 @@ onMounted(load)
         </p>
       </div>
 
-      <button
-        type="button"
-        class="btn btn--primary"
-        :disabled="saving || !isEmailVerified || windowWeeks < 1 || windowWeeks > 52"
-        @click="save"
-      >
-        {{ saving ? 'Сохранение…' : 'Сохранить' }}
+      <p v-if="dirty" class="hint">Есть несохранённые изменения.</p>
+
+      <button type="button" class="btn btn--primary" :disabled="!canSave" @click="save">
+        {{ saving ? 'Сохранение…' : saveError ? 'Повторить сохранение' : 'Сохранить' }}
       </button>
     </div>
   </section>

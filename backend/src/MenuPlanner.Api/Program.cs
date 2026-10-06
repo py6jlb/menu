@@ -94,6 +94,7 @@ builder.Services.AddScoped<ExternalRecipePromotionService>();
 builder.Services.AddScoped<RecipeMutationService>();
 builder.Services.AddScoped<RecipeSharingService>();
 builder.Services.AddScoped<RepetitionCounter>();
+builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<WeekPlanSaver>();
 builder.Services.AddScoped<WeekPlanReader>();
 builder.Services.AddScoped<AdminBootstrap>();
