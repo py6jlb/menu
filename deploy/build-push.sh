@@ -48,7 +48,8 @@ docker build -t "$FRONTEND_IMAGE:$TAG" frontend
 
 if [ "$PUBLISH" -eq 1 ]; then
   log "Гейт релиза: browser smoke (перед публикацией)"
-  "$ROOT/scripts/release-gate.sh" --only browser --artifacts "$ROOT/deploy/gate-artifacts"
+  GATE_SUMMARY_APPEND=1 "$ROOT/scripts/release-gate.sh" --only browser \
+    --artifacts "$ROOT/deploy/gate-artifacts"
 
   log "Публикация в Docker Hub"
   docker tag "$BACKEND_IMAGE:$TAG" "$BACKEND_IMAGE:latest"

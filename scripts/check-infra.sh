@@ -12,9 +12,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# shellcheck disable=SC1091
+. "$ROOT/deploy/release.sh"
+
 DOCKER="${GATE_DOCKER:-docker}"
-CADDY_IMAGE="caddy:2-alpine"
-COLLECTOR_IMAGE="${OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.161.0}"
+CADDY_IMAGE="$RELEASE_CADDY_IMAGE"
+COLLECTOR_IMAGE="$RELEASE_COLLECTOR_IMAGE"
 
 log()  { printf '\033[1;32m[infra]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[infra]\033[0m %s\n' "$*" >&2; exit 1; }

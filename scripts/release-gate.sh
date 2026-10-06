@@ -27,8 +27,6 @@ cd "$ROOT"
 GATE_ARTIFACT_DIR="${GATE_ARTIFACT_DIR:-$ROOT/deploy/gate-artifacts}"
 DOCKER="${GATE_DOCKER:-docker}"
 LOG_TAIL_LINES="${GATE_LOG_TAIL_LINES:-40}"
-SDK_IMAGE="mcr.microsoft.com/dotnet/sdk:10.0"
-NODE_IMAGE="$RELEASE_NODE_IMAGE"
 
 WITH_BROWSER=0
 ONLY=""
@@ -137,12 +135,19 @@ for tool in "$DOCKER" git python3 bash; do
   }
 done
 
-[ "$WITH_BROWSER" -ne 1 ] || true
-
 mkdir -p "$GATE_ARTIFACT_DIR"
 GATE_ARTIFACT_DIR="$(cd "$GATE_ARTIFACT_DIR" && pwd)"
+# Этапы-скрипты (infra/deps/postgres/browser) пишут диагностику в тот же каталог.
+export GATE_ARTIFACT_DIR
+export GATE_DOCKER="$DOCKER"
 SUMMARY="$GATE_ARTIFACT_DIR/summary.txt"
-: > "$SUMMARY"
+# build-push запускает гейт дважды (быстрые этапы → сборка → browser): второй
+# запуск дописывает сводку, а не стирает первую. GATE_SUMMARY_APPEND=1 включает это.
+if [ "${GATE_SUMMARY_APPEND-}" = "1" ]; then
+  printf '\n# повторный запуск: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$SUMMARY"
+else
+  : > "$SUMMARY"
+fi
 
 log()  { printf '\033[1;34m[gate]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[gate]\033[0m %s\n' "$*" >&2; }
@@ -179,7 +184,7 @@ stage_backend() {
     -e DOTNET_CLI_HOME=/tmp/dotnet-home \
     -e NUGET_PACKAGES=/tmp/nuget \
     -v "$ROOT":/app -w /app \
-    "$SDK_IMAGE" dotnet test
+    "$RELEASE_SDK_IMAGE" dotnet test
 }
 
 stage_postgres() {
@@ -192,7 +197,7 @@ stage_migrations() {
     -e DOTNET_CLI_HOME=/tmp/dotnet-home \
     -e NUGET_PACKAGES=/tmp/nuget \
     -v "$ROOT":/app -w /app \
-    "$SDK_IMAGE" sh -c "dotnet tool restore && dotnet ef migrations has-pending-model-changes --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api"
+    "$RELEASE_SDK_IMAGE" sh -c "dotnet tool restore && dotnet ef migrations has-pending-model-changes --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api"
 }
 
 stage_frontend() {
@@ -200,7 +205,7 @@ stage_frontend() {
     -u "$(id -u):$(id -g)" \
     -e HOME=/tmp \
     -v "$ROOT":/app -w /app/frontend \
-    "$NODE_IMAGE" sh -c "npm ci && npm test && npm run build"
+    "$RELEASE_NODE_IMAGE" sh -c "npm ci && npm test && npm run build"
   if ! git -C "$ROOT" diff --quiet -- frontend/package-lock.json; then
     printf 'frontend: npm ci изменил frontend/package-lock.json — lockfile невоспроизводим\n' >&2
     return 1

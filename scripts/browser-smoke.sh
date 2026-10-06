@@ -14,13 +14,11 @@ set -euo pipefail
 # Переменные:
 #   GATE_DOCKER             команда docker (по умолчанию docker)
 #   PLAYWRIGHT_IMAGE        образ с браузерами (по умолчанию закреплённый)
-#   PLAYWRIGHT_VERSION      версия npm-пакета playwright (совпадает с образом)
 #   SMOKE_READY_TIMEOUT_SECONDS  предел ожидания готовности (по умолчанию 180)
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOCKER="${GATE_DOCKER:-docker}"
 PLAYWRIGHT_IMAGE="${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.49.1-noble}"
-PLAYWRIGHT_VERSION="${PLAYWRIGHT_VERSION:-1.49.1}"
 READY_TIMEOUT="${SMOKE_READY_TIMEOUT_SECONDS:-180}"
 PROJECT="menu-gate-smoke-$$"
 SHARED="$(mktemp -d)"
@@ -68,8 +66,10 @@ wait_ready() {
     fi
     sleep 2
   done
-  printf '[browser-smoke] Диагностика backend:\n' >&2
-  "${COMPOSE[@]}" logs --tail 80 backend >&2 || true
+  # Журналы backend в lab-режиме содержат код подтверждения и адрес — их не
+  # печатаем в диагностику. Показываем только состояние контейнеров.
+  printf '[browser-smoke] Состояние контейнеров:\n' >&2
+  "${COMPOSE[@]}" ps >&2 || true
   fail "backend не готов за ${READY_TIMEOUT}s"
 }
 
@@ -91,12 +91,13 @@ if ! "$DOCKER" run --rm --network "${PROJECT}_default" \
   -v "$ROOT/scripts/browser-smoke":/smoke:ro \
   -v "$SHARED":/shared \
   "$PLAYWRIGHT_IMAGE" \
-  sh -c "mkdir -p /tmp/smoke && cp /smoke/flow.mjs /tmp/smoke/ && cd /tmp/smoke \
-    && npm init -y >/dev/null 2>&1 \
-    && npm install --no-save --no-audit playwright@${PLAYWRIGHT_VERSION} >/dev/null 2>&1 \
+  sh -c "mkdir -p /tmp/smoke \
+    && cp /smoke/flow.mjs /smoke/package.json /smoke/package-lock.json /tmp/smoke/ \
+    && cd /tmp/smoke \
+    && npm ci --no-audit --no-fund >/dev/null 2>&1 \
     && node flow.mjs"; then
-  printf '[browser-smoke] Диагностика backend:\n' >&2
-  "${COMPOSE[@]}" logs --tail 80 backend >&2 || true
+  printf '[browser-smoke] Состояние контейнеров:\n' >&2
+  "${COMPOSE[@]}" ps >&2 || true
   fail "Playwright-сценарий провалился"
 fi
 

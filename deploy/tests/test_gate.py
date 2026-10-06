@@ -197,6 +197,7 @@ class InfraCheckerTests(unittest.TestCase):
         shutil.copy(ROOT / "scripts/check-infra.sh", self.root / "scripts/check-infra.sh")
         (self.root / "scripts/check-infra.sh").chmod(0o755)
         (self.root / "deploy").mkdir()
+        shutil.copy(ROOT / "deploy/release.sh", self.root / "deploy/release.sh")
         (self.root / "deploy/Caddyfile").write_text(":80 {}\n")
         (self.root / "deploy/otel-collector.yaml").write_text("receivers: {}\n")
         (self.root / "docker-compose.prod.yml").write_text("services: {}\n")
