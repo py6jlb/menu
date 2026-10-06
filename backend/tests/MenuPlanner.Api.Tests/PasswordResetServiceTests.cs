@@ -68,14 +68,14 @@ public sealed class PasswordResetServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedVerifiedUserAsync(db);
-        user.VerificationAttempts = AuthCodeService.MaxAttempts;
+        user.VerificationAttempts = AuthCodePolicy.MaxAttempts;
         user.LockedUntil = Start.UtcDateTime.AddDays(3);
         await db.SaveChangesAsync();
 
         var result = await service.RequestAsync(user);
 
         Assert.Equal(PasswordResetRequestOutcome.Sent, result.Outcome);
-        Assert.Equal(AuthCodeService.MaxAttempts, user.VerificationAttempts);
+        Assert.Equal(AuthCodePolicy.MaxAttempts, user.VerificationAttempts);
         Assert.NotNull(user.LockedUntil);
     }
 
@@ -189,7 +189,7 @@ public sealed class PasswordResetServiceTests
         var user = await SeedVerifiedUserAsync(db);
         await service.RequestAsync(user);
 
-        clock.Advance(AuthCodeService.ResetLifetime + TimeSpan.FromMinutes(1));
+        clock.Advance(AuthCodePolicy.ResetLifetime + TimeSpan.FromMinutes(1));
         var expired = await service.ResetAsync(user, "000000", "newsecret1");
         Assert.Equal(PasswordResetOutcome.ExpiredCode, expired.Outcome);
 

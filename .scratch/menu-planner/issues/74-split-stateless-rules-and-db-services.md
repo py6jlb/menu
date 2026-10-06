@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** claimed (ticket/74-split-stateless-rules-and-db-services; ожидает code-review)
 
 - [ ] Доменные правила переименованы по смыслу: `ExternalRecipeStateRules`, `RepetitionRules`, `AuthCodePolicy`; `static` остаётся только для чистых функций и констант.
 - [ ] Хелперы, читающие БД, вынесены в scoped-сервисы с DI: `CurrentUserContext` (членство семьи), `SourceFamilyNameResolver`, загрузчик источников внешнего рецепта, `ExternalRecipeStateResolver`, `RepetitionCounter`.

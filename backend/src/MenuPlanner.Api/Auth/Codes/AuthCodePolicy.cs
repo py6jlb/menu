@@ -12,7 +12,7 @@ public enum CodeCheckResult
     AlreadyUsed
 }
 
-public static class AuthCodeService
+public static class AuthCodePolicy
 {
     public const int CodeLength = 6;
     public const int MaxAttempts = 5;

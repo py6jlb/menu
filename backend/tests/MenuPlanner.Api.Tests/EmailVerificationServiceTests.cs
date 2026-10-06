@@ -50,7 +50,7 @@ public sealed class EmailVerificationServiceTests
         var user = await SeedUserAsync(db);
         await service.IssueInitialCodeAsync(user);
 
-        clock.Advance(AuthCodeService.VerifyLifetime + TimeSpan.FromSeconds(1));
+        clock.Advance(AuthCodePolicy.VerifyLifetime + TimeSpan.FromSeconds(1));
         var result = await service.VerifyAsync(user, "111111");
 
         Assert.Equal(VerifyEmailOutcome.ExpiredCode, result.Outcome);

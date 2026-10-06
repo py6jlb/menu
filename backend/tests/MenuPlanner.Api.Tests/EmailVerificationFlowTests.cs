@@ -182,7 +182,7 @@ public sealed class EmailVerificationFlowTests
         using var client = factory.CreateClient();
         var token = await RegisterAsync(client, $"verify-expired-{Guid.NewGuid():N}@example.com");
 
-        clock.Advance(AuthCodeService.VerifyLifetime + TimeSpan.FromMinutes(1));
+        clock.Advance(AuthCodePolicy.VerifyLifetime + TimeSpan.FromMinutes(1));
         var verify = await PostVerifyAsync(client, token, "222222");
 
         Assert.Equal(HttpStatusCode.BadRequest, verify.StatusCode);

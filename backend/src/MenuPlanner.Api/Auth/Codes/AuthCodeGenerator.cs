@@ -12,5 +12,5 @@ public interface IAuthCodeGenerator
 
 public sealed class RandomAuthCodeGenerator : IAuthCodeGenerator
 {
-    public string Generate() => AuthCodeService.GenerateCode();
+    public string Generate() => AuthCodePolicy.GenerateCode();
 }
