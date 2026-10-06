@@ -71,6 +71,23 @@ public static class AuthCodePolicy
         return CodeCheckResult.Ok;
     }
 
+    /// <summary>
+    /// Остаток cooldown до повторной выдачи кода: null, если выдавать можно,
+    /// иначе число секунд до ближайшей возможности. Единый расчёт для
+    /// подтверждения почты и сброса пароля.
+    /// </summary>
+    public static int? CooldownSecondsLeft(AuthCode? latest, DateTime now, TimeSpan cooldown)
+    {
+        if (cooldown <= TimeSpan.Zero || latest is null)
+            return null;
+
+        var elapsed = now - latest.CreatedAt;
+        if (elapsed >= cooldown)
+            return null;
+
+        return (int)Math.Ceiling((cooldown - elapsed).TotalSeconds);
+    }
+
     public static bool IsLocked(User user, DateTime now) =>
         user.LockedUntil is { } until && until > now;
 

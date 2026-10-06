@@ -49,17 +49,37 @@ public sealed class RecipeMutationService
         _revisions = revisions;
     }
 
+    /// <summary>Создание рецепта семьи из проверенного запроса.</summary>
+    public async Task<RecipeMutationResult> CreateAsync(
+        Guid familyId, RecipeRequest request, CancellationToken cancellationToken = default)
+    {
+        var error = RecipeValidation.Validate(request);
+        if (error is not null)
+            return new(RecipeMutationOutcome.ValidationError, Error: error);
+
+        var now = _clock.GetUtcNow().UtcDateTime;
+        var recipe = new Recipe
+        {
+            FamilyId = familyId,
+            Name = "",
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+        RecipeValidation.Apply(recipe, request);
+
+        _db.Recipes.Add(recipe);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
+    }
+
     public async Task<RecipeMutationResult> UpdateAsync(
         RecipeTarget target, RecipeRequest request, CancellationToken cancellationToken = default)
     {
-        var recipe = await _db.Recipes
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
-        if (recipe is null)
-            return new(RecipeMutationOutcome.NotFound);
-        if (recipe.SourceRecipeId is not null)
-            return new(RecipeMutationOutcome.ExternalReadOnly);
+        var (recipe, failure) = await FindAsync(
+            target, requireOwn: true, includeContent: true, cancellationToken);
+        if (failure is not null)
+            return failure;
 
         var error = RecipeValidation.Validate(request);
         if (error is not null)
@@ -91,12 +111,10 @@ public sealed class RecipeMutationService
     public async Task<RecipeMutationResult> DeleteAsync(
         RecipeTarget target, int? revision, CancellationToken cancellationToken = default)
     {
-        var recipe = await _db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
-        if (recipe is null)
-            return new(RecipeMutationOutcome.NotFound);
-        if (recipe.SourceRecipeId is not null)
-            return new(RecipeMutationOutcome.ExternalReadOnly);
+        var (recipe, failure) = await FindAsync(
+            target, requireOwn: true, includeContent: false, cancellationToken);
+        if (failure is not null)
+            return failure;
 
         return await DeleteTrackedAsync(recipe, revision, cancellationToken);
     }
@@ -108,10 +126,10 @@ public sealed class RecipeMutationService
     public async Task<RecipeMutationResult> RemoveExternalAsync(
         RecipeTarget target, int? revision, CancellationToken cancellationToken = default)
     {
-        var recipe = await _db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
-        if (recipe is null)
-            return new(RecipeMutationOutcome.NotFound);
+        var (recipe, failure) = await FindAsync(
+            target, requireOwn: false, includeContent: false, cancellationToken);
+        if (failure is not null)
+            return failure;
         if (recipe.SourceRecipeId is null)
             return new(RecipeMutationOutcome.ValidationError, Error: "Это не внешний рецепт.");
 
@@ -129,12 +147,10 @@ public sealed class RecipeMutationService
         Stream content,
         CancellationToken cancellationToken = default)
     {
-        var recipe = await _db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
-        if (recipe is null)
-            return new(RecipeMutationOutcome.NotFound);
-        if (recipe.SourceRecipeId is not null)
-            return new(RecipeMutationOutcome.ExternalReadOnly);
+        var (recipe, failure) = await FindAsync(
+            target, requireOwn: true, includeContent: false, cancellationToken);
+        if (failure is not null)
+            return failure;
 
         var stale = RevisionProblem(revision, recipe.Revision);
         if (stale is not null)
@@ -169,12 +185,10 @@ public sealed class RecipeMutationService
     public async Task<RecipeMutationResult> DeletePhotoAsync(
         RecipeTarget target, int? revision, CancellationToken cancellationToken = default)
     {
-        var recipe = await _db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
-        if (recipe is null)
-            return new(RecipeMutationOutcome.NotFound);
-        if (recipe.SourceRecipeId is not null)
-            return new(RecipeMutationOutcome.ExternalReadOnly);
+        var (recipe, failure) = await FindAsync(
+            target, requireOwn: true, includeContent: false, cancellationToken);
+        if (failure is not null)
+            return failure;
 
         if (recipe.PhotoPath is null)
             return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
@@ -229,6 +243,27 @@ public sealed class RecipeMutationService
 
         _storage.Delete(photoPath);
         return new(RecipeMutationOutcome.Ok, Revision: RecipeRevisionRules.Next(revision.Value));
+    }
+
+    /// <summary>
+    /// Загрузка рецепта семьи с общим предикатом «есть / свой»: NotFound и
+    /// ExternalReadOnly решаются здесь, чтобы не повторять их в каждой операции.
+    /// </summary>
+    private async Task<(Recipe Recipe, RecipeMutationResult? Failure)> FindAsync(
+        RecipeTarget target, bool requireOwn, bool includeContent, CancellationToken cancellationToken)
+    {
+        var query = _db.Recipes.AsQueryable();
+        if (includeContent)
+            query = query.Include(r => r.Steps).Include(r => r.Ingredients);
+
+        var recipe = await query.FirstOrDefaultAsync(
+            r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
+        if (recipe is null)
+            return (null!, new(RecipeMutationOutcome.NotFound));
+        if (requireOwn && recipe.SourceRecipeId is not null)
+            return (recipe, new(RecipeMutationOutcome.ExternalReadOnly));
+
+        return (recipe, null);
     }
 
     /// <summary>Проверка ожидаемой ревизии: исход ошибки, если она не передана или устарела.</summary>

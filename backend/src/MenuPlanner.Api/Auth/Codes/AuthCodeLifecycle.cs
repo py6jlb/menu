@@ -45,7 +45,7 @@ public sealed class AuthCodeLifecycle
     public async Task<IDbContextTransaction?> BeginCriticalSectionAsync(
         User user, CancellationToken ct = default)
     {
-        if (!_db.Database.IsRelational())
+        if (!_db.SupportsRelationalLocking())
             return null;
 
         var tx = await _db.Database.BeginTransactionAsync(ct);

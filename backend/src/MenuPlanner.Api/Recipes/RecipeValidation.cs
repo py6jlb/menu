@@ -48,9 +48,7 @@ public static class RecipeValidation
         recipe.Difficulty = request.Difficulty!.Value;
         recipe.Calories = request.Calories;
         recipe.Tags = NormalizeStrings(request.Tags);
-        recipe.Seasonality = NormalizeStrings(request.Seasonality)
-            .Select(s => s.ToLowerInvariant())
-            .ToList();
+        recipe.Seasonality = NormalizeSeasons(request.Seasonality);
         recipe.Diet = NormalizeStrings(request.Diet);
         recipe.Steps = MapSteps(request);
         recipe.Ingredients = MapIngredients(request);
@@ -76,12 +74,12 @@ public static class RecipeValidation
 
         foreach (var ing in request.Ingredients ?? new List<RecipeIngredientRequest>())
         {
+            if (IsBlankIngredient(ing))
+                continue;
+
             var name = ing.Name?.Trim();
             var unit = ing.Unit?.Trim();
             var note = ing.Note?.Trim();
-
-            if (string.IsNullOrEmpty(name) && ing.Amount is null && string.IsNullOrEmpty(unit) && string.IsNullOrEmpty(note))
-                continue;
 
             result.Add(new RecipeIngredient
             {
@@ -141,9 +139,7 @@ public static class RecipeValidation
         if (tags.Count > 100)
             return "Слишком много тегов (максимум 100).";
 
-        var seasons = NormalizeStrings(request.Seasonality)
-            .Select(s => s.ToLowerInvariant())
-            .ToList();
+        var seasons = NormalizeSeasons(request.Seasonality);
         var invalidSeason = seasons.FirstOrDefault(s => !RecipeCatalog.Seasons.Contains(s));
         if (invalidSeason is not null)
             return $"Недопустимое значение сезона: «{invalidSeason}».";
@@ -154,13 +150,12 @@ public static class RecipeValidation
 
         foreach (var ing in request.Ingredients ?? new List<RecipeIngredientRequest>())
         {
+            if (IsBlankIngredient(ing))
+                continue;
+
             var ingredientName = ing.Name?.Trim();
             var unit = ing.Unit?.Trim();
             var note = ing.Note?.Trim();
-
-            if (string.IsNullOrEmpty(ingredientName) && ing.Amount is null
-                && string.IsNullOrEmpty(unit) && string.IsNullOrEmpty(note))
-                continue;
 
             if (string.IsNullOrEmpty(ingredientName))
                 return "Укажите название ингредиента.";
@@ -178,4 +173,15 @@ public static class RecipeValidation
 
         return null;
     }
+
+    /// <summary>Ингредиент без единого значимого поля — пустая строка формы, не ошибка.</summary>
+    private static bool IsBlankIngredient(RecipeIngredientRequest ingredient) =>
+        string.IsNullOrEmpty(ingredient.Name?.Trim())
+        && ingredient.Amount is null
+        && string.IsNullOrEmpty(ingredient.Unit?.Trim())
+        && string.IsNullOrEmpty(ingredient.Note?.Trim());
+
+    /// <summary>Сезоны — нормализованные строки в нижнем регистре.</summary>
+    private static List<string> NormalizeSeasons(List<string>? source) =>
+        NormalizeStrings(source).Select(s => s.ToLowerInvariant()).ToList();
 }

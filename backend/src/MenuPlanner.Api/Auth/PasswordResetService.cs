@@ -76,17 +76,13 @@ public sealed class PasswordResetService
             return new PasswordResetRequestResult(PasswordResetRequestOutcome.NotEligible, null, 0);
         }
 
-        var cooldown = TimeSpan.FromMinutes(_options.ResendCooldownMinutes);
         var latest = await _codes.LatestAsync(user.Id, AuthCodeType.Reset, ct);
-        if (cooldown > TimeSpan.Zero && latest is not null)
+        var left = AuthCodePolicy.CooldownSecondsLeft(
+            latest, now, TimeSpan.FromMinutes(_options.ResendCooldownMinutes));
+        if (left is { } seconds)
         {
-            var elapsed = now - latest.CreatedAt;
-            if (elapsed < cooldown)
-            {
-                var left = (int)Math.Ceiling((cooldown - elapsed).TotalSeconds);
-                await _codes.SaveAndCommitAsync(tx, ct);
-                return new PasswordResetRequestResult(PasswordResetRequestOutcome.TooSoon, null, left);
-            }
+            await _codes.SaveAndCommitAsync(tx, ct);
+            return new PasswordResetRequestResult(PasswordResetRequestOutcome.TooSoon, null, seconds);
         }
 
         var issued = await _codes.IssueAsync(user.Id, AuthCodeType.Reset, now, ct);

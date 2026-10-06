@@ -1,7 +1,5 @@
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Repetition;
@@ -34,8 +32,8 @@ public static class RecipeEndpoints
     private static async Task<IResult> ListAsync(
         string? scope,
         ClaimsPrincipal principal,
-        AppDbContext db,
         CurrentUserContext currentUser,
+        RecipeReader reader,
         SourceFamilyNameResolver sourceNames,
         ExternalRecipeSourceLoader sourceLoader,
         ExternalRecipeStateResolver stateResolver,
@@ -46,39 +44,10 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.Json(Array.Empty<RecipeSummaryDto>());
 
-        var counts = await RepetitionCountsAsync(principal, db, repetitionCounter, familyId.Value);
+        var counts = await repetitionCounter.CountForUserAsync(
+            CurrentUser.UserId(principal), familyId.Value);
 
-        var query = db.Recipes
-            .AsNoTracking()
-            .Where(r => r.FamilyId == familyId.Value);
-
-        query = scope switch
-        {
-            "own" => query.Where(r => r.SourceRecipeId == null),
-            "external" => query.Where(r => r.SourceRecipeId != null),
-            _ => query
-        };
-
-        var recipes = await query
-            .OrderBy(r => r.Name)
-            .Select(r => new
-            {
-                r.Id,
-                r.Name,
-                r.Difficulty,
-                r.Calories,
-                r.CookTimeMinutes,
-                r.Servings,
-                r.Tags,
-                r.Seasonality,
-                r.Diet,
-                r.PhotoPath,
-                r.SourceRecipeId,
-                r.SourceFamilyId,
-                r.SourceToken,
-                r.CopiedFromFamilyName
-            })
-            .ToListAsync();
+        var recipes = await reader.ListAsync(familyId.Value, scope);
 
         var liveSources = await sourceLoader.LoadSourcesAsync(
             recipes
@@ -106,9 +75,16 @@ public static class RecipeEndpoints
             .ToList();
         var sourceFamilyNames = await sourceNames.ResolveManyAsync(sourceFamilyIds);
 
+        // Внешний рецепт показывает живой контент источника целиком; у него самого
+        // кэшируется только Name, остальные поля могут быть пустыми/устаревшими.
+        var effective = recipes
+            .Select(r => ExternalRecipeContentResolver.Resolve(r, liveSources))
+            .ToList();
+
         var result = recipes
-            .Select(r =>
+            .Select((r, index) =>
             {
+                var content = effective[index];
                 var isExternal = r.SourceRecipeId is not null;
                 var state = isExternal
                     ? ExternalRecipeStateRules.Code(states[r.Id])
@@ -116,26 +92,12 @@ public static class RecipeEndpoints
                 var sourceFamilyName = isExternal && r.SourceFamilyId is Guid sourceFamilyId
                     ? sourceFamilyNames.GetValueOrDefault(sourceFamilyId)
                     : null;
-                // Внешний рецепт показывает живой контент источника целиком; у него самого
-                // кэшируется только Name, остальные поля могут быть пустыми/устаревшими.
-                Recipe? liveSource = null;
-                var hasLiveSource = isExternal
-                    && liveSources.TryGetValue(r.SourceRecipeId!.Value, out liveSource);
-                var name = hasLiveSource ? liveSource!.Name : r.Name;
-                var difficulty = hasLiveSource ? liveSource!.Difficulty : r.Difficulty;
-                var calories = hasLiveSource ? liveSource!.Calories : r.Calories;
-                var cookTimeMinutes = hasLiveSource ? liveSource!.CookTimeMinutes : r.CookTimeMinutes;
-                var servings = hasLiveSource ? liveSource!.Servings : r.Servings;
-                var tags = hasLiveSource ? liveSource!.Tags : r.Tags;
-                var seasonality = hasLiveSource ? liveSource!.Seasonality : r.Seasonality;
-                var diet = hasLiveSource ? liveSource!.Diet : r.Diet;
-                var photoPath = hasLiveSource ? liveSource!.PhotoPath : r.PhotoPath;
 
                 return new RecipeSummaryDto(
-                    r.Id, name, difficulty, calories, cookTimeMinutes, servings, tags,
-                    seasonality, diet,
+                    r.Id, content.Name, content.Difficulty, content.Calories, content.CookTimeMinutes,
+                    content.Servings, content.Tags, content.Seasonality, content.Diet,
                     counts.GetValueOrDefault(r.Id),
-                    PhotoUrl(photoPath),
+                    PhotoUrl(content.PhotoPath),
                     isExternal,
                     sourceFamilyName,
                     state,
@@ -149,8 +111,8 @@ public static class RecipeEndpoints
     private static async Task<IResult> GetAsync(
         Guid id,
         ClaimsPrincipal principal,
-        AppDbContext db,
         CurrentUserContext currentUser,
+        RecipeReader reader,
         SourceFamilyNameResolver sourceNames,
         ExternalRecipeStateResolver stateResolver,
         ExternalRecipeNameCache nameCache,
@@ -160,24 +122,18 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var recipe = await db.Recipes
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
+        var recipe = await reader.GetWithContentAsync(id, familyId.Value);
         if (recipe is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var counts = await RepetitionCountsAsync(principal, db, repetitionCounter, familyId.Value);
+        var counts = await repetitionCounter.CountForUserAsync(
+            CurrentUser.UserId(principal), familyId.Value);
         var repetition = counts.GetValueOrDefault(recipe.Id);
 
         if (recipe.SourceRecipeId is not Guid sourceId)
             return Results.Json(ToDto(recipe, repetition));
 
-        var source = await db.Recipes
-            .AsNoTracking()
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == sourceId);
+        var source = await reader.GetSourceWithContentAsync(sourceId);
 
         var sourceFamilyName = await sourceNames.ResolveAsync(recipe.SourceFamilyId);
 
@@ -221,33 +177,23 @@ public static class RecipeEndpoints
     }
 
     private static async Task<IResult> CreateAsync(
-        RecipeRequest request, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
+        RecipeRequest request,
+        ClaimsPrincipal principal,
+        CurrentUserContext currentUser,
+        RecipeMutationService mutations)
     {
-        var userId = CurrentUser.UserId(principal);
-        if (userId is null)
-            return Results.Unauthorized();
-
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Вы не состоите в семье."));
 
-        var error = RecipeValidation.Validate(request);
-        if (error is not null)
-            return Results.BadRequest(new RecipeErrorDto(error));
+        var result = await mutations.CreateAsync(familyId.Value, request);
+        if (result.Outcome == RecipeMutationOutcome.ValidationError)
+            return Results.BadRequest(new RecipeErrorDto(
+                result.Error ?? "Некорректные данные рецепта."));
 
-        var recipe = new Recipe
-        {
-            FamilyId = familyId.Value,
-            Name = "",
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-        RecipeValidation.Apply(recipe, request);
-
-        db.Recipes.Add(recipe);
-        await db.SaveChangesAsync();
-
-        return Results.Json(ToDto(recipe), statusCode: StatusCodes.Status201Created);
+        return Results.Json(
+            ToDto(result.Recipe!),
+            statusCode: StatusCodes.Status201Created);
     }
 
     private static async Task<IResult> UpdateAsync(
@@ -337,8 +283,8 @@ public static class RecipeEndpoints
     private static async Task<IResult> MatchAsync(
         RecipeMatchRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db,
         CurrentUserContext currentUser,
+        RecipeReader reader,
         ExternalRecipeSourceLoader sourceLoader)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
@@ -349,11 +295,7 @@ public static class RecipeEndpoints
         if (error is not null)
             return Results.BadRequest(new RecipeErrorDto(error));
 
-        var recipes = await db.Recipes
-            .AsNoTracking()
-            .Include(r => r.Ingredients)
-            .Where(r => r.FamilyId == familyId.Value)
-            .ToListAsync();
+        var recipes = await reader.MatchCandidatesAsync(familyId.Value);
 
         // Внешние рецепты подбираются по живому контенту источника, как свои.
         var liveSources = await sourceLoader.LoadSourcesAsync(
@@ -480,13 +422,14 @@ public static class RecipeEndpoints
     };
 
     private static async Task<IResult> RepetitionAsync(
-        ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser, RepetitionCounter repetitionCounter)
+        ClaimsPrincipal principal, CurrentUserContext currentUser, RepetitionCounter repetitionCounter)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.Json(Array.Empty<RecipeRepetitionDto>());
 
-        var counts = await RepetitionCountsAsync(principal, db, repetitionCounter, familyId.Value);
+        var counts = await repetitionCounter.CountForUserAsync(
+            CurrentUser.UserId(principal), familyId.Value);
 
         var result = counts
             .OrderByDescending(x => x.Value)
@@ -495,24 +438,5 @@ public static class RecipeEndpoints
             .ToList();
 
         return Results.Json(result);
-    }
-
-    private static async Task<Dictionary<Guid, int>> RepetitionCountsAsync(
-        ClaimsPrincipal principal, AppDbContext db, RepetitionCounter repetitionCounter, Guid familyId)
-    {
-        var userId = CurrentUser.UserId(principal);
-        var weeks = RepetitionRules.DefaultWindowWeeks;
-
-        if (userId is { } id)
-        {
-            var settings = await db.UserSettings
-                .AsNoTracking()
-                .FirstOrDefaultAsync(s => s.UserId == id);
-            if (settings is not null)
-                weeks = settings.RepetitionWindowWeeks;
-        }
-
-        var (windowStart, windowEnd) = RepetitionRules.Window(RepetitionRules.CurrentWeekStart(), weeks);
-        return await repetitionCounter.CountForFamilyAsync(familyId, windowStart, windowEnd);
     }
 }

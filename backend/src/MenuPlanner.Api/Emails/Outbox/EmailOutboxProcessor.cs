@@ -83,7 +83,7 @@ public sealed class EmailOutboxProcessor
 
     private async Task<int> ClaimAsync(Guid token, DateTime now, CancellationToken ct)
     {
-        if (_db.Database.IsRelational())
+        if (_db.SupportsRelationalLocking())
         {
             var leaseCutoff = now - TimeSpan.FromSeconds(_options.LeaseSeconds);
             return await _db.Database.ExecuteSqlRawAsync(

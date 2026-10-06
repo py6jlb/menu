@@ -1,8 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth;
@@ -21,7 +17,7 @@ public static class EmailVerificationEndpoints
 
     private static async Task<IResult> ResendVerificationAsync(
         ClaimsPrincipal principal,
-        AppDbContext db,
+        CurrentUserContext currentUser,
         EmailVerificationService verification,
         EmailDispatchTrigger dispatch,
         AuthCodeOptions options,
@@ -29,7 +25,7 @@ public static class EmailVerificationEndpoints
         TimeProvider clock,
         HttpContext http)
     {
-        var user = await CurrentUserAsync(principal, db);
+        var user = await currentUser.UserAsync(principal);
         if (user is null)
             return Results.Unauthorized();
 
@@ -67,10 +63,10 @@ public static class EmailVerificationEndpoints
     private static async Task<IResult> VerifyEmailAsync(
         VerifyEmailRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db,
+        CurrentUserContext currentUser,
         EmailVerificationService verification)
     {
-        var user = await CurrentUserAsync(principal, db);
+        var user = await currentUser.UserAsync(principal);
         if (user is null)
             return Results.Unauthorized();
 
@@ -95,13 +91,4 @@ public static class EmailVerificationEndpoints
         Results.Json(
             new ErrorDto("Слишком много неверных попыток. Попробуйте позже."),
             statusCode: StatusCodes.Status423Locked);
-
-    private static async Task<User?> CurrentUserAsync(ClaimsPrincipal principal, AppDbContext db)
-    {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        if (!Guid.TryParse(subject, out var userId))
-            return null;
-
-        return await db.Users.FirstOrDefaultAsync(u => u.Id == userId);
-    }
 }

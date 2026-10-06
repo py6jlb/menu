@@ -13,6 +13,29 @@ public sealed class RepetitionCounter
 
     public RepetitionCounter(AppDbContext db) => _db = db;
 
+    /// <summary>
+    /// Повторяемость семьи за окно, выбранное в настройках конкретного пользователя
+    /// (по умолчанию — <see cref="RepetitionRules.DefaultWindowWeeks"/>).
+    /// </summary>
+    public async Task<Dictionary<Guid, int>> CountForUserAsync(
+        Guid? userId,
+        Guid familyId,
+        CancellationToken cancellationToken = default)
+    {
+        var weeks = RepetitionRules.DefaultWindowWeeks;
+        if (userId is { } id)
+        {
+            var settings = await _db.UserSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(s => s.UserId == id, cancellationToken);
+            if (settings is not null)
+                weeks = settings.RepetitionWindowWeeks;
+        }
+
+        var (windowStart, windowEnd) = RepetitionRules.Window(RepetitionRules.CurrentWeekStart(), weeks);
+        return await CountForFamilyAsync(familyId, windowStart, windowEnd);
+    }
+
     public async Task<Dictionary<Guid, int>> CountForFamilyAsync(
         Guid familyId,
         DateOnly windowStart,

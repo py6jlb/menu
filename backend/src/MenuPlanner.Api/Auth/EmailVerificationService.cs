@@ -85,17 +85,13 @@ public sealed class EmailVerificationService
             return new ResendEmailResult(ResendEmailOutcome.Locked, null, 0);
         }
 
-        var cooldown = TimeSpan.FromMinutes(_options.ResendCooldownMinutes);
         var latest = await _codes.LatestAsync(user.Id, AuthCodeType.Verify, ct);
-        if (cooldown > TimeSpan.Zero && latest is not null)
+        var left = AuthCodePolicy.CooldownSecondsLeft(
+            latest, now, TimeSpan.FromMinutes(_options.ResendCooldownMinutes));
+        if (left is { } seconds)
         {
-            var elapsed = now - latest.CreatedAt;
-            if (elapsed < cooldown)
-            {
-                var left = (int)Math.Ceiling((cooldown - elapsed).TotalSeconds);
-                await _codes.SaveAndCommitAsync(tx, ct);
-                return new ResendEmailResult(ResendEmailOutcome.TooSoon, null, left);
-            }
+            await _codes.SaveAndCommitAsync(tx, ct);
+            return new ResendEmailResult(ResendEmailOutcome.TooSoon, null, seconds);
         }
 
         var issued = await _codes.IssueAsync(user.Id, AuthCodeType.Verify, now, ct);
