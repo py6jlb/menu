@@ -119,8 +119,13 @@ public sealed class PostgresPasswordResetTests : PostgresTestBase
     }
 
     private static PasswordResetService NewService(
-        AppDbContext db, AuthCodeOptions options, IAuthCodeGenerator generator) =>
-        new(new AuthCodeLifecycle(db, Hasher, generator), Hasher, options, new FakeTimeProvider(FixedNow));
+        AppDbContext db, AuthCodeOptions options, IAuthCodeGenerator generator)
+    {
+        var clock = new FakeTimeProvider(FixedNow);
+        return new PasswordResetService(
+            new AuthCodeLifecycle(db, Hasher, generator), Hasher, options, clock,
+            TestOutbox.NewOutbox(db, clock));
+    }
 
     private async Task<User> SeedVerifiedUserWithChallengeAsync(string code, DateTime createdAt)
     {

@@ -1,10 +1,9 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
-using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth;
 
@@ -24,8 +23,7 @@ public static class EmailVerificationEndpoints
         ClaimsPrincipal principal,
         AppDbContext db,
         EmailVerificationService verification,
-        EmailSender emailSender,
-        ILogger<EmailSender> logger,
+        EmailDispatchTrigger dispatch,
         AuthCodeOptions options,
         FixedWindowRateLimiter limiter,
         TimeProvider clock,
@@ -52,10 +50,12 @@ public static class EmailVerificationEndpoints
             return limited;
 
         var result = await verification.ResendAsync(user);
+        if (result.Outcome == ResendEmailOutcome.Sent)
+            await dispatch.TryDispatchAsync(http.RequestAborted);
+
         return result.Outcome switch
         {
-            ResendEmailOutcome.Sent => await SendAsync(
-                emailSender, logger, user.Email, result.Code!, http.RequestAborted),
+            ResendEmailOutcome.Sent => Results.Ok(),
             ResendEmailOutcome.AlreadyVerified => Results.Conflict(new ErrorDto("Почта уже подтверждена.")),
             ResendEmailOutcome.TooSoon => RateLimitResults.TooManyRequests(
                 result.RetryAfterSeconds,
@@ -86,28 +86,6 @@ public static class EmailVerificationEndpoints
                 "Этот код уже использован. Запросите новый код.", "used"),
             _ => BadCode("Неверный код. Проверьте и попробуйте снова.", "invalid")
         };
-    }
-
-    private static async Task<IResult> SendAsync(
-        EmailSender emailSender,
-        ILogger<EmailSender> logger,
-        string email,
-        string code,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            await emailSender.SendVerificationCodeAsync(email, code, cancellationToken);
-        }
-        catch (EmailDeliveryException failure)
-        {
-            EmailDeliveryFailure.LogSafe(logger, failure);
-            return Results.Json(
-                new ErrorDto(EmailDeliveryFailure.UserMessage),
-                statusCode: StatusCodes.Status503ServiceUnavailable);
-        }
-
-        return Results.Ok();
     }
 
     private static IResult BadCode(string message, string code) =>

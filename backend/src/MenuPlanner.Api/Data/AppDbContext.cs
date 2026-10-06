@@ -20,6 +20,7 @@ public class AppDbContext : DbContext
     public DbSet<PlanEntry> PlanEntries => Set<PlanEntry>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<AuthCode> AuthCodes => Set<AuthCode>();
+    public DbSet<EmailOutboxMessage> EmailOutboxMessages => Set<EmailOutboxMessage>();
     public DbSet<RecipeShare> RecipeShares => Set<RecipeShare>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -147,6 +148,26 @@ public class AppDbContext : DbContext
         authCode.HasOne(c => c.User)
             .WithMany()
             .HasForeignKey(c => c.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        var outbox = modelBuilder.Entity<EmailOutboxMessage>();
+
+        outbox.Property(m => m.Recipient).HasMaxLength(320).IsRequired();
+        outbox.Property(m => m.ProtectedPayload).HasMaxLength(2048).IsRequired();
+        outbox.Property(m => m.Type).HasConversion<string>().HasMaxLength(16);
+        outbox.Property(m => m.Status).HasConversion<string>().HasMaxLength(16);
+        outbox.Property(m => m.LastFailureReason).HasMaxLength(64);
+        outbox.Property(m => m.CreatedAt).HasColumnType("timestamp with time zone");
+        outbox.Property(m => m.NextAttemptAt).HasColumnType("timestamp with time zone");
+        outbox.Property(m => m.ClaimedAt).HasColumnType("timestamp with time zone");
+        outbox.HasIndex(m => new { m.Status, m.NextAttemptAt });
+        outbox.HasOne(m => m.User)
+            .WithMany()
+            .HasForeignKey(m => m.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        outbox.HasOne(m => m.AuthCode)
+            .WithMany()
+            .HasForeignKey(m => m.AuthCodeId)
             .OnDelete(DeleteBehavior.Cascade);
 
         var recipeShare = modelBuilder.Entity<RecipeShare>();

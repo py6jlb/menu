@@ -230,7 +230,8 @@ public sealed class PasswordResetServiceTests
         var clock = new FakeTimeProvider(Start);
         var generator = new QueueCodeGenerator(codes);
         var service = new PasswordResetService(
-            new AuthCodeLifecycle(db, Hasher, generator), Hasher, new AuthCodeOptions(), clock);
+            new AuthCodeLifecycle(db, Hasher, generator), Hasher, new AuthCodeOptions(), clock,
+            TestOutbox.NewOutbox(db, clock));
         return (service, db, clock, generator);
     }
 

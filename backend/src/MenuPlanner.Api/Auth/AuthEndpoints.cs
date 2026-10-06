@@ -2,10 +2,9 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
-using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth;
 
@@ -27,9 +26,8 @@ public static class AuthEndpoints
         AppDbContext db,
         IPasswordHasher<User> passwordHasher,
         JwtTokenService tokenService,
-        EmailSender emailSender,
         EmailVerificationService verification,
-        ILogger<EmailSender> logger,
+        EmailDispatchTrigger dispatch,
         AuthRateLimitOptions rateLimits,
         FixedWindowRateLimiter limiter,
         TimeProvider clock,
@@ -63,27 +61,19 @@ public static class AuthEndpoints
         // процедурой (AdminBootstrap), а не первым обратившимся.
         var user = new User
         {
+            Id = Guid.NewGuid(),
             Email = email,
             PasswordHash = passwordHasher.HashPassword(null!, password),
             Role = UserRole.User,
             CreatedAt = clock.GetUtcNow().UtcDateTime
         };
 
+        // Аккаунт, challenge и принятая к отправке доставка фиксируются одной
+        // транзакцией. Временная недоступность SMTP не мешает регистрации:
+        // сессия выдаётся сразу, письмо доводит фоновая очередь.
         db.Users.Add(user);
-        await db.SaveChangesAsync();
-
-        var code = await verification.IssueInitialCodeAsync(user);
-        try
-        {
-            await emailSender.SendVerificationCodeAsync(email, code, http.RequestAborted);
-        }
-        catch (EmailDeliveryException failure)
-        {
-            EmailDeliveryFailure.LogSafe(logger, failure);
-            return Results.Json(
-                new ErrorDto(EmailDeliveryFailure.UserMessage),
-                statusCode: StatusCodes.Status503ServiceUnavailable);
-        }
+        await verification.IssueInitialCodeAsync(user, http.RequestAborted);
+        await dispatch.TryDispatchAsync(http.RequestAborted);
 
         return Results.Json(
             new AuthResponse(tokenService.CreateToken(user), UserDto.From(user)),

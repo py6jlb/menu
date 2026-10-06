@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth;
 
@@ -24,8 +23,7 @@ public static class PasswordResetEndpoints
         PasswordResetCodeRequest request,
         AppDbContext db,
         PasswordResetService reset,
-        EmailSender emailSender,
-        ILogger<EmailSender> logger,
+        EmailDispatchTrigger dispatch,
         AuthCodeOptions options,
         FixedWindowRateLimiter limiter,
         TimeProvider clock,
@@ -49,19 +47,7 @@ public static class PasswordResetEndpoints
         {
             var result = await reset.RequestAsync(user);
             if (result.Outcome == PasswordResetRequestOutcome.Sent)
-            {
-                try
-                {
-                    await emailSender.SendPasswordResetCodeAsync(
-                        user.Email, result.Code!, http.RequestAborted);
-                }
-                catch (EmailDeliveryException failure)
-                {
-                    // Ответ остаётся нейтральным, иначе сбой отправки раскрыл бы
-                    // существование и подтверждённость аккаунта.
-                    EmailDeliveryFailure.LogSafe(logger, failure);
-                }
-            }
+                await dispatch.TryDispatchAsync(http.RequestAborted);
         }
 
         // Нейтральный ответ для существующих/неизвестных/неподтверждённых email.

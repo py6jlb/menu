@@ -7,6 +7,8 @@ using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Api.Tests;
 
 namespace MenuPlanner.Api.Tests.Postgres;
 
@@ -71,13 +73,17 @@ public sealed class PostgresAdminBootstrapTests : PostgresTestBase
             new AuthCodeLifecycle(db, Hasher, new QueueCodeGenerator("123456")),
             Hasher,
             new AuthCodeOptions(),
-            clock);
+            clock,
+            TestOutbox.NewOutbox(db, clock));
         var sender = new EmailSender(
             new EmailOptions { From = "noreply@example.com", FromName = "Тест" },
             new RecordingEmailTransport());
+        var outbox = new EmailOutboxProcessor(
+            db, sender, TestOutbox.Protector(), new EmailOutboxOptions(), clock,
+            NullLogger<EmailOutboxProcessor>.Instance);
 
         var bootstrap = new AdminBootstrap(
-            db, Hasher, verification, sender, clock, NullLogger<AdminBootstrap>.Instance);
+            db, Hasher, verification, outbox, clock, NullLogger<AdminBootstrap>.Instance);
 
         return await bootstrap.RunAsync(email, password);
     }

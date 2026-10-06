@@ -6,8 +6,10 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Tests;
 
@@ -83,6 +85,10 @@ public class ApiFactory : WebApplicationFactory<Program>
             if (configDescriptor is not null)
                 services.Remove(configDescriptor);
 
+            // Быстрые тесты детерминированы: отправку запускает явный dispatch,
+            // а не фоновый таймер.
+            RemoveEmailWorker(services);
+
             services.AddDbContext<AppDbContext>(options =>
             {
                 options.UseInMemoryDatabase(_databaseName, _databaseRoot)
@@ -108,6 +114,15 @@ public class ApiFactory : WebApplicationFactory<Program>
             {
             }
         }
+    }
+
+    internal static void RemoveEmailWorker(IServiceCollection services)
+    {
+        var worker = services.SingleOrDefault(
+            d => d.ServiceType == typeof(IHostedService)
+                && d.ImplementationType == typeof(EmailDeliveryWorker));
+        if (worker is not null)
+            services.Remove(worker);
     }
 
     private sealed class AutoVerifyEmailsInterceptor : SaveChangesInterceptor

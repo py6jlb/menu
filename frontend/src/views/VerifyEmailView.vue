@@ -63,7 +63,7 @@ async function resend() {
   try {
     const { response, data } = await resendVerification()
     if (response.status === 200) {
-      resendMessage.value = 'Код отправлен повторно.'
+      resendMessage.value = 'Запрос на отправку принят. Письмо придёт, когда почта будет доступна.'
       startCooldown(RESEND_COOLDOWN_SECONDS)
     } else if (response.status === 429) {
       const seconds = retryAfterSeconds(response, data)
@@ -94,8 +94,8 @@ onMounted(() => {
       <div class="auth-logo">✉️</div>
       <h2 class="auth-title">Подтвердите почту</h2>
       <p class="auth-sub">
-        Введите 6-значный код, который мы отправили на
-        <strong>{{ state.user?.email }}</strong>.
+        Мы приняли запрос на отправку кода на
+        <strong>{{ state.user?.email }}</strong>. Введите 6-значный код, когда письмо придёт.
       </p>
 
       <template v-if="isEmailVerified">
@@ -138,6 +138,10 @@ onMounted(() => {
             <template v-if="cooldown > 0">Отправить снова через {{ cooldownLabel }}</template>
             <template v-else>{{ resendPending ? 'Отправляем…' : 'Отправить код ещё раз' }}</template>
           </button>
+          <p class="hint">
+            Запрос принят, но письмо может задержаться. Если его нет, запросите код повторно
+            после таймера.
+          </p>
         </div>
 
         <p class="auth-alt">
@@ -201,6 +205,12 @@ onMounted(() => {
   flex-direction: column;
   gap: 0.75rem;
   margin-top: 1rem;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-faint);
 }
 
 .auth-alt {
