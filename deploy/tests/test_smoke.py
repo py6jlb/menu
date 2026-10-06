@@ -327,11 +327,11 @@ class ContainerHealthcheckTests(unittest.TestCase):
 class FrontendResilienceTests(unittest.TestCase):
     def test_transient_failure_does_not_discard_session(self):
         source = (ROOT / "frontend/src/api/client.js").read_text()
-        # Сессия очищается только по явному 401 (истёк/невалиден токен),
-        # но не по сетевому сбою или временному 5xx: повторный запрос не требует
-        # ручного удаления данных или сессии.
+        # Сессия гасится только по явному 401 (истёк/невалиден токен) и только
+        # для токена самого запроса, но не по сетевому сбою или временному 5xx:
+        # повторный запрос не требует ручного удаления данных или сессии.
         self.assertIn("response.status === 401", source)
-        self.assertEqual(source.count("clearSession()"), 1)
+        self.assertEqual(source.count("invalidateSession("), 1)
         self.assertEqual(source.count("localStorage"), 0)
 
 

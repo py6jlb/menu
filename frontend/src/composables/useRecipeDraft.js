@@ -7,8 +7,8 @@ import {
   deleteRecipePhoto
 } from '../api/recipes'
 import { parseList, joinList, combineDiets, splitDiets } from '../constants/recipe'
+import { LEAVE_MESSAGE } from './draftMessages'
 
-export const LEAVE_MESSAGE = 'Есть несохранённые изменения. Уйти без сохранения?'
 export const LOAD_ERROR_MESSAGE =
   'Не удалось загрузить рецепт. Проверьте соединение и попробуйте снова.'
 export const SAVE_ERROR_MESSAGE =

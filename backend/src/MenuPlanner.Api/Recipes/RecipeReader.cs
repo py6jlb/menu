@@ -148,6 +148,15 @@ public sealed class RecipeReader
             .ToList();
     }
 
+    /// <summary>Рецепты семьи как кандидаты подбора (с ингредиентами).</summary>
+    public Task<List<Recipe>> ReadMatchCandidatesAsync(
+        Guid familyId, CancellationToken cancellationToken = default) =>
+        _db.Recipes
+            .AsNoTracking()
+            .Include(r => r.Ingredients)
+            .Where(r => r.FamilyId == familyId)
+            .ToListAsync(cancellationToken);
+
     /// <summary>
     /// Подробный рецепт семьи или null, если его нет в этой семье. Живой источник читается
     /// с шагами и ингредиентами; при удалённом источнике контент не выдумывается —

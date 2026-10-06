@@ -89,7 +89,7 @@ public sealed class ExternalRecipePromotionService
             ?? await _sourceNames.ResolveAsync(wrapper.SourceFamilyId)
             ?? await _sourceNames.ResolveAsync(source.FamilyId);
 
-        return _db.Database.IsRelational()
+        return _db.SupportsRelationalLocking()
             ? await PromoteRelationalAsync(
                 target, sourceId, wrapper.Revision, source, copiedFromFamilyName, cancellationToken)
             : await PromoteTrackedAsync(target, source, copiedFromFamilyName, cancellationToken);

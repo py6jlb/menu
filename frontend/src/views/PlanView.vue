@@ -40,19 +40,23 @@ const pickerPortions = ref(1)
 const pickerLoading = ref(false)
 const pickerError = ref('')
 
-const filter = ref({
-  maxDifficulty: null,
-  maxCalories: '',
-  seasons: [],
-  diets: [],
-  maxCookTime: '',
-  ingredient: '',
-  tag: '',
-  preferSeasons: [],
-  preferDiets: [],
-  preferLowCalories: false,
-  preferLowComplexity: false
-})
+function emptyFilters() {
+  return {
+    maxDifficulty: null,
+    maxCalories: '',
+    seasons: [],
+    diets: [],
+    maxCookTime: '',
+    ingredient: '',
+    tag: '',
+    preferSeasons: [],
+    preferDiets: [],
+    preferLowCalories: false,
+    preferLowComplexity: false
+  }
+}
+
+const filter = ref(emptyFilters())
 
 const weekLabel = computed(() => weekRangeLabel(monday.value))
 const days = computed(() => weekDays(monday.value))
@@ -121,19 +125,7 @@ function toggleInList(list, value) {
 }
 
 function resetFilters() {
-  filter.value = {
-    maxDifficulty: null,
-    maxCalories: '',
-    seasons: [],
-    diets: [],
-    maxCookTime: '',
-    ingredient: '',
-    tag: '',
-    preferSeasons: [],
-    preferDiets: [],
-    preferLowCalories: false,
-    preferLowComplexity: false
-  }
+  filter.value = emptyFilters()
 }
 
 async function applyFilters() {

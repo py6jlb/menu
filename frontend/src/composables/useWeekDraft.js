@@ -1,11 +1,11 @@
 import { ref, computed } from 'vue'
 import { addDays, toIso } from '../constants/plan'
 import { getWeekPlan, saveWeekPlan } from '../api/plans'
+import { LEAVE_MESSAGE } from './draftMessages'
 
 export const LOAD_ERROR_MESSAGE = 'Не удалось загрузить план. Проверьте соединение и попробуйте снова.'
 export const SAVE_ERROR_MESSAGE = 'Не удалось сохранить план. Проверьте соединение и повторите.'
 export const FAMILY_ERROR_MESSAGE = 'Вы пока не состоите в семье.'
-export const LEAVE_MESSAGE = 'Есть несохранённые изменения. Уйти без сохранения?'
 export const CONFLICT_MESSAGE =
   'План на этой неделе изменил другой участник. Ваш черновик сохранён. Загрузите актуальную версию, чтобы сравнить и повторить.'
 export const RELOAD_CONFIRM_MESSAGE =

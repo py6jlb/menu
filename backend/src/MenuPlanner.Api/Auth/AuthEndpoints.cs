@@ -1,8 +1,5 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails.Outbox;
 
@@ -23,7 +20,7 @@ public static class AuthEndpoints
 
     private static async Task<IResult> RegisterAsync(
         RegisterRequest request,
-        AppDbContext db,
+        UserAccountStore users,
         IPasswordHasher<User> passwordHasher,
         JwtTokenService tokenService,
         EmailVerificationService verification,
@@ -53,7 +50,7 @@ public static class AuthEndpoints
         if (password.Length < PasswordPolicy.MinLength)
             return Results.BadRequest(new ErrorDto(PasswordPolicy.TooShortMessage));
 
-        if (await db.Users.AnyAsync(u => u.Email == email))
+        if (await users.EmailExistsAsync(email))
             return Results.Conflict(new ErrorDto("Пользователь с таким email уже существует."));
 
         // Публичная регистрация всегда выдаёт только роль Пользователя.
@@ -71,7 +68,7 @@ public static class AuthEndpoints
         // Аккаунт, challenge и принятая к отправке доставка фиксируются одной
         // транзакцией. Временная недоступность SMTP не мешает регистрации:
         // сессия выдаётся сразу, письмо доводит фоновая очередь.
-        db.Users.Add(user);
+        users.Add(user);
         await verification.IssueInitialCodeAsync(user, http.RequestAborted);
         await dispatch.TryDispatchAsync(http.RequestAborted);
 
@@ -82,7 +79,7 @@ public static class AuthEndpoints
 
     private static async Task<IResult> LoginAsync(
         LoginRequest request,
-        AppDbContext db,
+        UserAccountStore users,
         IPasswordHasher<User> passwordHasher,
         JwtTokenService tokenService,
         AuthRateLimitOptions rateLimits,
@@ -105,7 +102,7 @@ public static class AuthEndpoints
         if (limited is not null)
             return limited;
 
-        var user = await db.Users.SingleOrDefaultAsync(u => u.Email == email);
+        var user = await users.FindByEmailAsync(email);
         if (user is null)
             return Unauthorized();
 
@@ -116,13 +113,9 @@ public static class AuthEndpoints
         return Results.Json(new AuthResponse(tokenService.CreateToken(user), UserDto.From(user)));
     }
 
-    private static async Task<IResult> MeAsync(ClaimsPrincipal principal, AppDbContext db)
+    private static async Task<IResult> MeAsync(ClaimsPrincipal principal, CurrentUserContext currentUser)
     {
-        var subject = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        if (!Guid.TryParse(subject, out var userId))
-            return Results.Unauthorized();
-
-        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
+        var user = await currentUser.UserAsync(principal);
         if (user is null)
             return Results.Unauthorized();
 

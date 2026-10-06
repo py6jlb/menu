@@ -118,7 +118,7 @@ public sealed class AdminBootstrap
     private async Task<AdminBootstrapResult> CreateInitialAdminAsync(
         string email, string password, CancellationToken ct)
     {
-        if (!_db.Database.IsRelational())
+        if (!_db.SupportsRelationalLocking())
             return await CreateAsync(email, password, ct);
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);

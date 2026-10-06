@@ -103,7 +103,7 @@ public sealed class RecipeSharingService
 
         var now = _clock.GetUtcNow().UtcDateTime;
 
-        if (_db.Database.IsRelational())
+        if (_db.SupportsRelationalLocking())
         {
             // Атомарный отзыв: гонка двух отзывов и отзыва с перегенерацией
             // разрешается на уровне строки БД, а не перезаписью состояния.
@@ -136,7 +136,7 @@ public sealed class RecipeSharingService
         if (access != RecipeShareOutcome.Ok)
             return new(access);
 
-        if (_db.Database.IsRelational())
+        if (_db.SupportsRelationalLocking())
         {
             // Перегенерация — условное обновление по наблюдённому токену:
             // проигравшие гонку не выпускают свой токен, а сходятся на актуальном.
