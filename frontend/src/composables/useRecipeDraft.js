@@ -20,8 +20,20 @@ export const CONFLICT_MESSAGE =
 export const PHOTO_ERROR_MESSAGE =
   'Рецепт сохранён, но фото не удалось сохранить. Повторите действие с фото.'
 
+let ingredientSequence = 0
+
+/**
+ * Стабильная локальная identity строки ингредиента. Не участвует в сериализации
+ * черновика и в запросе на сохранение — нужна, чтобы таймеры и ответы
+ * автодополнения были привязаны к строке, а не к её индексу.
+ */
+export function nextIngredientId() {
+  ingredientSequence += 1
+  return `ingredient-${ingredientSequence}`
+}
+
 export function newIngredientDraft() {
-  return { name: '', amount: '', unit: 'g', note: '' }
+  return { uid: nextIngredientId(), name: '', amount: '', unit: 'g', note: '' }
 }
 
 /** Пустой черновик нового рецепта: только поля, значимые для сохранения. */
@@ -59,6 +71,7 @@ export function draftFromRecipe(data) {
     ingredients:
       data.ingredients && data.ingredients.length
         ? data.ingredients.map((i) => ({
+            uid: nextIngredientId(),
             name: i.name || '',
             amount: i.amount === null || i.amount === undefined ? '' : String(i.amount),
             unit: i.unit || 'g',

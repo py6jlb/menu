@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   useRecipeDraft,
+  newIngredientDraft,
   serializeDraft,
   draftToPayload,
   LOAD_ERROR_MESSAGE,
@@ -578,6 +579,39 @@ describe('useRecipeDraft — предупреждение об уходе', () =
     state.draft.value.name = 'важное'
 
     expect(state.confirmNavigation()).toBe(true)
+  })
+})
+
+describe('useRecipeDraft — identity ингредиентов', () => {
+  async function loaded() {
+    const state = make({
+      initialId: 'A',
+      loadRecipe: vi.fn().mockResolvedValue(ok(recipeData('A')))
+    })
+    await state.load()
+    return state
+  }
+
+  it('каждая строка получает уникальную непустую identity, переживающую перестановку', async () => {
+    const state = await loaded()
+    const uids = state.draft.value.ingredients.map((i) => i.uid)
+    expect(uids.every(Boolean)).toBe(true)
+    expect(new Set(uids).size).toBe(uids.length)
+
+    state.draft.value.ingredients.push(newIngredientDraft())
+    const addedUid = state.draft.value.ingredients.at(-1).uid
+    expect(addedUid).toBeTruthy()
+    expect(uids).not.toContain(addedUid)
+  })
+
+  it('identity не участвует в dirty и не попадает в запрос сохранения', async () => {
+    const state = await loaded()
+
+    state.draft.value.ingredients[0].uid = 'переписанный-uid'
+    expect(state.dirty.value).toBe(false)
+
+    const payload = draftToPayload(state.draft.value)
+    expect(payload.ingredients[0]).not.toHaveProperty('uid')
   })
 })
 

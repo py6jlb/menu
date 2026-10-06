@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { autocompleteIngredients } from '../api/ingredients'
 import { UNITS, SEASONS } from '../constants/recipe'
 import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
+import { useIngredientAutocomplete } from '../composables/useIngredientAutocomplete'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,22 +31,15 @@ const {
   confirmNavigation
 } = useRecipeDraft({ initialId: route.params.id || null })
 
+const autocomplete = useIngredientAutocomplete()
+
 const photoTarget = ref(null)
 
 const error = ref('')
 const visibleError = computed(() => error.value || saveError.value)
 
-const debounceTimers = new Map()
-
-function newIngredient() {
-  return {
-    ...newIngredientDraft(),
-    suggestions: [],
-    showSuggestions: false,
-    activeIndex: -1,
-    loadingSuggestions: false,
-    noSuggestions: false
-  }
+function ingredientState(ing) {
+  return autocomplete.stateFor(ing.uid)
 }
 
 const selectedPhotoPreview = ref('')
@@ -103,11 +96,12 @@ function moveStep(index, delta) {
 }
 
 function addIngredient() {
-  draft.value.ingredients.push(newIngredient())
+  draft.value.ingredients.push(newIngredientDraft())
 }
 
 function removeIngredient(index) {
-  clearDebounce(index)
+  const ing = draft.value.ingredients[index]
+  if (ing) autocomplete.release(ing.uid)
   draft.value.ingredients.splice(index, 1)
 }
 
@@ -119,81 +113,37 @@ function moveIngredient(index, delta) {
   draft.value.ingredients[target] = tmp
 }
 
-function clearDebounce(index) {
-  const timer = debounceTimers.get(index)
-  if (timer) {
-    clearTimeout(timer)
-    debounceTimers.delete(index)
-  }
+function closeSuggestions(ing) {
+  autocomplete.close(ing.uid)
 }
 
-function closeSuggestions(index) {
-  clearDebounce(index)
-  const ing = draft.value.ingredients[index]
-  if (!ing) return
-  ing.showSuggestions = false
-  ing.activeIndex = -1
+function onIngredientInput(ing) {
+  autocomplete.input(ing.uid, ing.name)
 }
 
-function onIngredientInput(index) {
-  const ing = draft.value.ingredients[index]
-  if (!ing) return
-  if (!ing.name.trim()) {
-    clearDebounce(index)
-    ing.suggestions = []
-    ing.showSuggestions = false
-    ing.noSuggestions = false
-    ing.activeIndex = -1
-    return
-  }
-  clearDebounce(index)
-  debounceTimers.set(index, setTimeout(() => fetchSuggestions(index), 150))
-}
-
-async function fetchSuggestions(index) {
-  const ing = draft.value.ingredients[index]
-  if (!ing) return
-  const query = ing.name.trim()
-  if (!query) return
-  ing.loadingSuggestions = true
-  ing.noSuggestions = false
-  const { response, data } = await autocompleteIngredients(query)
-  // Ответ устарел, если строка пересоздана или сменился сам ресурс.
-  if (draft.value.ingredients[index] !== ing || ing.name.trim() !== query) return
-  if (response.status === 200 && data) {
-    ing.suggestions = data.items || []
-    ing.showSuggestions = true
-    ing.activeIndex = -1
-    ing.noSuggestions = ing.suggestions.length === 0
-  } else {
-    ing.suggestions = []
-    ing.showSuggestions = false
-    ing.noSuggestions = false
-  }
-  ing.loadingSuggestions = false
-}
-
-function selectSuggestion(index, suggestion) {
-  const ing = draft.value.ingredients[index]
+function selectSuggestion(ing, suggestion) {
   ing.name = suggestion
-  closeSuggestions(index)
+  autocomplete.close(ing.uid)
 }
 
-function onSuggestionKeydown(index, event) {
-  const ing = draft.value.ingredients[index]
-  if (!ing || !ing.showSuggestions || ing.suggestions.length === 0) return
+function onSuggestionKeydown(ing, event) {
+  const state = autocomplete.stateFor(ing.uid)
+  if (!state.showSuggestions || state.suggestions.length === 0) return
   if (event.key === 'ArrowDown') {
     event.preventDefault()
-    ing.activeIndex = Math.min(ing.activeIndex + 1, ing.suggestions.length - 1)
+    autocomplete.moveActive(ing.uid, 1)
   } else if (event.key === 'ArrowUp') {
     event.preventDefault()
-    ing.activeIndex = Math.max(ing.activeIndex - 1, 0)
-  } else if (event.key === 'Enter' && ing.activeIndex >= 0) {
-    event.preventDefault()
-    selectSuggestion(index, ing.suggestions[ing.activeIndex])
+    autocomplete.moveActive(ing.uid, -1)
+  } else if (event.key === 'Enter') {
+    const pick = autocomplete.activeSuggestion(ing.uid)
+    if (pick) {
+      event.preventDefault()
+      selectSuggestion(ing, pick)
+    }
   } else if (event.key === 'Escape') {
     event.preventDefault()
-    closeSuggestions(index)
+    closeSuggestions(ing)
   }
 }
 
@@ -248,9 +198,16 @@ watch(
     if (id === editingId.value) return
     setIdentity(id)
     error.value = ''
-    clearDebounceAll()
+    autocomplete.reset()
     load()
   }
+)
+
+// Черновик заменяется при загрузке и сохранении: строки получают новую identity,
+// поэтому прежние таймеры и поздние ответы автодополнения обесцениваются.
+watch(
+  () => draft.value.ingredients,
+  () => autocomplete.reset()
 )
 
 onBeforeRouteLeave(() => confirmNavigation())
@@ -260,11 +217,6 @@ onBeforeRouteUpdate((to, from) => {
   return confirmNavigation()
 })
 
-function clearDebounceAll() {
-  debounceTimers.forEach((timer) => clearTimeout(timer))
-  debounceTimers.clear()
-}
-
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   if (isEdit.value) load()
@@ -272,7 +224,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
-  clearDebounceAll()
+  autocomplete.reset()
   if (selectedPhotoPreview.value) URL.revokeObjectURL(selectedPhotoPreview.value)
 })
 </script>
@@ -389,27 +341,27 @@ onBeforeUnmount(() => {
       <fieldset class="card fieldset">
         <legend>Ингредиенты</legend>
         <p class="hint">Количество и единица измерения указываются вместе. Примечание (например, «по вкусу») не влияет на расчёт.</p>
-        <div v-for="(ing, index) in draft.ingredients" :key="index" class="ingredient-row">
+        <div v-for="(ing, index) in draft.ingredients" :key="ing.uid" class="ingredient-row">
           <div class="ing-name-wrap">
             <input
               v-model="ing.name"
               type="text"
               placeholder="Название"
               class="ing-name"
-              @input="onIngredientInput(index)"
-              @keydown="onSuggestionKeydown(index, $event)"
-              @blur="closeSuggestions(index)"
+              @input="onIngredientInput(ing)"
+              @keydown="onSuggestionKeydown(ing, $event)"
+              @blur="closeSuggestions(ing)"
             />
-            <ul v-if="ing.showSuggestions" class="suggestions">
+            <ul v-if="ingredientState(ing).showSuggestions" class="suggestions">
               <li
-                v-for="(suggestion, sIndex) in ing.suggestions"
+                v-for="(suggestion, sIndex) in ingredientState(ing).suggestions"
                 :key="suggestion"
-                :class="{ active: sIndex === ing.activeIndex }"
-                @mousedown.prevent="selectSuggestion(index, suggestion)"
+                :class="{ active: sIndex === ingredientState(ing).activeIndex }"
+                @mousedown.prevent="selectSuggestion(ing, suggestion)"
               >
                 {{ suggestion }}
               </li>
-              <li v-if="ing.noSuggestions" class="no-suggestions">Нет подсказок</li>
+              <li v-if="ingredientState(ing).noSuggestions" class="no-suggestions">Нет подсказок</li>
             </ul>
           </div>
           <input v-model.number="ing.amount" type="number" min="0" step="0.01" placeholder="Кол-во" class="ing-amount" />
