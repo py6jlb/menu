@@ -18,6 +18,7 @@ public sealed record ObservabilityOptions
     public const int DefaultLogQueueSize = 2048;
     public const int DefaultLogBatchSize = 512;
     public const int DefaultExportTimeoutMilliseconds = 10_000;
+    public const int DefaultScheduledDelayMilliseconds = 5_000;
     public const int MinLogQueueSize = 256;
     public const int MinLogBatchSize = 1;
     public const int MinExportTimeoutMilliseconds = 1_000;

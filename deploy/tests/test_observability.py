@@ -127,7 +127,7 @@ class ObservabilityDocumentationTests(unittest.TestCase):
             "trace-id",
             "logs.sh",
             "10001:10001",
-            "min(3 дня",
+            "не более 10",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, readme)

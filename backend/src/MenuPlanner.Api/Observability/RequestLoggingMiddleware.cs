@@ -29,7 +29,7 @@ public sealed class RequestLoggingMiddleware
     {
         // trace-id захватывается до вызова конвейера: после завершения Activity
         // перестаёт быть текущей.
-        var traceId = Activity.Current?.TraceId.ToHexString() ?? context.TraceIdentifier;
+        var traceId = RequestTrace.Current(context);
         var started = Stopwatch.GetTimestamp();
         try
         {

@@ -24,7 +24,7 @@ exporters:
   file:
     path: /var/log/otel/logs.json
     # Ротация по размеру (50 МБ на файл) и возрасту (3 дня), не более 10 бэкапов.
-    # Фактическое окно = min(3 дня, 10 файлов × 50 МБ) — см. deploy/README.md.
+    # Хранение ограничено одновременно возрастом и числом файлов — см. deploy/README.md.
     rotation:
       max_megabytes: 50
       max_days: 3

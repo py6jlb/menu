@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Observability;
@@ -37,7 +36,7 @@ public sealed class ApiExceptionHandlingMiddleware
                 "Некорректный запрос {Method} {Path}. TraceId={TraceId}",
                 context.Request.Method,
                 SensitivePath.Minimize(context.Request.Path),
-                TraceId(context));
+                RequestTrace.Current(context));
 
             await WriteAsync(context, StatusCodes.Status400BadRequest,
                 "Некорректный запрос.", "malformed_request");
@@ -49,7 +48,7 @@ public sealed class ApiExceptionHandlingMiddleware
                 "Необработанная ошибка {Method} {Path}. TraceId={TraceId}",
                 context.Request.Method,
                 SensitivePath.Minimize(context.Request.Path),
-                TraceId(context));
+                RequestTrace.Current(context));
 
             await WriteAsync(context, StatusCodes.Status500InternalServerError,
                 "Внутренняя ошибка сервера.", "internal_error");
@@ -62,12 +61,9 @@ public sealed class ApiExceptionHandlingMiddleware
         context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/json; charset=utf-8";
         await context.Response.WriteAsJsonAsync(
-            new ApiErrorDto(message, code, TraceId(context)),
+            new ApiErrorDto(message, code, RequestTrace.Current(context)),
             context.RequestAborted);
     }
-
-    private static string TraceId(HttpContext context) =>
-        Activity.Current?.Id ?? context.TraceIdentifier;
 }
 
 /// <summary>Непредвиденный сбой: русский текст, машинный код и trace-id запроса.</summary>

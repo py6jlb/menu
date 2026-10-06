@@ -109,14 +109,10 @@ builder.Services.AddSingleton(services => new ShareOptions
 var observability = ObservabilityOptions.Read(builder.Configuration);
 builder.Services.AddSingleton(observability);
 
-var otelResource = ResourceBuilder.CreateDefault()
-    .AddService("menu-planner-api", serviceVersion: observability.Release.Id)
-    .AddAttributes(new[] { new KeyValuePair<string, object>("release.id", observability.Release.Id) });
+var otelResource = AddReleaseResource(ResourceBuilder.CreateDefault(), observability.Release.Id);
 
 builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource
-        .AddService("menu-planner-api", serviceVersion: observability.Release.Id)
-        .AddAttributes(new[] { new KeyValuePair<string, object>("release.id", observability.Release.Id) }))
+    .ConfigureResource(resource => AddReleaseResource(resource, observability.Release.Id))
     .WithTracing(tracing =>
     {
         // Activity и trace-id нужны для корреляции журналов всегда. Полные traces
@@ -143,7 +139,8 @@ if (observability.LogsExportEnabled)
             processor.BatchExportProcessorOptions.MaxExportBatchSize = observability.LogBatchSize;
             processor.BatchExportProcessorOptions.ExporterTimeoutMilliseconds =
                 observability.ExportTimeoutMilliseconds;
-            processor.BatchExportProcessorOptions.ScheduledDelayMilliseconds = 5_000;
+            processor.BatchExportProcessorOptions.ScheduledDelayMilliseconds =
+                ObservabilityOptions.DefaultScheduledDelayMilliseconds;
         });
     });
 }
@@ -238,6 +235,11 @@ await using (var scope = app.Services.CreateAsyncScope())
 }
 
 app.Run();
+
+static ResourceBuilder AddReleaseResource(ResourceBuilder resource, string releaseId) =>
+    resource
+        .AddService("menu-planner-api", serviceVersion: releaseId)
+        .AddAttributes(new[] { new KeyValuePair<string, object>("release.id", releaseId) });
 
 static JwtOptions ReadJwtOptions(ConfigurationManager configuration)
 {

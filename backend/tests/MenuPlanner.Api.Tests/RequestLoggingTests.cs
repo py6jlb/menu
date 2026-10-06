@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -45,5 +46,25 @@ public sealed class RequestLoggingTests
 
         var entry = Assert.Single(capture.Logs, l => l.Properties.ContainsKey("Operation"));
         Assert.Equal(Observability.ReleaseIdentity.UnknownId, entry.Properties["ReleaseId"]);
+    }
+
+    [Fact]
+    public async Task AuthRequest_DoesNotLogCredentialsOrCode()
+    {
+        const string email = "secret-person@example.com";
+        const string password = "P@ssw0rd-leak-check";
+        const string code = "424242";
+        using var factory = new ApiFactory();
+        var capture = new CapturingLoggerProvider();
+        factory.ConfigureTestServices = services =>
+            services.AddSingleton<ILoggerProvider>(capture);
+        using var client = factory.CreateClient();
+
+        await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        await client.PostAsJsonAsync("/api/auth/verify", new { code });
+
+        Assert.DoesNotContain(capture.Logs, l => l.Message.Contains(password));
+        Assert.DoesNotContain(capture.Logs, l => l.Message.Contains(email));
+        Assert.DoesNotContain(capture.Logs, l => l.Message.Contains(code));
     }
 }

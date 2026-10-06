@@ -92,6 +92,16 @@ public sealed class ReleaseIdentityTests : IDisposable
     }
 
     [Fact]
+    public void MutableLatestTag_IsNotAcceptedAsRelease()
+    {
+        var release = ReleaseIdentity.Resolve(Config(
+            (ReleaseIdentity.IdVariable, ReleaseIdentity.MutableTag)));
+
+        Assert.False(release.IsKnown);
+        Assert.Equal(ReleaseIdentity.UnknownId, release.Id);
+    }
+
+    [Fact]
     public void NoConfigurationAtAll_YieldsUnknown()
     {
         var release = ReleaseIdentity.Resolve(Config());

@@ -29,6 +29,9 @@ public sealed partial record ReleaseIdentity(string Id, ReleaseIdentitySource So
     public const string IdVariable = "RELEASE_ID";
     public const string ManifestPathVariable = "RELEASE_MANIFEST_PATH";
 
+    /// <summary>Плавающий тег — не конкретный релиз; как release-id не показывается.</summary>
+    public const string MutableTag = "latest";
+
     public static readonly ReleaseIdentity Unknown = new(UnknownId, ReleaseIdentitySource.Unavailable);
 
     public bool IsKnown => Source != ReleaseIdentitySource.Unavailable;
@@ -72,7 +75,9 @@ public sealed partial record ReleaseIdentity(string Id, ReleaseIdentitySource So
             : null;
 
     private static bool IsSafeId(string? value) =>
-        !string.IsNullOrEmpty(value) && SafeIdRegex().IsMatch(value);
+        !string.IsNullOrEmpty(value)
+        && !string.Equals(value, MutableTag, StringComparison.OrdinalIgnoreCase)
+        && SafeIdRegex().IsMatch(value);
 
     [GeneratedRegex("^[A-Za-z0-9._-]{1,128}$")]
     private static partial Regex SafeIdRegex();
