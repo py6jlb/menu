@@ -191,15 +191,51 @@ public sealed class RecipeValidationTests
     }
 
     [Fact]
-    public void ExcessiveCollections_AreRejected()
+    public void OverlongDescriptionAndIngredientName_AreRejected()
+    {
+        var longDescription = new string('о', RecipeCatalog.TextMaxLength + 1);
+        Assert.Equal(
+            "description_too_long",
+            RecipeValidation.Validate(Valid() with { Description = longDescription })!.Code);
+
+        var longIngredientName = new string('и', RecipeCatalog.IngredientNameMaxLength + 1);
+        var request = Valid() with
+        {
+            Ingredients = new List<RecipeIngredientRequest> { new(longIngredientName, 1m, "g", null) }
+        };
+        Assert.Equal("ingredient_name_too_long", RecipeValidation.Validate(request)!.Code);
+    }
+
+    [Fact]
+    public void OverlongTagAndDietLabel_AreRejected()
+    {
+        var longTag = new string('т', RecipeCatalog.TagMaxLength + 1);
+        Assert.Equal("tag_too_long", RecipeValidation.Validate(Valid() with { Tags = new List<string> { longTag } })!.Code);
+
+        var longDiet = new string('д', RecipeCatalog.DietMaxLength + 1);
+        Assert.Equal("diet_too_long", RecipeValidation.Validate(Valid() with { Diet = new List<string> { longDiet } })!.Code);
+    }
+
+    [Fact]
+    public void ExcessiveCollections_AreRejected_ByRawPayload()
     {
         var tags = Enumerable.Range(0, RecipeCatalog.TagsMax + 1).Select(i => $"тег{i}").ToList();
         Assert.Equal("tags_too_many", RecipeValidation.Validate(Valid() with { Tags = tags })!.Code);
+
+        // Повторяющиеся значения не должны обходить предел.
+        var duplicateTags = Enumerable.Range(0, RecipeCatalog.TagsMax + 1).Select(_ => "суп").ToList();
+        Assert.Equal("tags_too_many", RecipeValidation.Validate(Valid() with { Tags = duplicateTags })!.Code);
 
         var ingredients = Enumerable.Range(0, RecipeCatalog.IngredientsMax + 1)
             .Select(i => new RecipeIngredientRequest($"и{i}", 1m, "g", null))
             .ToList();
         Assert.Equal("ingredients_too_many", RecipeValidation.Validate(Valid() with { Ingredients = ingredients })!.Code);
+
+        var steps = Enumerable.Range(0, RecipeCatalog.StepsMax + 1).Select(i => new RecipeStepRequest($"ш{i}")).ToList();
+        Assert.Equal("steps_too_many", RecipeValidation.Validate(Valid() with { Steps = steps })!.Code);
+
+        var diets = Enumerable.Range(0, RecipeCatalog.DietsMax + 1).Select(i => $"диета{i}").ToList();
+        Assert.Equal("diets_too_many", RecipeValidation.Validate(Valid() with { Diet = diets })!.Code);
     }
 
     [Fact]

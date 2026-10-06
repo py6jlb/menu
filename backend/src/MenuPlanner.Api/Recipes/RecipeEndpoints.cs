@@ -211,7 +211,7 @@ public static class RecipeEndpoints
 
         var error = RecipeValidation.ValidateMatch(request);
         if (error is not null)
-            return Results.BadRequest(new RecipeErrorDto(error));
+            return RecipeErrors.Validation(error);
 
         // Единое актуальное чтение: живые внешние рецепты как свои, broken исключён,
         // состояние/происхождение разрешены модулем. Поиск по имени применяется до

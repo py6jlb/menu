@@ -73,6 +73,52 @@ public sealed class RecipeValidationFlowTests
     }
 
     [Fact]
+    public async Task AcceptedAmount_SurvivesUpdateRoundTrip()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+
+        var (_, created) = await PostAuthorizedAsync<RecipeDto>(
+            client, owner.Token, "/api/recipes", Request(amount: 1m));
+
+        var (updateResponse, updated) = await PutAuthorizedAsync<RecipeDto>(
+            client, owner.Token, $"/api/recipes/{created!.Id}",
+            Request(amount: 99999999.99m) with { Revision = created.Revision });
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+        var (_, detail) = await GetAuthorizedAsync<RecipeDto>(
+            client, owner.Token, $"/api/recipes/{created.Id}");
+        Assert.Equal(99999999.99m, detail!.Ingredients.Single().Amount);
+    }
+
+    [Fact]
+    public async Task FamilyName_AboveStorageLimit_ReturnsFieldError()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+
+        var (response, error) = await PostAuthorizedAsync<FamilyErrorDto>(
+            client, owner.Token, "/api/families", new { name = new string('С', 201) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("family_name_too_long", error!.Code);
+        Assert.Equal("name", error.Field);
+    }
+
+    [Fact]
+    public async Task Email_AboveStorageLimit_IsRejected()
+    {
+        using var client = new ApiFactory().CreateClient();
+
+        var localPart = new string('a', 310);
+        var response = await client.PostAsJsonAsync("/api/auth/register",
+            new { email = $"{localPart}@example.com", password = "secret1" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task NullCollectionElements_AreIgnoredNotFatal()
     {
         using var client = new ApiFactory().CreateClient();
@@ -189,6 +235,17 @@ public sealed class RecipeValidationFlowTests
         HttpClient client, string token, string path, object? body)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (body is not null)
+            request.Content = JsonContent.Create(body);
+        var response = await client.SendAsync(request);
+        return (response, await ReadJsonAsync<T>(response));
+    }
+
+    private static async Task<(HttpResponseMessage Response, T? Data)> PutAuthorizedAsync<T>(
+        HttpClient client, string token, string path, object? body)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         if (body is not null)
             request.Content = JsonContent.Create(body);

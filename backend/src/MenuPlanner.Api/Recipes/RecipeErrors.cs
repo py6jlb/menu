@@ -20,7 +20,8 @@ public static class RecipeErrors
 
     /// <summary>Клиент не передал ожидаемую ревизию.</summary>
     public static IResult MissingRevision() =>
-        Results.BadRequest(new RecipeErrorDto(RecipeRevisionRules.MissingMessage));
+        Results.BadRequest(new RecipeValidationErrorDto(
+            RecipeRevisionRules.MissingMessage, "revision_missing"));
 
     /// <summary>
     /// Ошибка ввода: русский текст, машинный код и путь поля, чтобы клиент показал

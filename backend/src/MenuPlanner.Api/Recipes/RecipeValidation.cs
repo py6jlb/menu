@@ -17,7 +17,7 @@ public sealed record RecipeFieldError(string Code, string Message, string? Field
 /// </summary>
 public static class RecipeValidation
 {
-    public static string? ValidateMatch(RecipeMatchRequest request)
+    public static RecipeFieldError? ValidateMatch(RecipeMatchRequest request)
     {
         var filters = request.Filters;
         if (filters is null)
@@ -25,21 +25,33 @@ public static class RecipeValidation
 
         if (filters.MaxDifficulty is { } maxDifficulty &&
             maxDifficulty is < RecipeCatalog.DifficultyMin or > RecipeCatalog.DifficultyMax)
-            return $"Максимальная сложность должна быть от {RecipeCatalog.DifficultyMin} до {RecipeCatalog.DifficultyMax}.";
+            return new(
+                "match_difficulty_range",
+                $"Максимальная сложность должна быть от {RecipeCatalog.DifficultyMin} до {RecipeCatalog.DifficultyMax}.",
+                "filters.maxDifficulty");
 
         if (filters.MaxCalories is { } maxCalories && maxCalories < 0)
-            return "Максимальная калорийность не может быть отрицательной.";
+            return new(
+                "match_calories_range",
+                "Максимальная калорийность не может быть отрицательной.",
+                "filters.maxCalories");
 
         if (filters.MaxCookTimeMinutes is { } maxCookTime && maxCookTime < 0)
-            return "Максимальное время приготовления не может быть отрицательным.";
+            return new(
+                "match_cook_time_range",
+                "Максимальное время приготовления не может быть отрицательным.",
+                "filters.maxCookTimeMinutes");
 
         foreach (var season in filters.Seasons ?? new List<string>())
         {
             if (season is null)
-                return "Недопустимое значение сезона.";
+                return new("match_season_invalid", "Недопустимое значение сезона.", "filters.seasons");
             var normalized = season.Trim().ToLowerInvariant();
             if (!RecipeCatalog.Seasons.Contains(normalized))
-                return $"Недопустимое значение сезона: «{season}».";
+                return new(
+                    "match_season_invalid",
+                    $"Недопустимое значение сезона: «{season}».",
+                    "filters.seasons");
         }
 
         return null;
@@ -161,13 +173,15 @@ public static class RecipeValidation
                 $"Калорийность должна быть в диапазоне от 0 до {RecipeCatalog.CaloriesMax}.",
                 "calories");
 
-        var steps = NonNullElements(request.Steps).ToList();
-        if (steps.Count > RecipeCatalog.StepsMax)
+        // Предел считается по сырому payload, а не по нормализованному набору:
+        // тысячи дублей/пустых элементов не должны проходить guard.
+        if ((request.Steps?.Count ?? 0) > RecipeCatalog.StepsMax)
             return new(
                 "steps_too_many",
                 $"Слишком много шагов (максимум {RecipeCatalog.StepsMax}).",
                 "steps");
 
+        var steps = NonNullElements(request.Steps).ToList();
         var stepTexts = steps
             .Select(s => s.Text?.Trim())
             .Where(t => !string.IsNullOrEmpty(t))
@@ -180,12 +194,13 @@ public static class RecipeValidation
                 $"Текст шага не должен превышать {RecipeCatalog.TextMaxLength} символов.",
                 "steps");
 
-        var tags = NormalizeStrings(request.Tags);
-        if (tags.Count > RecipeCatalog.TagsMax)
+        if ((request.Tags?.Count ?? 0) > RecipeCatalog.TagsMax)
             return new(
                 "tags_too_many",
                 $"Слишком много тегов (максимум {RecipeCatalog.TagsMax}).",
                 "tags");
+
+        var tags = NormalizeStrings(request.Tags);
         if (tags.Any(t => t.Length > RecipeCatalog.TagMaxLength))
             return new(
                 "tag_too_long",
@@ -200,25 +215,26 @@ public static class RecipeValidation
                 $"Недопустимое значение сезона: «{invalidSeason}».",
                 "seasonality");
 
-        var diet = DietCatalog.NormalizeAll(request.Diet);
-        if (diet.Count > RecipeCatalog.DietsMax)
+        if ((request.Diet?.Count ?? 0) > RecipeCatalog.DietsMax)
             return new(
                 "diets_too_many",
                 $"Слишком много меток диеты (максимум {RecipeCatalog.DietsMax}).",
                 "diet");
+
+        var diet = DietCatalog.NormalizeAll(request.Diet);
         if (diet.Any(d => d.Length > RecipeCatalog.DietMaxLength))
             return new(
                 "diet_too_long",
                 $"Метки диеты не должны превышать {RecipeCatalog.DietMaxLength} символов.",
                 "diet");
 
-        var ingredients = NonNullElements(request.Ingredients).ToList();
-        if (ingredients.Count > RecipeCatalog.IngredientsMax)
+        if ((request.Ingredients?.Count ?? 0) > RecipeCatalog.IngredientsMax)
             return new(
                 "ingredients_too_many",
                 $"Слишком много ингредиентов (максимум {RecipeCatalog.IngredientsMax}).",
                 "ingredients");
 
+        var ingredients = NonNullElements(request.Ingredients).ToList();
         for (var index = 0; index < ingredients.Count; index++)
         {
             var ing = ingredients[index];

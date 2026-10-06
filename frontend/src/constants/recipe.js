@@ -107,3 +107,39 @@ export function parseList(value) {
 export function joinList(items) {
   return (items || []).join(', ')
 }
+
+const FIELD_LABELS = {
+  name: 'Название',
+  description: 'Описание',
+  cookTimeMinutes: 'Время приготовления',
+  servings: 'Порции',
+  difficulty: 'Сложность',
+  calories: 'Калорийность',
+  steps: 'Шаги',
+  tags: 'Теги',
+  seasonality: 'Сезонность',
+  diet: 'Диеты',
+  ingredients: 'Ингредиенты'
+}
+
+const INGREDIENT_FIELD_LABELS = {
+  name: 'название',
+  amount: 'количество',
+  unit: 'единица измерения',
+  note: 'примечание'
+}
+
+/**
+ * Человекочитаемая подпись пути поля из серверной ошибки ввода, чтобы причина
+ * была привязана к конкретному вводу, а не только к форме целиком.
+ */
+export function recipeFieldLabel(field) {
+  if (!field) return ''
+  const match = /^ingredients\[(\d+)\](?:\.(\w+))?$/.exec(field)
+  if (match) {
+    const base = `Ингредиент ${Number(match[1]) + 1}`
+    const part = match[2] ? INGREDIENT_FIELD_LABELS[match[2]] || match[2] : ''
+    return part ? `${base}: ${part}` : base
+  }
+  return FIELD_LABELS[field] || field
+}

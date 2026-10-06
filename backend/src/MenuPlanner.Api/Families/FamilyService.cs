@@ -35,9 +35,6 @@ public sealed class FamilyService
 {
     private const string AlreadyMemberError = "Вы уже состоите в семье.";
 
-    /// <summary>Согласовано с хранилищем: Family.Name — varchar(200).</summary>
-    public const int NameMaxLength = 200;
-
     private readonly AppDbContext _db;
 
     public FamilyService(AppDbContext db) => _db = db;
@@ -52,10 +49,10 @@ public sealed class FamilyService
         if (string.IsNullOrEmpty(trimmed))
             return new FamilyAccess(
                 FamilyOutcome.Invalid, Error: "Укажите название семьи.", Code: "family_name_required", Field: "name");
-        if (trimmed.Length > NameMaxLength)
+        if (trimmed.Length > FamilyCatalog.NameMaxLength)
             return new FamilyAccess(
                 FamilyOutcome.Invalid,
-                Error: $"Название семьи не должно превышать {NameMaxLength} символов.",
+                Error: $"Название семьи не должно превышать {FamilyCatalog.NameMaxLength} символов.",
                 Code: "family_name_too_long",
                 Field: "name");
 

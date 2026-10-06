@@ -8,7 +8,8 @@ import {
   PHOTO_ACCEPT,
   PHOTO_MAX_LABEL,
   PHOTO_TYPES_LABEL,
-  validatePhotoFile
+  validatePhotoFile,
+  recipeFieldLabel
 } from '../constants/recipe'
 import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
 import { useIngredientAutocomplete } from '../composables/useIngredientAutocomplete'
@@ -45,31 +46,7 @@ const autocomplete = useIngredientAutocomplete()
 const error = ref('')
 const photoValidationError = ref('')
 const visibleError = computed(() => error.value || saveError.value)
-const fieldErrorLabel = computed(() => fieldLabel(saveErrorField.value))
-
-const FIELD_LABELS = {
-  name: 'Название',
-  description: 'Описание',
-  cookTimeMinutes: 'Время приготовления',
-  servings: 'Порции',
-  difficulty: 'Сложность',
-  calories: 'Калорийность',
-  steps: 'Шаги',
-  tags: 'Теги',
-  seasonality: 'Сезонность',
-  diet: 'Диеты',
-  ingredients: 'Ингредиенты'
-}
-
-function fieldLabel(field) {
-  if (!field) return ''
-  const match = field.match(/^(ingredients|entries)\[(\d+)\](?:\.(\w+))?$/)
-  if (match) {
-    const base = match[1] === 'ingredients' ? 'Ингредиент' : 'Запись плана'
-    return `${base} ${Number(match[2]) + 1}${match[3] ? `.${match[3]}` : ''}`
-  }
-  return FIELD_LABELS[field] || field
-}
+const fieldErrorLabel = computed(() => recipeFieldLabel(saveErrorField.value))
 
 function ingredientState(ing) {
   return autocomplete.stateFor(ing.uid)
