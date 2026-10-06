@@ -25,52 +25,52 @@ function resetSuggestionState(state) {
 /**
  * Автодополнение ингредиентов, привязанное к стабильной identity строки.
  *
- * Состояние каждой строки живёт в отдельной записи по её `id` (uid), а не по
- * индексу. Каждый запрос получает собственный токен: если строка изменилась,
- * была удалена или список закрыли, поздний ответ не может открыть список или
- * подменить более новый результат. `reset()` обесценивает все токены и
- * очищает таймеры при смене рецепта или уходе со страницы.
+ * Состояние каждой строки живёт в одной записи по её `id` (uid), а не по
+ * индексу: `{ state, timer, token, query }`. Каждый запрос получает собственный
+ * токен и query, поэтому ответ устаревшего текста, удалённой или переставленной
+ * строки не может открыть список или подменить более новый результат.
+ * `reset()` очищает таймеры и обесценивает все записи при смене рецепта или
+ * уходе со страницы.
  */
 export function useIngredientAutocomplete(options = {}) {
   const request = options.request || autocompleteIngredients
   const delay = options.delay ?? AUTOCOMPLETE_DELAY
 
-  const states = new Map()
-  const timers = new Map()
-  const tokens = new Map()
+  const records = new Map()
   let tokenSequence = 0
 
-  function stateFor(id) {
-    let state = states.get(id)
-    if (!state) {
-      state = reactive(createSuggestionState())
-      states.set(id, state)
+  function recordFor(id) {
+    let record = records.get(id)
+    if (!record) {
+      record = { state: reactive(createSuggestionState()), timer: undefined, token: 0, query: '' }
+      records.set(id, record)
     }
-    return state
+    return record
   }
 
-  function nextToken(id) {
-    tokenSequence += 1
-    tokens.set(id, tokenSequence)
-    return tokenSequence
+  function stateFor(id) {
+    return recordFor(id).state
   }
 
-  function isCurrent(id, token) {
-    return tokens.get(id) === token
+  function isCurrent(id, token, query) {
+    const record = records.get(id)
+    return Boolean(record) && record.token === token && record.query === query
   }
 
   function cancelTimer(id) {
-    const timer = timers.get(id)
-    if (timer !== undefined) {
-      clearTimeout(timer)
-      timers.delete(id)
+    const record = records.get(id)
+    if (record && record.timer !== undefined) {
+      clearTimeout(record.timer)
+      record.timer = undefined
     }
   }
 
   async function run(id, query, token) {
-    timers.delete(id)
-    if (!isCurrent(id, token)) return
-    const state = stateFor(id)
+    const record = records.get(id)
+    if (record) record.timer = undefined
+    if (!isCurrent(id, token, query)) return
+
+    const state = records.get(id).state
     state.loading = true
     state.noSuggestions = false
 
@@ -78,85 +78,70 @@ export function useIngredientAutocomplete(options = {}) {
     try {
       result = await request(query)
     } catch {
-      if (!isCurrent(id, token)) return
-      state.loading = false
-      state.suggestions = []
-      state.showSuggestions = false
-      state.activeIndex = -1
-      state.noSuggestions = false
+      if (!isCurrent(id, token, query)) return
+      resetSuggestionState(records.get(id).state)
       return
     }
 
-    if (!isCurrent(id, token)) return
-    state.loading = false
+    if (!isCurrent(id, token, query)) return
+    const current = records.get(id).state
+    current.loading = false
     const response = result?.response
     const data = result?.data
     if (response?.status === 200 && data) {
-      state.suggestions = data.items || []
-      state.showSuggestions = true
-      state.activeIndex = -1
-      state.noSuggestions = state.suggestions.length === 0
+      current.suggestions = data.items || []
+      current.showSuggestions = true
+      current.activeIndex = -1
+      current.noSuggestions = current.suggestions.length === 0
     } else {
-      state.suggestions = []
-      state.showSuggestions = false
-      state.activeIndex = -1
-      state.noSuggestions = false
+      resetSuggestionState(current)
     }
   }
 
-  /** Реакция на ввод в строке: дебаунс и запрос за актуальным query. */
+  /** Реакция на ввод: дебаунс, свежий токен и отказ от подсказок прошлого текста. */
   function input(id, rawQuery) {
     cancelTimer(id)
+    const record = recordFor(id)
     const query = (rawQuery || '').trim()
-    const state = stateFor(id)
-    const token = nextToken(id)
-    if (!query) {
-      resetSuggestionState(state)
-      return
-    }
-    state.noSuggestions = false
-    timers.set(
-      id,
-      setTimeout(() => run(id, query, token), delay)
-    )
+    record.token = ++tokenSequence
+    record.query = query
+    resetSuggestionState(record.state)
+    if (!query) return
+    record.timer = setTimeout(() => run(id, query, record.token), delay)
   }
 
   /** Закрыть список (blur, Escape, выбор) и обесценить отправленный ответ. */
   function close(id) {
     cancelTimer(id)
-    nextToken(id)
-    const state = stateFor(id)
-    state.showSuggestions = false
-    state.activeIndex = -1
-    state.loading = false
+    const record = recordFor(id)
+    record.token = ++tokenSequence
+    record.query = ''
+    resetSuggestionState(record.state)
   }
 
-  /** Строка удалена: убрать таймер, ответы и состояние. */
+  /** Строка удалена: убрать таймер и состояние. */
   function release(id) {
     cancelTimer(id)
-    nextToken(id)
-    states.delete(id)
-    timers.delete(id)
-    tokens.delete(id)
+    records.delete(id)
   }
 
   /** Смена рецепта/уход со страницы: очистить таймеры и обесценить все ответы. */
   function reset() {
-    timers.forEach((timer) => clearTimeout(timer))
-    timers.clear()
-    states.clear()
-    tokens.clear()
+    records.forEach((record) => {
+      if (record.timer !== undefined) clearTimeout(record.timer)
+    })
+    records.clear()
   }
 
   function moveActive(id, delta) {
-    const state = states.get(id)
+    const state = records.get(id)?.state
     if (!state || state.suggestions.length === 0) return
     const last = state.suggestions.length - 1
     state.activeIndex = Math.max(0, Math.min(last, state.activeIndex + delta))
   }
 
   function activeSuggestion(id) {
-    const state = states.get(id)
+    const state = records.get(id)?.state
     if (!state || state.activeIndex < 0) return null
     return state.suggestions[state.activeIndex] ?? null
   }

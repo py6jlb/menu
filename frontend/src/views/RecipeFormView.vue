@@ -38,10 +38,6 @@ const photoTarget = ref(null)
 const error = ref('')
 const visibleError = computed(() => error.value || saveError.value)
 
-function newIngredient() {
-  return newIngredientDraft()
-}
-
 function ingredientState(ing) {
   return autocomplete.stateFor(ing.uid)
 }
@@ -100,7 +96,7 @@ function moveStep(index, delta) {
 }
 
 function addIngredient() {
-  draft.value.ingredients.push(newIngredient())
+  draft.value.ingredients.push(newIngredientDraft())
 }
 
 function removeIngredient(index) {
@@ -205,6 +201,13 @@ watch(
     autocomplete.reset()
     load()
   }
+)
+
+// Черновик заменяется при загрузке и сохранении: строки получают новую identity,
+// поэтому прежние таймеры и поздние ответы автодополнения обесцениваются.
+watch(
+  () => draft.value.ingredients,
+  () => autocomplete.reset()
 )
 
 onBeforeRouteLeave(() => confirmNavigation())

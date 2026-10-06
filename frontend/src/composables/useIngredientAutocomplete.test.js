@@ -118,19 +118,37 @@ describe('useIngredientAutocomplete — дебаунс и актуальност
   })
 
   it('перестановка строк сохраняет подсказки за identity, а не за индексом', async () => {
+    const request = vi.fn((query) => Promise.resolve(ok([query])))
+    const autocomplete = make({ request })
+    const rows = [{ uid: 'r1', name: 'лук' }, { uid: 'r2', name: 'соль' }]
+
+    autocomplete.input(rows[0].uid, rows[0].name)
+    autocomplete.input(rows[1].uid, rows[1].name)
+    // Перестановка строк до срабатывания таймеров не должна путать их подсказки.
+    rows.reverse()
+    await vi.advanceTimersByTimeAsync(150)
+
+    expect(autocomplete.stateFor('r1').suggestions).toEqual(['лук'])
+    expect(autocomplete.stateFor('r2').suggestions).toEqual(['соль'])
+  })
+
+  it('пока идёт дебаунс, подсказки прошлого текста не показываются', async () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce(ok(['лук']))
-      .mockResolvedValueOnce(ok(['соль']))
+      .mockResolvedValueOnce(ok(['луковый суп']))
     const autocomplete = make({ request })
 
     autocomplete.input('r1', 'лук')
-    autocomplete.input('r2', 'соль')
     await vi.advanceTimersByTimeAsync(150)
+    expect(autocomplete.stateFor('r1').showSuggestions).toBe(true)
 
-    // Перестановка — операция вью над массивом; identity строк не меняется.
-    expect(autocomplete.stateFor('r1').suggestions).toEqual(['лук'])
-    expect(autocomplete.stateFor('r2').suggestions).toEqual(['соль'])
+    autocomplete.input('r1', 'луков')
+    expect(autocomplete.stateFor('r1').showSuggestions).toBe(false)
+    expect(autocomplete.stateFor('r1').suggestions).toEqual([])
+
+    await vi.advanceTimersByTimeAsync(150)
+    expect(autocomplete.stateFor('r1').suggestions).toEqual(['луковый суп'])
   })
 })
 
@@ -168,6 +186,26 @@ describe('useIngredientAutocomplete — закрытие и выбор', () => {
     await flush()
 
     expect(autocomplete.stateFor('r1').showSuggestions).toBe(false)
+  })
+
+  it('выбор подсказки во время запроса не открывает список поздним ответом', async () => {
+    const pending = deferred()
+    const request = vi.fn().mockImplementation(() => pending.promise)
+    const autocomplete = make({ request })
+    const row = { uid: 'r1', name: 'л' }
+
+    autocomplete.input(row.uid, row.name)
+    await vi.advanceTimersByTimeAsync(150)
+    // Выбор подсказки: имя строки обновляется, список закрывается.
+    row.name = 'лук'
+    autocomplete.close(row.uid)
+
+    pending.resolve(ok(['лук']))
+    await flush()
+
+    expect(row.name).toBe('лук')
+    expect(autocomplete.stateFor(row.uid).showSuggestions).toBe(false)
+    expect(autocomplete.stateFor(row.uid).suggestions).toEqual([])
   })
 
   it('закрытие отменяет ещё не отправленный debounce', async () => {
