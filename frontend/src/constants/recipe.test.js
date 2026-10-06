@@ -2,11 +2,14 @@ import { describe, it, expect } from 'vitest'
 import {
   DIETS,
   PHOTO_MAX_BYTES,
+  PHOTO_MAX_DIMENSION,
+  PHOTO_MAX_PIXELS,
   PHOTO_TYPES,
   combineDiets,
   dietLabel,
   recipeFieldLabel,
   splitDiets,
+  validatePhotoDimensions,
   validatePhotoFile
 } from './recipe'
 
@@ -27,6 +30,28 @@ describe('validatePhotoFile', () => {
 
   it('пустое значение не считается ошибкой', () => {
     expect(validatePhotoFile(null)).toBe('')
+  })
+})
+
+describe('validatePhotoDimensions', () => {
+  it('принимает изображение в пределах стороны и пикселей', () => {
+    expect(validatePhotoDimensions(4032, 3024)).toBe('')
+  })
+
+  it('отклоняет слишком большую сторону', () => {
+    expect(validatePhotoDimensions(PHOTO_MAX_DIMENSION + 1, 1)).toMatch(/большое/i)
+    expect(validatePhotoDimensions(1, PHOTO_MAX_DIMENSION + 1)).toMatch(/большое/i)
+  })
+
+  it('отклоняет слишком много пикселей при допустимых сторонах', () => {
+    const side = Math.ceil(Math.sqrt(PHOTO_MAX_PIXELS)) + 1
+    expect(side).toBeLessThanOrEqual(PHOTO_MAX_DIMENSION)
+    expect(validatePhotoDimensions(side, side)).toMatch(/большое/i)
+  })
+
+  it('неизвестные размеры считаются ошибкой', () => {
+    expect(validatePhotoDimensions(0, 100)).toMatch(/размер/i)
+    expect(validatePhotoDimensions(undefined, 100)).toMatch(/размер/i)
   })
 })
 

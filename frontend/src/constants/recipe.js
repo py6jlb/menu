@@ -84,6 +84,9 @@ export const PHOTO_ACCEPT = PHOTO_TYPES.join(',')
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024
 export const PHOTO_MAX_LABEL = '5 МБ'
 export const PHOTO_TYPES_LABEL = 'JPEG, PNG, WebP или GIF'
+export const PHOTO_MAX_DIMENSION = 8000
+export const PHOTO_MAX_PIXELS = 25000000
+export const PHOTO_DIMENSIONS_LABEL = '8000 пикселей по стороне и 25 мегапикселей'
 
 /** Проверка файла до отправки; серверная валидация остаётся окончательной. */
 export function validatePhotoFile(file) {
@@ -93,6 +96,22 @@ export function validatePhotoFile(file) {
   }
   if (file.size > PHOTO_MAX_BYTES) {
     return `Размер фото не должен превышать ${PHOTO_MAX_LABEL}.`
+  }
+  return ''
+}
+
+/**
+ * Проверка фактических размеров изображения (в пикселях) до отправки.
+ * Ограничения совпадают с серверными; окончательное решение за сервером.
+ */
+export function validatePhotoDimensions(width, height) {
+  const w = Number(width)
+  const h = Number(height)
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return 'Не удалось определить размеры изображения. Загрузите другой файл.'
+  }
+  if (w > PHOTO_MAX_DIMENSION || h > PHOTO_MAX_DIMENSION || w * h > PHOTO_MAX_PIXELS) {
+    return `Изображение слишком большое: допустимо не более ${PHOTO_DIMENSIONS_LABEL}.`
   }
   return ''
 }

@@ -8,7 +8,9 @@ import {
   PHOTO_ACCEPT,
   PHOTO_MAX_LABEL,
   PHOTO_TYPES_LABEL,
+  PHOTO_DIMENSIONS_LABEL,
   validatePhotoFile,
+  validatePhotoDimensions,
   recipeFieldLabel
 } from '../constants/recipe'
 import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
@@ -68,22 +70,63 @@ const photoActionLabel = computed(() =>
     : 'Выбрать фото'
 )
 
-function onPhotoSelected(event) {
+let photoSelectionToken = 0
+const PHOTO_DECODE_ERROR = 'Файл не является изображением или повреждён. Загрузите другой файл.'
+
+/** Фактические размеры выбранного изображения (без учёта ориентации файла). */
+function readImageDimensions(file) {
+  if (typeof createImageBitmap === 'function') {
+    return createImageBitmap(file).then((bitmap) => {
+      const size = { width: bitmap.width, height: bitmap.height }
+      if (typeof bitmap.close === 'function') bitmap.close()
+      return size
+    })
+  }
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const image = new Image()
+    image.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve({ width: image.naturalWidth, height: image.naturalHeight })
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('image-decode-failed'))
+    }
+    image.src = url
+  })
+}
+
+async function onPhotoSelected(event) {
   const file = event.target.files?.[0]
+  event.target.value = ''
   if (!file) return
+  const token = ++photoSelectionToken
   const validationError = validatePhotoFile(file)
   if (validationError) {
     photoValidationError.value = validationError
-    event.target.value = ''
     return
   }
   photoValidationError.value = ''
+  try {
+    const { width, height } = await readImageDimensions(file)
+    if (token !== photoSelectionToken) return
+    const dimensionError = validatePhotoDimensions(width, height)
+    if (dimensionError) {
+      photoValidationError.value = dimensionError
+      return
+    }
+  } catch {
+    if (token !== photoSelectionToken) return
+    photoValidationError.value = PHOTO_DECODE_ERROR
+    return
+  }
   draft.value.photo.selected = file
   draft.value.photo.removed = false
-  event.target.value = ''
 }
 
 function clearSelectedPhoto() {
+  photoSelectionToken += 1
   draft.value.photo.selected = null
   photoValidationError.value = ''
 }
@@ -323,8 +366,8 @@ onBeforeUnmount(() => {
           <input type="file" :accept="PHOTO_ACCEPT" class="file-input" @change="onPhotoSelected" />
         </label>
         <p class="hint">
-          Допустимы {{ PHOTO_TYPES_LABEL }}, размер — до {{ PHOTO_MAX_LABEL }}. Проверка на сервере
-          остаётся окончательной.
+          Допустимы {{ PHOTO_TYPES_LABEL }}, размер — до {{ PHOTO_MAX_LABEL }}, не более
+          {{ PHOTO_DIMENSIONS_LABEL }}. Проверка на сервере остаётся окончательной.
         </p>
         <p v-if="photoValidationError" class="error">{{ photoValidationError }}</p>
       </fieldset>

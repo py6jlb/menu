@@ -30,6 +30,10 @@ public static class RecipeCatalog
     public const int DietsMax = 100;
 
     public const int PhotoMaxBytes = 5 * 1024 * 1024;
+    // Защита от «бомбы»: маленький файл с огромными размерами не должен
+    // исчерпать память при декодировании.
+    public const int PhotoMaxDimension = 8000;
+    public const long PhotoMaxPixels = 25_000_000;
     public static readonly IReadOnlyDictionary<string, string> PhotoContentTypes =
         new Dictionary<string, string>
         {

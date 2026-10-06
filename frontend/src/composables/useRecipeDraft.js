@@ -256,13 +256,17 @@ export function useRecipeDraft(options = {}) {
     clearPhotoState()
   }
 
+  function clearPhotoResult() {
+    photoPartial.value = false
+    photoUnknown.value = false
+    photoError.value = ''
+  }
+
   function clearPhotoState() {
     pendingPhoto = null
     lastServerTextDraft = null
     photoSaving.value = false
-    photoPartial.value = false
-    photoUnknown.value = false
-    photoError.value = ''
+    clearPhotoResult()
   }
 
   function clearMessages() {
@@ -611,6 +615,24 @@ export function useRecipeDraft(options = {}) {
     }
   }
 
+  /**
+   * Приводит замороженный intent к текущему выбору пользователя. Нужен после
+   * отказа сервера (например, изображение не прошло проверку): пользователь мог
+   * выбрать другой файл или отказаться от действия. Во время самого запроса
+   * форма блокирует изменение выбора, поэтому подмена intent безопасна.
+   */
+  function reconcilePendingPhoto() {
+    if (!pendingPhoto) return
+    const intent = photoIntentFromDraft(draft.value)
+    if (intent.kind === 'keep') {
+      // Действие с фото отменено пользователем: повторять нечего.
+      pendingPhoto = null
+      clearPhotoResult()
+      return
+    }
+    pendingPhoto = { ...pendingPhoto, kind: intent.kind, file: intent.file }
+  }
+
   /** Повтор только действия с фото для уже сохранённого рецепта. */
   async function retryPhoto() {
     if (!pendingPhoto) return { ok: true }
@@ -618,6 +640,8 @@ export function useRecipeDraft(options = {}) {
       const applied = await verifyPendingPhoto()
       if (applied.ok) return applied
     }
+    reconcilePendingPhoto()
+    if (!pendingPhoto) return { ok: true }
     return performPhoto()
   }
 

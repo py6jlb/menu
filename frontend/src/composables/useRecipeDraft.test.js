@@ -609,6 +609,52 @@ describe('useRecipeDraft — действия с фото', () => {
     expect(state.draft.value.photo.existing).toBe('/photos/new.jpg')
   })
 
+  it('после отказа сервера повтор отправляет выбранный заново файл, а не отклонённый', async () => {
+    const other = { name: 'b.png', size: 2, lastModified: 2, type: 'image/png' }
+    const uploadPhoto = vi
+      .fn()
+      .mockResolvedValueOnce({ response: { status: 400 }, data: { error: 'Файл не является изображением.' } })
+      .mockResolvedValueOnce({
+        response: { status: 200 },
+        data: recipeData('A', { revision: 3, photoUrl: '/photos/b.png' })
+      })
+    const state = make(photoOptions({ uploadPhoto }))
+    await state.load()
+    state.draft.value.name = 'Новое'
+    state.draft.value.photo.selected = file
+
+    await state.save()
+    expect(state.photoError.value).toContain('Файл не является изображением.')
+
+    state.draft.value.photo.selected = other
+    const retried = await state.retryPhoto()
+
+    expect(retried.ok).toBe(true)
+    expect(uploadPhoto).toHaveBeenLastCalledWith('A', other, 2)
+    expect(state.draft.value.photo.existing).toBe('/photos/b.png')
+  })
+
+  it('снятие выбора после отказа сервера отменяет повтор фото', async () => {
+    const uploadPhoto = vi
+      .fn()
+      .mockResolvedValueOnce({ response: { status: 400 }, data: { error: 'Файл не является изображением.' } })
+    const state = make(photoOptions({ uploadPhoto }))
+    await state.load()
+    state.draft.value.name = 'Новое'
+    state.draft.value.photo.selected = file
+
+    await state.save()
+    expect(state.photoPartial.value).toBe(true)
+
+    state.draft.value.photo.selected = null
+    const retried = await state.retryPhoto()
+
+    expect(retried.ok).toBe(true)
+    expect(uploadPhoto).toHaveBeenCalledTimes(1)
+    expect(state.photoPartial.value).toBe(false)
+    expect(state.photoError.value).toBe('')
+  })
+
   it('повтор фото для нового рецепта не создаёт второй рецепт и не переписывает поля', async () => {
     const createRecipe = vi.fn().mockResolvedValue(created(recipeData('NEW', { revision: 1 })))
     const updateRecipe = vi.fn()

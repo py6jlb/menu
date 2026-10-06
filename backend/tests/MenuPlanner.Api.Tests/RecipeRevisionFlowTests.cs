@@ -105,13 +105,13 @@ public sealed class RecipeRevisionFlowTests
 
         var (upload, uploaded) = await PutPhotoAsync<RecipeDto>(
             client, owner.Token, recipe.Id, recipe.Revision,
-            new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "image/png", "photo.png");
+            TestImages.Png(), "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
         Assert.Equal(2, uploaded!.Revision);
 
         var (stale, conflict) = await PutPhotoAsync<RecipeConflictDto>(
             client, owner.Token, recipe.Id, recipe.Revision,
-            new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "image/png", "photo.png");
+            TestImages.Png(), "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         Assert.Equal(2, conflict!.Revision);
     }

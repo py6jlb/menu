@@ -151,7 +151,7 @@ public sealed class ExternalRecipePromotionTests
         using var client = factory.CreateClient();
         var (owner, recipient, imported) = await ImportAsync(client);
 
-        var bytes = Encoding.ASCII.GetBytes("source-photo-bytes");
+        var bytes = TestImages.Png();
         var (photoResponse, source) = await PutPhotoAuthorizedAsync<RecipeDto>(
             client, owner.Token, imported.SourceId, imported.SourceRevision, bytes, "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.OK, photoResponse.StatusCode);

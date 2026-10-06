@@ -23,7 +23,7 @@ public sealed class SharedRecipeFlowTests
             client, owner.Token, "/api/recipes", FullRequest());
         var (_, uploaded) = await PutPhotoAuthorizedAsync<RecipeDto>(
             client, owner.Token, recipe!.Id, recipe.Revision,
-            Encoding.ASCII.GetBytes("png-bytes"), "image/png", "photo.png");
+            TestImages.Png(), "image/png", "photo.png");
         var (_, share) = await CreateShareAsync(client, owner.Token, recipe.Id);
 
         var (response, shared) = await GetAsync<RecipeDto>(client, $"/api/shared/{share!.Token}");
@@ -75,7 +75,7 @@ public sealed class SharedRecipeFlowTests
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
         var (_, uploaded) = await PutPhotoAuthorizedAsync<RecipeDto>(
             client, owner.Token, recipe.Id, updated!.Revision,
-            Encoding.ASCII.GetBytes("new-png-bytes"), "image/png", "new.png");
+            TestImages.Png(), "image/png", "new.png");
 
         var (response, shared) = await GetAsync<RecipeDto>(client, $"/api/shared/{share!.Token}");
 
