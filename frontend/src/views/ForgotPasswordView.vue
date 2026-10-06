@@ -98,7 +98,7 @@ async function submitReset() {
       <h2 class="auth-title">Сброс пароля</h2>
 
       <template v-if="resetDone">
-        <p class="success">Пароль изменён. Войдите с новым паролем.</p>
+        <p class="success" role="status">Пароль изменён. Войдите с новым паролем.</p>
         <router-link to="/login" class="btn btn--primary btn--block">Перейти ко входу</router-link>
       </template>
 
@@ -110,7 +110,7 @@ async function submitReset() {
 
         <form @submit.prevent="requestCode" class="auth-form">
           <label class="field">
-            <label>Email</label>
+            <span>Email</span>
             <input
               v-model="email"
               type="email"
@@ -119,7 +119,7 @@ async function submitReset() {
               required
             />
           </label>
-          <p v-if="forgotError" class="error">{{ forgotError }}</p>
+          <p v-if="forgotError" class="error" role="alert">{{ forgotError }}</p>
           <button
             type="submit"
             class="btn btn--primary btn--block"
@@ -131,14 +131,14 @@ async function submitReset() {
         </form>
 
         <template v-if="sent">
-          <p class="success">{{ neutralMessage }}</p>
+          <p class="success" role="status">{{ neutralMessage }}</p>
           <p class="hint">
             Для восстановления нужна подтверждённая почта. Код действует 1 час.
           </p>
 
           <form @submit.prevent="submitReset" class="auth-form reset-form">
             <label class="field">
-              <label>Код из письма</label>
+              <span>Код из письма</span>
               <input
                 v-model="code"
                 type="text"
@@ -152,7 +152,7 @@ async function submitReset() {
               />
             </label>
             <label class="field">
-              <label>Новый пароль</label>
+              <span>Новый пароль</span>
               <input
                 v-model="newPassword"
                 type="password"
@@ -162,7 +162,7 @@ async function submitReset() {
               />
             </label>
             <label class="field">
-              <label>Повторите новый пароль</label>
+              <span>Повторите новый пароль</span>
               <input
                 v-model="newPasswordConfirm"
                 type="password"
@@ -171,8 +171,8 @@ async function submitReset() {
                 required
               />
             </label>
-            <p v-if="passwordsMismatch" class="error">Пароли не совпадают.</p>
-            <p v-if="resetError" class="error">{{ resetError }}</p>
+            <p v-if="passwordsMismatch" class="error" role="alert">Пароли не совпадают.</p>
+            <p v-if="resetError" class="error" role="alert">{{ resetError }}</p>
             <button
               type="submit"
               class="btn btn--primary btn--block"

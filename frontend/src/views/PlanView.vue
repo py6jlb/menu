@@ -6,6 +6,8 @@ import { useWeekDraft } from '../composables/useWeekDraft'
 import { useRecipePicker } from '../composables/useRecipePicker'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 import { SEASONS, DIETS } from '../constants/recipe'
+import { externalState } from '../constants/external'
+import { useDialog } from '../composables/useDialog'
 import { useAuth } from '../stores/auth'
 
 const { isEmailVerified } = useAuth()
@@ -41,6 +43,17 @@ const {
 } = useWeekDraft({ initialWeek: weekFromQuery(route.query.week) || mondayOf(new Date()) })
 
 const editing = ref(null)
+
+const {
+  container: pickerDialog,
+  open: openDialog,
+  close: closeDialog,
+  onKeydown: onDialogKeydown
+} = useDialog({
+  onClose: () => {
+    editing.value = null
+  }
+})
 
 let searchTimer = null
 function scheduleSearch(run) {
@@ -78,9 +91,10 @@ function toggleInList(list, value) {
   else list.push(value)
 }
 
-function openPicker(day, mealType) {
+function openPicker(day, mealType, event) {
   editing.value = { day, mealType }
   openPickerState(slotEntry(day, mealType))
+  openDialog(event?.currentTarget)
 }
 
 function isSelected(recipe) {
@@ -92,14 +106,14 @@ function isSelectionOutsideResults() {
 }
 
 function closePicker() {
-  editing.value = null
+  closeDialog()
 }
 
 function confirmSlot() {
   const entry = confirmPicker()
   if (!entry) return
   setSlot(editing.value.day, editing.value.mealType, entry)
-  closePicker()
+  closeDialog()
 }
 
 function removeSlot(day, mealType) {
@@ -126,6 +140,23 @@ function mealLabel(code) {
 function slotLabel(name, portions) {
   if (!name) return 'пусто'
   return portions ? `${name} (${portions} порц.)` : name
+}
+
+function slotDayLabel(index) {
+  return `${DAYS[index].label} ${String(days.value[index].getDate()).padStart(2, '0')}`
+}
+
+function slotAria(index, mealCode) {
+  const entry = slotEntry(index, mealCode)
+  const prefix = `${slotDayLabel(index)}, ${mealLabel(mealCode)}`
+  if (!entry) return `${prefix}: пусто. Добавить блюдо`
+  const state = externalState(entry.state)?.label
+  return `${prefix}: ${entry.recipeName}, ${entry.portions} порц.${state ? `, ${state}` : ''}. Изменить`
+}
+
+function slotRemoveAria(index, mealCode) {
+  const entry = slotEntry(index, mealCode)
+  return `Убрать ${entry?.recipeName || 'блюдо'} из плана: ${slotDayLabel(index)}, ${mealLabel(mealCode)}`
 }
 
 onBeforeRouteLeave(() => confirmNavigation())
@@ -166,14 +197,28 @@ onBeforeUnmount(() => {
     </p>
 
     <div class="nav">
-      <button type="button" class="btn btn--ghost btn--small" @click="goToWeek(-1)">←</button>
+      <button
+        type="button"
+        class="btn btn--ghost btn--small"
+        aria-label="Предыдущая неделя"
+        @click="goToWeek(-1)"
+      >
+        ←
+      </button>
       <span class="week-label">{{ weekLabel }}</span>
-      <button type="button" class="btn btn--ghost btn--small" @click="goToWeek(1)">→</button>
+      <button
+        type="button"
+        class="btn btn--ghost btn--small"
+        aria-label="Следующая неделя"
+        @click="goToWeek(1)"
+      >
+        →
+      </button>
     </div>
 
-    <p v-if="savedMessage" class="success">{{ savedMessage }}</p>
+    <p v-if="savedMessage" class="success" role="status">{{ savedMessage }}</p>
     <div v-else-if="conflict" class="conflict">
-      <p class="error">{{ saveError }}</p>
+      <p class="error" role="alert">{{ saveError }}</p>
       <p v-if="conflict.revision !== null" class="conflict-server">
         Актуальная версия на сервере: ревизия {{ conflict.revision }}.
       </p>
@@ -189,10 +234,10 @@ onBeforeUnmount(() => {
         Загрузить актуальную версию
       </button>
     </div>
-    <p v-else-if="saveError" class="error">{{ saveError }}</p>
+    <p v-else-if="saveError" class="error" role="alert">{{ saveError }}</p>
 
     <p v-if="loading" class="loading">Загрузка…</p>
-    <p v-else-if="loadingError" class="error">
+    <p v-else-if="loadingError" class="error" role="alert">
       {{ loadingError }}
       <router-link to="/family">Перейти на страницу «Семья»</router-link>
     </p>
@@ -214,27 +259,40 @@ onBeforeUnmount(() => {
 
           <template v-for="meal in MEALS" :key="meal.code">
             <div class="meal-label">{{ meal.label }}</div>
-            <button
+            <div
               v-for="(day, index) in days"
               :key="`${meal.code}-${day.getTime()}`"
-              type="button"
-              class="slot"
-              :class="{ filled: slotEntry(index, meal.code), readonly: !isEmailVerified }"
-              :disabled="!isEmailVerified"
-              @click="openPicker(index, meal.code)"
+              class="slot-wrap"
             >
-              <template v-if="slotEntry(index, meal.code)">
-                <span class="slot-recipe">{{ slotEntry(index, meal.code).recipeName }}</span>
-                <span class="slot-portions">{{ slotEntry(index, meal.code).portions }} порц.</span>
-                <ExternalStateBadge
-                  class="slot-state"
-                  variant="slot"
-                  :state="slotEntry(index, meal.code).state"
-                />
-                <span v-if="isEmailVerified" class="slot-remove" @click.stop="removeSlot(index, meal.code)">✕</span>
-              </template>
-              <span v-else class="slot-empty">+</span>
-            </button>
+              <button
+                type="button"
+                class="slot"
+                :class="{ filled: slotEntry(index, meal.code), readonly: !isEmailVerified }"
+                :disabled="!isEmailVerified"
+                :aria-label="slotAria(index, meal.code)"
+                @click="openPicker(index, meal.code, $event)"
+              >
+                <template v-if="slotEntry(index, meal.code)">
+                  <span class="slot-recipe">{{ slotEntry(index, meal.code).recipeName }}</span>
+                  <span class="slot-portions">{{ slotEntry(index, meal.code).portions }} порц.</span>
+                  <ExternalStateBadge
+                    class="slot-state"
+                    variant="slot"
+                    :state="slotEntry(index, meal.code).state"
+                  />
+                </template>
+                <span v-else class="slot-empty">+</span>
+              </button>
+              <button
+                v-if="isEmailVerified && slotEntry(index, meal.code)"
+                type="button"
+                class="slot-remove"
+                :aria-label="slotRemoveAria(index, meal.code)"
+                @click="removeSlot(index, meal.code)"
+              >
+                ✕
+              </button>
+            </div>
           </template>
         </div>
 
@@ -246,6 +304,7 @@ onBeforeUnmount(() => {
               type="button"
               class="day-tab"
               :class="{ active: mobileDay === index }"
+              :aria-current="mobileDay === index ? 'true' : undefined"
               @click="mobileDay = index"
             >
               {{ DAYS[index].label }}
@@ -254,43 +313,72 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="mobile-day-list">
-            <button
+            <div
               v-for="meal in MEALS"
               :key="`${mobileDay}-${meal.code}`"
-              type="button"
-              class="mobile-slot"
-              :class="{ filled: slotEntry(mobileDay, meal.code), readonly: !isEmailVerified }"
-              :disabled="!isEmailVerified"
-              @click="openPicker(mobileDay, meal.code)"
+              class="mobile-slot-wrap"
             >
-              <span class="mobile-meal">{{ meal.label }}</span>
-              <template v-if="slotEntry(mobileDay, meal.code)">
-                <span class="mobile-recipe">{{ slotEntry(mobileDay, meal.code).recipeName }}</span>
-                <ExternalStateBadge
-                  class="slot-state"
-                  variant="mobile"
-                  :state="slotEntry(mobileDay, meal.code).state"
-                />
-                <span class="mobile-meta">
-                  {{ slotEntry(mobileDay, meal.code).portions }} порц.
-                  <span v-if="isEmailVerified" class="mobile-remove" @click.stop="removeSlot(mobileDay, meal.code)">✕</span>
-                </span>
-              </template>
-              <span v-else class="mobile-empty">+ Добавить</span>
-            </button>
+              <button
+                type="button"
+                class="mobile-slot"
+                :class="{ filled: slotEntry(mobileDay, meal.code), readonly: !isEmailVerified }"
+                :disabled="!isEmailVerified"
+                :aria-label="slotAria(mobileDay, meal.code)"
+                @click="openPicker(mobileDay, meal.code, $event)"
+              >
+                <span class="mobile-meal">{{ meal.label }}</span>
+                <template v-if="slotEntry(mobileDay, meal.code)">
+                  <span class="mobile-recipe">{{ slotEntry(mobileDay, meal.code).recipeName }}</span>
+                  <ExternalStateBadge
+                    class="slot-state"
+                    variant="mobile"
+                    :state="slotEntry(mobileDay, meal.code).state"
+                  />
+                  <span class="mobile-meta">
+                    {{ slotEntry(mobileDay, meal.code).portions }} порц.
+                  </span>
+                </template>
+                <span v-else class="mobile-empty">+ Добавить</span>
+              </button>
+              <button
+                v-if="isEmailVerified && slotEntry(mobileDay, meal.code)"
+                type="button"
+                class="mobile-remove"
+                :aria-label="slotRemoveAria(mobileDay, meal.code)"
+                @click="removeSlot(mobileDay, meal.code)"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </div>
       </template>
     </template>
 
     <div v-if="editing" class="overlay" @click.self="closePicker">
-      <div class="picker">
-        <h3>
+      <div
+        ref="pickerDialog"
+        class="picker"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="plan-picker-title"
+        tabindex="-1"
+        @keydown="onDialogKeydown"
+      >
+        <h3 id="plan-picker-title">
           {{ mealLabel(editing.mealType) }} ·
           {{ DAYS.find((d) => d.code === editing.day)?.label }}
         </h3>
 
-        <input :value="search" type="text" placeholder="Поиск рецепта…" @input="setSearch($event.target.value)" />
+        <label class="field">
+          <span>Поиск рецепта</span>
+          <input
+            :value="search"
+            type="text"
+            placeholder="Поиск рецепта…"
+            @input="setSearch($event.target.value)"
+          />
+        </label>
 
         <details class="filter-panel">
           <summary>Фильтры и предпочтения</summary>
@@ -316,7 +404,7 @@ onBeforeUnmount(() => {
           <div class="filter-group">
             <span class="filter-label">Сезон (жёсткий):</span>
             <label v-for="season in SEASONS" :key="season.code" class="chip">
-              <input type="checkbox" :value="season.code" :checked="filter.seasons.includes(season.code)" @change="toggleInList(filter.seasons, season.code)" />
+              <input class="sr-only" type="checkbox" :value="season.code" :checked="filter.seasons.includes(season.code)" @change="toggleInList(filter.seasons, season.code)" />
               {{ season.label }}
             </label>
           </div>
@@ -324,7 +412,7 @@ onBeforeUnmount(() => {
           <div class="filter-group">
             <span class="filter-label">Диета (жёсткий):</span>
             <label v-for="diet in DIETS" :key="diet.code" class="chip">
-              <input type="checkbox" :value="diet.code" :checked="filter.diets.includes(diet.code)" @change="toggleInList(filter.diets, diet.code)" />
+              <input class="sr-only" type="checkbox" :value="diet.code" :checked="filter.diets.includes(diet.code)" @change="toggleInList(filter.diets, diet.code)" />
               {{ diet.label }}
             </label>
           </div>
@@ -343,11 +431,11 @@ onBeforeUnmount(() => {
           <div class="filter-group">
             <span class="filter-label">Предпочтения (сорт.):</span>
             <label class="chip">
-              <input type="checkbox" v-model="filter.preferLowCalories" />
+              <input class="sr-only" type="checkbox" v-model="filter.preferLowCalories" />
               Низкокалорийные
             </label>
             <label class="chip">
-              <input type="checkbox" v-model="filter.preferLowComplexity" />
+              <input class="sr-only" type="checkbox" v-model="filter.preferLowComplexity" />
               Простые
             </label>
           </div>
@@ -355,7 +443,7 @@ onBeforeUnmount(() => {
           <div class="filter-group">
             <span class="filter-label">Предпочт. сезоны:</span>
             <label v-for="season in SEASONS" :key="season.code" class="chip">
-              <input type="checkbox" :value="season.code" :checked="filter.preferSeasons.includes(season.code)" @change="toggleInList(filter.preferSeasons, season.code)" />
+              <input class="sr-only" type="checkbox" :value="season.code" :checked="filter.preferSeasons.includes(season.code)" @change="toggleInList(filter.preferSeasons, season.code)" />
               {{ season.label }}
             </label>
           </div>
@@ -363,7 +451,7 @@ onBeforeUnmount(() => {
           <div class="filter-group">
             <span class="filter-label">Предпочт. диеты:</span>
             <label v-for="diet in DIETS" :key="diet.code" class="chip">
-              <input type="checkbox" :value="diet.code" :checked="filter.preferDiets.includes(diet.code)" @change="toggleInList(filter.preferDiets, diet.code)" />
+              <input class="sr-only" type="checkbox" :value="diet.code" :checked="filter.preferDiets.includes(diet.code)" @change="toggleInList(filter.preferDiets, diet.code)" />
               {{ diet.label }}
             </label>
           </div>
@@ -382,35 +470,38 @@ onBeforeUnmount(() => {
         </details>
 
         <p v-if="pickerLoading" class="picker-loading">Загрузка…</p>
-        <p v-else-if="pickerError" class="error">{{ pickerError }}</p>
+        <p v-else-if="pickerError" class="error" role="alert">{{ pickerError }}</p>
 
-        <ul class="recipe-options">
-          <li
-            v-for="recipe in recipes"
-            :key="recipe.id"
-            :class="{ selected: isSelected(recipe) }"
-            @click="selectRecipe(recipe)"
-          >
-            <span class="recipe-name">
-              {{ recipe.name }}
-              <ExternalStateBadge v-if="recipe.state" :state="recipe.state" />
-            </span>
-            <span v-if="recipe.isExternal" class="recipe-origin">
-              внешний · из семьи {{ recipe.sourceFamilyName }}
-            </span>
-            <span class="recipe-meta">
-              <template v-if="recipe.difficulty">Сл.: {{ recipe.difficulty }}</template>
-              <template v-if="recipe.calories !== null && recipe.calories !== undefined"> · {{ recipe.calories }} ккал</template>
-              <template v-if="recipe.cookTimeMinutes"> · {{ recipe.cookTimeMinutes }} мин</template>
-              <span v-if="recipe.repetitionCount > 0" class="repetition" title="Сколько раз готовилось за последние недели">
-                ×{{ recipe.repetitionCount }}
+        <ul v-if="recipes.length" class="recipe-options" aria-label="Результаты подбора">
+          <li v-for="recipe in recipes" :key="recipe.id" class="recipe-option-item">
+            <button
+              type="button"
+              class="recipe-option"
+              :class="{ selected: isSelected(recipe) }"
+              :aria-pressed="isSelected(recipe)"
+              @click="selectRecipe(recipe)"
+            >
+              <span class="recipe-name">
+                {{ recipe.name }}
+                <ExternalStateBadge v-if="recipe.state" :state="recipe.state" />
               </span>
-            </span>
+              <span v-if="recipe.isExternal" class="recipe-origin">
+                внешний · из семьи {{ recipe.sourceFamilyName }}
+              </span>
+              <span class="recipe-meta">
+                <template v-if="recipe.difficulty">Сл.: {{ recipe.difficulty }}</template>
+                <template v-if="recipe.calories !== null && recipe.calories !== undefined"> · {{ recipe.calories }} ккал</template>
+                <template v-if="recipe.cookTimeMinutes"> · {{ recipe.cookTimeMinutes }} мин</template>
+                <span v-if="recipe.repetitionCount > 0" class="repetition" title="Сколько раз готовилось за последние недели">
+                  ×{{ recipe.repetitionCount }}
+                </span>
+              </span>
+            </button>
           </li>
-          <li v-if="recipes.length === 0" class="no-results">Ничего не найдено.</li>
         </ul>
+        <p v-else class="no-results">Ничего не найдено.</p>
 
-        <p v-if="isSelectionOutsideResults()" class="selection-kept">
+        <p v-if="isSelectionOutsideResults()" class="selection-kept" role="status">
           Выбрано: <strong>{{ selection.name }}</strong> — вне текущей выдачи.
         </p>
 
@@ -419,7 +510,7 @@ onBeforeUnmount(() => {
           <input v-model.number="pickerPortions" type="number" min="1" max="100" />
         </label>
 
-        <p v-if="selectionWarning" class="selection-warning">{{ selectionWarning }}</p>
+        <p v-if="selectionWarning" class="selection-warning" role="alert">{{ selectionWarning }}</p>
 
         <div class="picker-actions">
           <button type="button" class="btn btn--primary" :disabled="!selection || pickerPortions < 1" @click="confirmSlot">
@@ -549,6 +640,11 @@ onBeforeUnmount(() => {
   color: var(--text-soft);
 }
 
+.slot-wrap {
+  position: relative;
+  display: flex;
+}
+
 .slot {
   display: flex;
   flex-direction: column;
@@ -561,7 +657,7 @@ onBeforeUnmount(() => {
   background: var(--surface);
   font-size: 0.85rem;
   text-align: left;
-  position: relative;
+  width: 100%;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
@@ -620,11 +716,24 @@ onBeforeUnmount(() => {
 
 .slot-remove {
   position: absolute;
-  top: 0.2rem;
-  right: 0.35rem;
+  top: 0.15rem;
+  right: 0.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface);
   color: var(--danger);
   font-weight: 700;
-  cursor: pointer;
+  line-height: 1;
+}
+
+.slot-remove:hover {
+  background: var(--danger-bg);
 }
 
 /* mobile day tabs */
@@ -678,6 +787,10 @@ onBeforeUnmount(() => {
   gap: 0.6rem;
 }
 
+.mobile-slot-wrap {
+  position: relative;
+}
+
 .mobile-slot {
   display: flex;
   flex-direction: column;
@@ -720,18 +833,32 @@ onBeforeUnmount(() => {
 .mobile-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   color: var(--success);
   font-size: 0.85rem;
   font-weight: 600;
 }
 
 .mobile-remove {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface);
   color: var(--danger);
   font-weight: 800;
   font-size: 1rem;
-  padding: 0.45rem 0.7rem;
-  margin: -0.45rem -0.7rem -0.45rem 0;
+  line-height: 1;
+}
+
+.mobile-remove:hover {
+  background: var(--danger-bg);
 }
 
 .mobile-empty {
@@ -801,19 +928,30 @@ onBeforeUnmount(() => {
 }
 
 .recipe-options li {
-  padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
+  display: block;
+}
+
+.recipe-option {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-family: inherit;
+  font-size: 1rem;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
 }
 
-.recipe-options li:last-child {
+.recipe-options li:last-child .recipe-option {
   border-bottom: none;
 }
 
-.recipe-options li.selected {
+.recipe-option.selected {
   background: var(--primary-soft);
 }
 
@@ -857,8 +995,9 @@ onBeforeUnmount(() => {
   margin-left: 0.4rem;
 }
 
-.recipe-options li.no-results {
-  cursor: default;
+.no-results {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
   color: var(--text-soft);
 }
 
@@ -923,14 +1062,16 @@ onBeforeUnmount(() => {
 }
 
 .filter-group .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   font-weight: 600;
 }
 
-.filter-group .chip input {
-  display: none;
+.filter-group .chip:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .filter-actions {

@@ -240,7 +240,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div v-if="actionError" class="error action-error">
+      <div v-if="actionError" class="error action-error" role="alert">
         <p>{{ actionError }}</p>
         <button
           v-if="actionConflict"
@@ -273,7 +273,7 @@ onMounted(async () => {
             Источник удалил рецепт — содержимое недоступно. Имя сохранено, но рецепт больше
             нельзя готовить. Уберите его из семьи или замените в плане недели.
           </p>
-          <p v-if="copyError" class="error">{{ copyError }}</p>
+          <p v-if="copyError" class="error" role="alert">{{ copyError }}</p>
           <div v-if="isEmailVerified" class="external-actions">
             <button type="button" class="btn btn--primary" disabled title="Источник удалён">
               Сделать копию
@@ -294,7 +294,7 @@ onMounted(async () => {
             Ссылка отозвана или перегенерирована. Рецепт пока доступен, но может пропасть —
             сделайте копию, чтобы сохранить.
           </p>
-          <p v-if="copyError" class="error">{{ copyError }}</p>
+          <p v-if="copyError" class="error" role="alert">{{ copyError }}</p>
           <div v-if="isEmailVerified" class="external-actions">
             <button type="button" class="btn btn--primary" :disabled="copying" @click="onCopy">
               {{ copying ? 'Сохранение…' : 'Сделать копию, чтобы сохранить' }}
@@ -314,7 +314,7 @@ onMounted(async () => {
           <p class="external-note">
             Рецепт доступен только для чтения — изменения вносит семья-источник.
           </p>
-          <p v-if="copyError" class="error">{{ copyError }}</p>
+          <p v-if="copyError" class="error" role="alert">{{ copyError }}</p>
           <div v-if="isEmailVerified" class="external-actions">
             <button type="button" class="btn btn--primary" :disabled="copying" @click="onCopy">
               {{ copying ? 'Сохранение…' : 'Сделать копию' }}
@@ -349,7 +349,7 @@ onMounted(async () => {
           <span v-if="share && share.revoked" class="badge badge--revoked">Ссылка отозвана</span>
         </div>
 
-        <p v-if="shareError" class="error">{{ shareError }}</p>
+        <p v-if="shareError" class="error" role="alert">{{ shareError }}</p>
 
         <div v-else-if="!share" class="share-empty">
           <p class="share-hint">Создайте ссылку, чтобы поделиться рецептом с другой семьёй.</p>

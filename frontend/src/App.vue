@@ -46,9 +46,14 @@ watch(isAuthenticated, (authenticated) => {
         <span class="role-badge" :class="{ admin: isAdmin }">
           {{ roleLabel }}
         </span>
-        <button type="button" class="btn btn--ghost btn--small logout-btn" @click="logout">
-          <svg class="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-          <span class="logout-text">Выйти</span>
+        <button
+          type="button"
+          class="btn btn--ghost btn--small logout-btn"
+          aria-label="Выйти"
+          @click="logout"
+        >
+          <svg class="logout-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          <span class="logout-text" aria-hidden="true">Выйти</span>
         </button>
       </div>
 
@@ -116,6 +121,25 @@ watch(isAuthenticated, (authenticated) => {
 
 * {
   box-sizing: border-box;
+}
+
+/* Видимый фокус для клавиатуры на всех интерактивных элементах. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Скрыть визуально, но оставить в дереве доступности и доступным с клавиатуры. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 html {
@@ -516,7 +540,8 @@ input::placeholder, textarea::placeholder {
   gap: 0.3rem;
 }
 
-.field > label {
+.field > label,
+.field > span:first-child {
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-soft);

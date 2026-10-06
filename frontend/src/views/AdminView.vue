@@ -51,8 +51,8 @@ async function submit() {
           <span>Email пользователя</span>
           <input v-model="email" type="email" autocomplete="off" required />
         </label>
-        <p v-if="message" class="success">{{ message }}</p>
-        <p v-else-if="error" class="error">{{ error }}</p>
+        <p v-if="message" class="success" role="status">{{ message }}</p>
+        <p v-else-if="error" class="error" role="alert">{{ error }}</p>
         <button type="submit" class="btn btn--primary" :disabled="pending || !email.trim()">
           {{ pending ? 'Разблокировка…' : 'Разблокировать' }}
         </button>

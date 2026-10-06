@@ -80,15 +80,29 @@ onMounted(load)
     </div>
 
     <div class="week-nav">
-      <button type="button" class="btn btn--ghost btn--small" @click="goToWeek(-1)">←</button>
+      <button
+        type="button"
+        class="btn btn--ghost btn--small"
+        aria-label="Предыдущая неделя"
+        @click="goToWeek(-1)"
+      >
+        ←
+      </button>
       <span class="week-label">{{ weekLabel }}</span>
-      <button type="button" class="btn btn--ghost btn--small" @click="goToWeek(1)">→</button>
+      <button
+        type="button"
+        class="btn btn--ghost btn--small"
+        aria-label="Следующая неделя"
+        @click="goToWeek(1)"
+      >
+        →
+      </button>
     </div>
 
     <p v-if="loading" class="loading">Загрузка…</p>
 
     <template v-else>
-      <p v-if="error" class="error">
+      <p v-if="error" class="error" role="alert">
         {{ error }}
         <router-link v-if="!resultWeekLabel" to="/family">Перейти на страницу «Семья»</router-link>
       </p>
