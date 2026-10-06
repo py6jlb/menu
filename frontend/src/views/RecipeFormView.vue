@@ -2,7 +2,14 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { autocompleteIngredients } from '../api/ingredients'
-import { UNITS, SEASONS } from '../constants/recipe'
+import {
+  UNITS,
+  SEASONS,
+  PHOTO_ACCEPT,
+  PHOTO_MAX_LABEL,
+  PHOTO_TYPES_LABEL,
+  validatePhotoFile
+} from '../constants/recipe'
 import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
 
 const route = useRoute()
@@ -15,25 +22,24 @@ const {
   dirty,
   loading,
   saving,
-  revision,
   conflictMessage,
   conflictRevision,
   photoSaving,
+  photoPartial,
+  photoUnknown,
   photoError,
   loadError,
   saveError,
   setIdentity,
   load,
   save,
-  setPendingPhoto,
-  savePhoto,
+  retryPhoto,
   validate,
   confirmNavigation
 } = useRecipeDraft({ initialId: route.params.id || null })
 
-const photoTarget = ref(null)
-
 const error = ref('')
+const photoValidationError = ref('')
 const visibleError = computed(() => error.value || saveError.value)
 
 const debounceTimers = new Map()
@@ -68,6 +74,13 @@ const photoActionLabel = computed(() =>
 function onPhotoSelected(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  const validationError = validatePhotoFile(file)
+  if (validationError) {
+    photoValidationError.value = validationError
+    event.target.value = ''
+    return
+  }
+  photoValidationError.value = ''
   draft.value.photo.selected = file
   draft.value.photo.removed = false
   event.target.value = ''
@@ -75,6 +88,7 @@ function onPhotoSelected(event) {
 
 function clearSelectedPhoto() {
   draft.value.photo.selected = null
+  photoValidationError.value = ''
 }
 
 function removeExistingPhoto() {
@@ -206,29 +220,18 @@ function toggleSeason(code) {
 async function submit() {
   error.value = validate()
   if (error.value) return
+  if (photoValidationError.value) return
 
-  const photoIntent = {
-    removed:
-      draft.value.photo.removed &&
-      !draft.value.photo.selected &&
-      Boolean(draft.value.photo.existing),
-    selected: draft.value.photo.selected
-  }
-
+  // save() сам фиксирует id и действие с фото до первого await; при частичном
+  // успехе (текст сохранён, фото — нет) он возвращает textSaved и мы остаёмся
+  // на форме, чтобы повторить только фото.
   const result = await save()
-  if (!result.ok) return
-
-  // Текст сохранён и id зафиксирован: действие с фото применяется отдельно,
-  // поэтому сбой фото не теряет сохранённый рецепт и не создаёт второй.
-  photoTarget.value = { id: result.id, revision: result.data?.revision ?? revision.value }
-  setPendingPhoto(photoIntent)
-  await runPhoto()
+  if (result.ok) router.push(`/recipes/${result.id}`)
 }
 
-async function runPhoto() {
-  if (!photoTarget.value) return
-  const result = await savePhoto(photoTarget.value.id, photoTarget.value.revision)
-  if (result.ok) router.push(`/recipes/${photoTarget.value.id}`)
+async function onRetryPhoto() {
+  const result = await retryPhoto()
+  if (result.ok) router.push(`/recipes/${editingId.value}`)
 }
 
 function reloadLatest() {
@@ -281,7 +284,8 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-heading">
       <h2>{{ isEdit ? 'Редактирование рецепта' : 'Новый рецепт' }}</h2>
-      <span v-if="dirty" class="dirty-badge">● есть изменения</span>
+      <span v-if="photoPartial" class="dirty-badge">● текст сохранён, фото — нет</span>
+      <span v-else-if="dirty" class="dirty-badge">● есть изменения</span>
     </div>
 
     <p v-if="loading" class="loading">Загрузка…</p>
@@ -355,8 +359,13 @@ onBeforeUnmount(() => {
         </p>
         <label class="file-label btn btn--ghost">
           {{ photoActionLabel }}
-          <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="file-input" @change="onPhotoSelected" />
+          <input type="file" :accept="PHOTO_ACCEPT" class="file-input" @change="onPhotoSelected" />
         </label>
+        <p class="hint">
+          Допустимы {{ PHOTO_TYPES_LABEL }}, размер — до {{ PHOTO_MAX_LABEL }}. Проверка на сервере
+          остаётся окончательной.
+        </p>
+        <p v-if="photoValidationError" class="error">{{ photoValidationError }}</p>
       </fieldset>
 
       <div class="card form-section">
@@ -450,8 +459,8 @@ onBeforeUnmount(() => {
 
       <div v-if="photoError" class="error conflict-box">
         <p>{{ photoError }}</p>
-        <button type="button" class="btn btn--ghost" :disabled="photoSaving" @click="runPhoto">
-          {{ photoSaving ? 'Повтор…' : 'Повторить фото' }}
+        <button type="button" class="btn btn--ghost" :disabled="photoSaving" @click="onRetryPhoto">
+          {{ photoSaving ? 'Повтор…' : photoUnknown ? 'Проверить и повторить' : 'Повторить фото' }}
         </button>
       </div>
 
