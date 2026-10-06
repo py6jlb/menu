@@ -243,6 +243,38 @@ public sealed class RecipeMatchTests
     }
 
     [Fact]
+    public async Task Match_Search_FiltersByNameOnServer()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
+        await CreateRecipeAsync(client, owner.Token, "Блины", FullRequest() with { Name = "Блины" });
+
+        var (_, result) = await PostMatchAsync<RecipeMatchResponse>(client, owner.Token,
+            new RecipeMatchRequest(Search: "борщ"));
+
+        Assert.Equal("Борщ", Assert.Single(result!.Items).Name);
+    }
+
+    [Fact]
+    public async Task Match_OwnRecipe_HasNoExternalMetadata()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
+
+        var (_, result) = await PostMatchAsync<RecipeMatchResponse>(client, owner.Token,
+            new RecipeMatchRequest());
+
+        var item = Assert.Single(result!.Items);
+        Assert.False(item.IsExternal);
+        Assert.Null(item.SourceFamilyName);
+        Assert.Null(item.State);
+    }
+
+    [Fact]
     public async Task Match_OtherFamilyRecipes_NeverReturned()
     {
         using var client = new ApiFactory().CreateClient();

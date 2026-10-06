@@ -1,9 +1,9 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { matchRecipes } from '../api/recipes'
 import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel } from '../constants/plan'
 import { useWeekDraft } from '../composables/useWeekDraft'
+import { useRecipePicker } from '../composables/useRecipePicker'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 import { SEASONS, DIETS } from '../constants/recipe'
 import { useAuth } from '../stores/auth'
@@ -31,92 +31,37 @@ const {
   confirmNavigation
 } = useWeekDraft({ initialWeek: mondayOf(new Date()) })
 
-const recipes = ref([])
-
 const editing = ref(null)
-const search = ref('')
-const pickerRecipeId = ref(null)
-const pickerPortions = ref(1)
-const pickerLoading = ref(false)
-const pickerError = ref('')
 
-function emptyFilters() {
-  return {
-    maxDifficulty: null,
-    maxCalories: '',
-    seasons: [],
-    diets: [],
-    maxCookTime: '',
-    ingredient: '',
-    tag: '',
-    preferSeasons: [],
-    preferDiets: [],
-    preferLowCalories: false,
-    preferLowComplexity: false
-  }
+let searchTimer = null
+function scheduleSearch(run) {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(run, 250)
 }
 
-const filter = ref(emptyFilters())
+const {
+  recipes,
+  loading: pickerLoading,
+  error: pickerError,
+  search,
+  draftFilters: filter,
+  hasFilters,
+  selection,
+  selectionWarning,
+  portions: pickerPortions,
+  open: openPickerState,
+  select: selectRecipe,
+  setSearch,
+  apply: applyFilters,
+  reset: resetFilters,
+  confirm: confirmPicker,
+  reload: reloadRecipes
+} = useRecipePicker({ schedule: scheduleSearch })
 
 const weekLabel = computed(() => weekRangeLabel(monday.value))
 const days = computed(() => weekDays(monday.value))
 
 const mobileDay = ref((new Date().getDay() + 6) % 7)
-
-const hasFilters = computed(() => {
-  const f = filter.value
-  return Boolean(
-    f.maxDifficulty ||
-      f.maxCalories ||
-      f.seasons.length ||
-      f.diets.length ||
-      f.maxCookTime ||
-      f.ingredient ||
-      f.tag ||
-      f.preferSeasons.length ||
-      f.preferDiets.length ||
-      f.preferLowCalories ||
-      f.preferLowComplexity
-  )
-})
-
-const filteredRecipes = computed(() => {
-  const q = search.value.trim().toLowerCase()
-  if (!q) return recipes.value
-  return recipes.value.filter((r) => r.name.toLowerCase().includes(q))
-})
-
-async function loadRecipes(body = {}) {
-  pickerLoading.value = true
-  pickerError.value = ''
-  try {
-    const { response, data } = await matchRecipes(body)
-    if (response.status === 200) {
-      recipes.value = (data?.items || []).map(toPickerItem)
-    } else {
-      pickerError.value = data?.error || 'Не удалось загрузить рецепты.'
-    }
-  } catch {
-    pickerError.value = 'Не удалось загрузить рецепты. Проверьте соединение.'
-  } finally {
-    pickerLoading.value = false
-  }
-}
-
-function toPickerItem(item) {
-  return {
-    id: item.recipeId,
-    name: item.name,
-    difficulty: item.difficulty,
-    calories: item.calories,
-    cookTimeMinutes: item.cookTimeMinutes,
-    servings: item.servings,
-    tags: item.tags,
-    seasonality: item.seasonality,
-    diet: item.diet,
-    matchScore: item.matchScore
-  }
-}
 
 function toggleInList(list, value) {
   const index = list.indexOf(value)
@@ -124,58 +69,27 @@ function toggleInList(list, value) {
   else list.push(value)
 }
 
-function resetFilters() {
-  filter.value = emptyFilters()
-}
-
-async function applyFilters() {
-  const f = filter.value
-  const body = {
-    filters: {
-      maxDifficulty: f.maxDifficulty || null,
-      maxCalories: f.maxCalories === '' ? null : Number(f.maxCalories),
-      seasons: f.seasons,
-      diets: f.diets,
-      maxCookTimeMinutes: f.maxCookTime === '' ? null : Number(f.maxCookTime),
-      includeIngredients: f.ingredient ? [f.ingredient] : null,
-      tags: f.tag ? [f.tag] : null
-    },
-    preferences: {
-      preferSeasons: f.preferSeasons,
-      preferDiets: f.preferDiets,
-      preferLowCalories: f.preferLowCalories,
-      preferLowComplexity: f.preferLowComplexity
-    }
-  }
-  await loadRecipes(body)
-}
-
 function openPicker(day, mealType) {
   editing.value = { day, mealType }
-  search.value = ''
-  resetFilters()
-  loadRecipes()
-  const current = slotEntry(day, mealType)
-  pickerRecipeId.value = current ? current.recipeId : null
-  pickerPortions.value = current ? current.portions : 1
+  openPickerState(slotEntry(day, mealType))
+}
+
+function isSelected(recipe) {
+  return selection.value?.recipeId === recipe.id
+}
+
+function isSelectionOutsideResults() {
+  return Boolean(selection.value) && !recipes.value.some((r) => r.id === selection.value.recipeId)
 }
 
 function closePicker() {
   editing.value = null
 }
 
-function selectRecipe(recipe) {
-  pickerRecipeId.value = recipe.id
-}
-
 function confirmSlot() {
-  if (!pickerRecipeId.value || pickerPortions.value < 1) return
-  const recipe = recipes.value.find((r) => r.id === pickerRecipeId.value)
-  setSlot(editing.value.day, editing.value.mealType, {
-    recipeId: pickerRecipeId.value,
-    recipeName: recipe?.name || '',
-    portions: pickerPortions.value
-  })
+  const entry = confirmPicker()
+  if (!entry) return
+  setSlot(editing.value.day, editing.value.mealType, entry)
   closePicker()
 }
 
@@ -210,11 +124,12 @@ onBeforeRouteLeave(() => confirmNavigation())
 onMounted(() => {
   window.addEventListener('beforeunload', handleBeforeUnload)
   load()
-  loadRecipes()
+  reloadRecipes()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  clearTimeout(searchTimer)
 })
 </script>
 
@@ -366,7 +281,7 @@ onBeforeUnmount(() => {
           {{ DAYS.find((d) => d.code === editing.day)?.label }}
         </h3>
 
-        <input v-model="search" type="text" placeholder="Поиск рецепта…" />
+        <input :value="search" type="text" placeholder="Поиск рецепта…" @input="setSearch($event.target.value)" />
 
         <details class="filter-panel">
           <summary>Фильтры и предпочтения</summary>
@@ -446,7 +361,14 @@ onBeforeUnmount(() => {
 
           <div class="filter-actions">
             <button type="button" class="btn btn--primary" @click="applyFilters">Применить</button>
-            <button type="button" class="btn btn--ghost" @click="resetFilters">Сбросить</button>
+            <button
+              type="button"
+              class="btn btn--ghost"
+              :disabled="!hasFilters && !search"
+              @click="resetFilters"
+            >
+              Сбросить
+            </button>
           </div>
         </details>
 
@@ -455,12 +377,18 @@ onBeforeUnmount(() => {
 
         <ul class="recipe-options">
           <li
-            v-for="recipe in filteredRecipes"
+            v-for="recipe in recipes"
             :key="recipe.id"
-            :class="{ selected: recipe.id === pickerRecipeId }"
+            :class="{ selected: isSelected(recipe) }"
             @click="selectRecipe(recipe)"
           >
-            <span class="recipe-name">{{ recipe.name }}</span>
+            <span class="recipe-name">
+              {{ recipe.name }}
+              <ExternalStateBadge v-if="recipe.state" :state="recipe.state" />
+            </span>
+            <span v-if="recipe.isExternal" class="recipe-origin">
+              внешний · из семьи {{ recipe.sourceFamilyName }}
+            </span>
             <span class="recipe-meta">
               <template v-if="recipe.difficulty">Сл.: {{ recipe.difficulty }}</template>
               <template v-if="recipe.calories !== null && recipe.calories !== undefined"> · {{ recipe.calories }} ккал</template>
@@ -470,16 +398,22 @@ onBeforeUnmount(() => {
               </span>
             </span>
           </li>
-          <li v-if="filteredRecipes.length === 0" class="no-results">Ничего не найдено.</li>
+          <li v-if="recipes.length === 0" class="no-results">Ничего не найдено.</li>
         </ul>
+
+        <p v-if="isSelectionOutsideResults()" class="selection-kept">
+          Выбрано: <strong>{{ selection.name }}</strong> — вне текущей выдачи.
+        </p>
 
         <label class="portions field">
           <span>Порции</span>
           <input v-model.number="pickerPortions" type="number" min="1" max="100" />
         </label>
 
+        <p v-if="selectionWarning" class="selection-warning">{{ selectionWarning }}</p>
+
         <div class="picker-actions">
-          <button type="button" class="btn btn--primary" :disabled="!pickerRecipeId || pickerPortions < 1" @click="confirmSlot">
+          <button type="button" class="btn btn--primary" :disabled="!selection || pickerPortions < 1" @click="confirmSlot">
             Назначить
           </button>
           <button
@@ -881,6 +815,27 @@ onBeforeUnmount(() => {
 .recipe-meta {
   font-size: 0.8rem;
   color: var(--text-soft);
+}
+
+.recipe-origin {
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+
+.selection-kept {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+}
+
+.selection-warning {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .repetition {

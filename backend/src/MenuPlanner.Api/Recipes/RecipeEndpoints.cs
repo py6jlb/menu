@@ -201,8 +201,7 @@ public static class RecipeEndpoints
         RecipeMatchRequest request,
         ClaimsPrincipal principal,
         CurrentUserContext currentUser,
-        RecipeReader reader,
-        ExternalRecipeSourceLoader sourceLoader)
+        RecipeReader reader)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
@@ -212,30 +211,33 @@ public static class RecipeEndpoints
         if (error is not null)
             return Results.BadRequest(new RecipeErrorDto(error));
 
-        var recipes = await reader.ReadMatchCandidatesAsync(familyId.Value);
+        // Единое актуальное чтение: живые внешние рецепты как свои, broken исключён,
+        // состояние/происхождение разрешены модулем. Поиск по имени применяется до
+        // ограничения выдачи — рецепт за пределами первых MaxResults тоже находится.
+        var candidates = await reader.ReadMatchCandidatesAsync(familyId.Value);
+        var byId = candidates.ToDictionary(c => c.Recipe.Id);
 
-        // Внешние рецепты подбираются по живому контенту источника, как свои.
-        var liveSources = await sourceLoader.LoadSourcesAsync(
-            recipes
-                .Where(r => r.SourceRecipeId is not null)
-                .Select(r => r.SourceRecipeId!.Value));
-        var effective = recipes
-            .Select(r => ExternalRecipeContentResolver.Resolve(r, liveSources))
-            .ToList();
-
-        var items = RecipeMatcher.Apply(effective, request.Filters, request.Preferences)
-            .Select(m => new RecipeMatchItemDto(
-                m.Recipe.Id,
-                m.Recipe.Name,
-                m.Recipe.Difficulty,
-                m.Recipe.Calories,
-                m.Recipe.CookTimeMinutes,
-                m.Recipe.Servings,
-                m.Recipe.Tags,
-                m.Recipe.Seasonality,
-                DietCatalog.NormalizeAll(m.Recipe.Diet),
-                PhotoUrl(m.Recipe.PhotoPath),
-                m.MatchScore))
+        var items = RecipeMatcher.Apply(
+                candidates.Select(c => c.Recipe), request.Filters, request.Preferences, request.Search)
+            .Select(m =>
+            {
+                var candidate = byId[m.Recipe.Id];
+                return new RecipeMatchItemDto(
+                    m.Recipe.Id,
+                    m.Recipe.Name,
+                    m.Recipe.Difficulty,
+                    m.Recipe.Calories,
+                    m.Recipe.CookTimeMinutes,
+                    m.Recipe.Servings,
+                    m.Recipe.Tags,
+                    m.Recipe.Seasonality,
+                    DietCatalog.NormalizeAll(m.Recipe.Diet),
+                    PhotoUrl(m.Recipe.PhotoPath),
+                    m.MatchScore,
+                    candidate.IsExternal,
+                    candidate.SourceFamilyName,
+                    candidate.State is { } state ? ExternalRecipeStateRules.Code(state) : null);
+            })
             .ToList();
 
         return Results.Json(new RecipeMatchResponse(items));

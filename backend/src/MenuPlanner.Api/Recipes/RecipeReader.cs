@@ -47,6 +47,17 @@ public sealed record RecipeDetail(
     ExternalRecipeState? State);
 
 /// <summary>
+/// Кандидат подбора: актуальный контент (внешний рецепт спроецирован на живой источник),
+/// локальная identity и разрешённые состояние/происхождение. Сломанный источник сюда
+/// не попадает.
+/// </summary>
+public sealed record RecipeMatchCandidate(
+    Recipe Recipe,
+    bool IsExternal,
+    string? SourceFamilyName,
+    ExternalRecipeState? State);
+
+/// <summary>
 /// Единое предметное чтение рецепта для списка и деталей. Прячет от потребителей связь
 /// локального рецепта с источником, доступность источника и происхождение: вызывающий
 /// получает уже разрешённые состояние, подпись семьи-источника и правильный контент.
@@ -122,40 +133,74 @@ public sealed class RecipeReader
         var liveSources = await _sources.LoadSummariesAsync(
             external.Select(r => r.SourceRecipeId!.Value), cancellationToken);
 
-        var staleIds = stored
-            .Where(r => r.SourceRecipeId is Guid sourceId
-                && liveSources.TryGetValue(sourceId, out var live)
-                && !string.Equals(r.Name, live.Name, StringComparison.Ordinal))
-            .Select(r => r.Id)
-            .ToList();
-        await _nameCache.RefreshAsync(
-            staleIds,
+        var context = await ResolveExternalContextAsync(
+            external
+                .Select(r => new ExternalLinkInfo(
+                    r.Id, r.SourceRecipeId!.Value, r.SourceToken, r.SourceFamilyId, r.Name))
+                .ToList(),
             liveSources.ToDictionary(x => x.Key, x => x.Value.Name),
             cancellationToken);
 
-        var states = await _states.ResolveManyAsync(
-            external
-                .Select(r => new ExternalSourceLink(r.Id, r.SourceRecipeId!.Value, r.SourceToken))
-                .ToList());
-
-        var familyNames = await _sourceNames.ResolveManyAsync(
-            stored
-                .Where(r => r.SourceFamilyId is not null)
-                .Select(r => r.SourceFamilyId!.Value));
-
         return stored
-            .Select(r => Summarize(r, liveSources, states, familyNames))
+            .Select(r => Summarize(r, liveSources, context.States, context.FamilyNames))
             .ToList();
     }
 
-    /// <summary>Рецепты семьи как кандидаты подбора (с ингредиентами).</summary>
-    public Task<List<Recipe>> ReadMatchCandidatesAsync(
-        Guid familyId, CancellationToken cancellationToken = default) =>
-        _db.Recipes
+    /// <summary>
+    /// Рецепты семьи как кандидаты подбора: локальный id и принадлежность сохранены,
+    /// контент внешнего рецепта проецируется на живой источник, состояние/происхождение
+    /// разрешены. Сломанный источник исключён — его нельзя подтвердить как доступное блюдо.
+    /// </summary>
+    public async Task<IReadOnlyList<RecipeMatchCandidate>> ReadMatchCandidatesAsync(
+        Guid familyId, CancellationToken cancellationToken = default)
+    {
+        var recipes = await _db.Recipes
             .AsNoTracking()
             .Include(r => r.Ingredients)
             .Where(r => r.FamilyId == familyId)
             .ToListAsync(cancellationToken);
+
+        if (recipes.Count == 0)
+            return Array.Empty<RecipeMatchCandidate>();
+
+        var external = recipes.Where(r => r.SourceRecipeId is not null).ToList();
+
+        var liveSources = await _sources.LoadSourcesAsync(
+            external.Select(r => r.SourceRecipeId!.Value), cancellationToken);
+
+        var context = await ResolveExternalContextAsync(
+            external
+                .Select(r => new ExternalLinkInfo(
+                    r.Id, r.SourceRecipeId!.Value, r.SourceToken, r.SourceFamilyId, r.Name))
+                .ToList(),
+            liveSources.ToDictionary(x => x.Key, x => x.Value.Name),
+            cancellationToken);
+
+        var candidates = new List<RecipeMatchCandidate>();
+        foreach (var recipe in recipes)
+        {
+            var isExternal = recipe.SourceRecipeId is not null;
+            ExternalRecipeState? state = null;
+            string? sourceFamilyName = null;
+
+            if (isExternal)
+            {
+                state = context.States.GetValueOrDefault(recipe.Id, ExternalRecipeState.Broken);
+                sourceFamilyName = recipe.SourceFamilyId is Guid sourceFamilyId
+                    ? context.FamilyNames.GetValueOrDefault(sourceFamilyId)
+                    : null;
+
+                if (state == ExternalRecipeState.Broken)
+                    continue;
+            }
+
+            var effective = ExternalRecipeContentResolver.Resolve(recipe, liveSources);
+            effective.Revision = recipe.Revision;
+            candidates.Add(new RecipeMatchCandidate(effective, isExternal, sourceFamilyName, state));
+        }
+
+        return candidates;
+    }
 
     /// <summary>
     /// Подробный рецепт семьи или null, если его нет в этой семье. Живой источник читается
@@ -237,6 +282,55 @@ public sealed class RecipeReader
             sourceFamilyName,
             state,
             stored.CopiedFromFamilyName);
+    }
+
+    /// <summary>
+    /// Связь локального внешнего рецепта с источником в том виде, в каком она нужна
+    /// для разрешения состояния/происхождения и обновления кэша имени.
+    /// </summary>
+    private sealed record ExternalLinkInfo(
+        Guid LocalId,
+        Guid SourceRecipeId,
+        string? SourceToken,
+        Guid? SourceFamilyId,
+        string CachedName);
+
+    private sealed record ExternalContext(
+        Dictionary<Guid, ExternalRecipeState> States,
+        Dictionary<Guid, string> FamilyNames);
+
+    /// <summary>
+    /// Единая оркестрация внешних связей: обновляет кэш имени по живым именам,
+    /// разрешает состояние ссылок и подписи семей-источников. Обе проекции чтения
+    /// используют её, чтобы правила не расходились.
+    /// </summary>
+    private async Task<ExternalContext> ResolveExternalContextAsync(
+        IReadOnlyList<ExternalLinkInfo> links,
+        IReadOnlyDictionary<Guid, string> liveNames,
+        CancellationToken cancellationToken)
+    {
+        if (links.Count == 0)
+            return new ExternalContext(new Dictionary<Guid, ExternalRecipeState>(),
+                new Dictionary<Guid, string>());
+
+        var staleIds = links
+            .Where(l => liveNames.TryGetValue(l.SourceRecipeId, out var liveName)
+                && !string.Equals(l.CachedName, liveName, StringComparison.Ordinal))
+            .Select(l => l.LocalId)
+            .ToList();
+        await _nameCache.RefreshAsync(staleIds, liveNames, cancellationToken);
+
+        var states = await _states.ResolveManyAsync(
+            links
+                .Select(l => new ExternalSourceLink(l.LocalId, l.SourceRecipeId, l.SourceToken))
+                .ToList());
+
+        var familyNames = await _sourceNames.ResolveManyAsync(
+            links
+                .Where(l => l.SourceFamilyId is not null)
+                .Select(l => l.SourceFamilyId!.Value));
+
+        return new ExternalContext(states, familyNames);
     }
 
     private sealed record StoredSummary(

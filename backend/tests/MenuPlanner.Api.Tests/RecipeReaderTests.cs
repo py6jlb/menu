@@ -132,6 +132,85 @@ public sealed class RecipeReaderTests
     }
 
     [Fact]
+    public async Task ReadMatchCandidates_ExternalWithLiveSource_ResolvesContentAndMetadata()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+        var source = NewRecipe(sourceFamily.Id, "Свежий борщ");
+        source.Difficulty = 4;
+        source.Ingredients.Add(new RecipeIngredient { Order = 0, Name = "Свёкла", Amount = 2m, Unit = "pcs" });
+        db.Recipes.Add(source);
+        var wrapper = NewRecipe(recipientFamily.Id, "Устаревшее имя");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "tok"));
+        await db.SaveChangesAsync();
+
+        var candidates = await Reader(db).ReadMatchCandidatesAsync(recipientFamily.Id);
+
+        var candidate = Assert.Single(candidates);
+        Assert.Equal(wrapper.Id, candidate.Recipe.Id);
+        Assert.Equal("Свежий борщ", candidate.Recipe.Name);
+        Assert.Equal(4, candidate.Recipe.Difficulty);
+        Assert.Single(candidate.Recipe.Ingredients);
+        Assert.True(candidate.IsExternal);
+        Assert.Equal(ExternalRecipeState.Ok, candidate.State);
+        Assert.Equal(sourceFamily.Name, candidate.SourceFamilyName);
+    }
+
+    [Fact]
+    public async Task ReadMatchCandidates_BrokenSource_IsExcluded_WarningKept()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+        var liveSource = NewRecipe(sourceFamily.Id, "Живой");
+        db.Recipes.Add(liveSource);
+        var broken = NewRecipe(recipientFamily.Id, "Кэш имени");
+        broken.SourceRecipeId = Guid.NewGuid();
+        broken.SourceFamilyId = sourceFamily.Id;
+        broken.SourceToken = "tok";
+        db.Recipes.Add(broken);
+        var warning = NewRecipe(recipientFamily.Id, "Отозванный");
+        warning.SourceRecipeId = liveSource.Id;
+        warning.SourceFamilyId = sourceFamily.Id;
+        warning.SourceToken = "stale";
+        db.Recipes.Add(warning);
+        await db.SaveChangesAsync();
+
+        var candidates = await Reader(db).ReadMatchCandidatesAsync(recipientFamily.Id);
+
+        Assert.DoesNotContain(candidates, c => c.Recipe.Id == broken.Id);
+        var kept = Assert.Single(candidates);
+        Assert.Equal(warning.Id, kept.Recipe.Id);
+        Assert.Equal(ExternalRecipeState.Warning, kept.State);
+    }
+
+    [Fact]
+    public async Task ReadMatchCandidates_OwnRecipe_IsNotExternal()
+    {
+        await using var db = NewDb();
+        var family = NewFamily();
+        db.Families.Add(family);
+        var own = NewRecipe(family.Id, "Свой суп");
+        own.Ingredients.Add(new RecipeIngredient { Order = 0, Name = "Лук", Amount = 1m, Unit = "pcs" });
+        db.Recipes.Add(own);
+        await db.SaveChangesAsync();
+
+        var candidate = Assert.Single(await Reader(db).ReadMatchCandidatesAsync(family.Id));
+
+        Assert.False(candidate.IsExternal);
+        Assert.Null(candidate.State);
+        Assert.Null(candidate.SourceFamilyName);
+        Assert.Single(candidate.Recipe.Ingredients);
+    }
+
+    [Fact]
     public async Task ReadDetail_ExternalWithLiveSource_KeepsLocalIdAndRevision_WithSourceContent()
     {
         await using var db = NewDb();
