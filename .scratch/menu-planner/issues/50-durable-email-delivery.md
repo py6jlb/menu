@@ -4,13 +4,31 @@
 
 **Blocked by:** 46 — Атомарный сброс пароля без внешне навязанной блокировки; 49 — Обязательный защищённый SMTP и отсутствие кодов в production-логах.
 
-**Status:** ready-for-agent
+**Status:** resolved (commit e55a9c2)
 
-- [ ] Изменение аккаунта/challenge и запись принятой доставки сохраняются в одной транзакции в PostgreSQL; используется небольшой outbox без отдельного брокера.
-- [ ] Регистрация возвращает созданную сессию после принятия письма, временная недоступность SMTP не превращает повторную регистрацию в единственный доступный пользователю путь.
-- [ ] Фоновая отправка имеет ограниченные повторы с задержкой и понятные состояния; записи не теряются после перезапуска, параллельные worker не обрабатывают их бесконтрольно.
-- [ ] Перед отправкой проверены TTL и актуальность challenge: истёкший, потреблённый или заменённый код не отправляется как действующий.
-- [ ] Чувствительное содержимое outbox защищено от логирования, имеет ограниченный срок хранения и удаляется после завершения; ключи защиты, если используются, переживают перезапуск.
-- [ ] Возможность повторной доставки при неопределённом результате SMTP явно учтена: письмо относится к тому же challenge и не создаёт новый код само по себе.
-- [ ] UI отличает принятую отправку от гарантированной фактической доставки, предлагает штатный resend по таймеру и не заявляет ложный успех доставки.
-- [ ] Проверены SMTP-отказ, restart между принятием и отправкой, окончательный отказ и замена кода до отправки; миграция и upgrade проверены на PostgreSQL.
+- [x] Изменение аккаунта/challenge и запись принятой доставки сохраняются в одной транзакции в PostgreSQL; используется небольшой outbox без отдельного брокера.
+  - `EmailVerificationService.IssueInitialCodeAsync`/`ResendAsync` и `PasswordResetService.RequestAsync` вызывают `EmailOutbox.EnqueueAsync` до `AuthCodeLifecycle.SaveAndCommitAsync`, поэтому `User`/`AuthCode`/`EmailOutboxMessage` фиксируются одним `SaveChanges` в одной транзакции. Регистрация больше не сохраняет пользователя отдельным `SaveChanges`. `PostgresEmailOutboxTests.ChallengeAndAcceptedDelivery_AreCommittedAndRolledBackTogether` (rollback → ни challenge, ни outbox; commit → оба).
+- [x] Регистрация возвращает созданную сессию после принятия письма, временная недоступность SMTP не превращает повторную регистрацию в единственный доступный пользователю путь.
+  - `AuthEndpoints.RegisterAsync` создаёт аккаунт, challenge и запись очереди и возвращает `201 { token, user }`; быстрый путь `EmailDispatchTrigger` — best-effort и не влияет на ответ. `EmailWiringTests.Register_WhenTransportFails_StillReturnsSessionAndQueuesDelivery`, `DurableEmailDeliveryFlowTests.Register_WhenTransportFails_KeepsSessionAndDeliversAfterRecovery` (после восстановления транспорта то же письмо доставляется, новый код не создаётся).
+- [x] Фоновая отправка имеет ограниченные повторы с задержкой и понятные состояния; записи не теряются после перезапуска, параллельные worker не обрабатывают их бесконтрольно.
+  - `EmailDeliveryWorker` + `EmailOutboxOptions` (`MaxAttempts`, экспоненциальная задержка до потолка, аренда, retention); состояния `Pending`/`InProgress`/`Failed`. Захват на PostgreSQL — одним `UPDATE ... WHERE "Id" IN (SELECT ... FOR UPDATE SKIP LOCKED)`, лиз переоценивает зависшие захваты. `PostgresEmailOutboxTests.ConcurrentWorkers_DeliverEachAcceptedMessageOnce` (два воркера через `AsyncBarrier` → одна доставка), `EmailOutboxProcessorTests.ProtectedPayload_DoesNotContainPlaintextCode_ButSurvivesRestart` (новый контекст/процессор доставляет сохранённую запись), `StaleInProgressClaim_IsReclaimed`.
+- [x] Перед отправкой проверены TTL и актуальность challenge: истёкший, потреблённый или заменённый код не отправляется как действующий.
+  - `EmailOutboxProcessor.SkipReason`: отсутствие challenge/user, `Used` (потреблён/заменён `IssueAsync`), `ExpiresAt <= now`, уже подтверждённая почта. `EmailOutboxProcessorTests.ExpiredChallenge_IsNotSent_AndIsRemoved`, `ReplacedOrConsumedChallenge_IsNotSent`, `VerifiedUser_DoesNotGetVerificationCode`, `PostgresEmailOutboxTests.ConsumedChallenge_IsNotDeliveredAsActiveCode`.
+- [x] Чувствительное содержимое outbox защищено от логирования, имеет ограниченный срок хранения и удаляется после завершения; ключи защиты, если используются, переживают перезапуск.
+  - Код хранится только в `ProtectedPayload` (AES-GCM), ключ выводится HKDF из `EMAIL_OUTBOX_KEY` или `JWT_SECRET` и не зависит от жизненного цикла процесса; в журналы идут только безопасные коды причин. Успешная доставка и неактуальный challenge удаляют запись; окончательно проваленные (`Failed`) вычищаются по `RetentionDays`. `OutboxPayloadProtectorTests` (round-trip, случайный nonce, чужой ключ/tamper → отказ), `EmailOutboxProcessorTests.FailedRecords_ArePurgedAfterRetention`.
+- [x] Возможность повторной доставки при неопределённом результате SMTP явно учтена: письмо относится к тому же challenge и не создаёт новый код само по себе.
+  - Повтор использует ту же запись `EmailOutboxMessage` с тем же `AuthCodeId` и зашифрованным кодом; `IssueAsync` при повторе не вызывается. `EmailOutboxProcessorTests.TransientFailure_Reschedules_ThenRetryDeliversSameCode` (тот же код, `AuthCodes == 1`), `PostgresEmailOutboxTests.TransientFailure_RetriesSameChallenge_WithoutNewCode`.
+- [x] UI отличает принятую отправку от гарантированной фактической доставки, предлагает штатный resend по таймеру и не заявляет ложный успех доставки.
+  - `VerifyEmailView.vue`: подзаголовок «Мы приняли запрос на отправку кода…», сообщение о приёме запроса при resend, подсказка о возможной задержке; таймер повторной отправки сохранён. Регистрация не показывает ошибку доставки, т.к. сервер возвращает сессию после принятия.
+- [x] Проверены SMTP-отказ, restart между принятием и отправкой, окончательный отказ и замена кода до отправки; миграция и upgrade проверены на PostgreSQL.
+  - SMTP-отказ — `Register_..._StillReturnsSession...`, `Resend_WhenTransportFails_AcceptsAndQueuesWithoutFalseError`; restart — `ProtectedPayload_..._SurvivesRestart`; окончательный отказ — `PermanentFailure_StopsAfterBoundedAttempts`; замена до отправки — `ReplacedOrConsumedChallenge_IsNotSent`; миграция `20261006074826_AddEmailOutbox` и общий `PostgresMigrationTests.AppliedMigrations_MatchAllDefinedMigrations_ForFutureUpgrade`; регистрация на PostgreSQL — `PostgresEmailOutboxTests.Registration_OnPostgres_CommitsAccountChallengeAndOutbox_ThenDelivers`.
+
+## Evidence
+
+- Fast: `docker run --rm -u "$(id -u):$(id -g)" -e DOTNET_CLI_HOME=/tmp/dotnet-home -e NUGET_PACKAGES=/tmp/nuget -v "$PWD":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 dotnet test` → Failed: 0, Passed: 395, Skipped: 32 (Postgres-тесты пропущены без сервера).
+- PostgreSQL: `scripts/test-postgres.sh` → Failed: 0, Passed: 35.
+- Frontend: `node:24-alpine npm ci && npm run build` → built successfully.
+- Deploy: `python3 -B -m unittest discover -s deploy/tests` → Ran 128 tests, OK.
+- Схема: миграция `20261006074826_AddEmailOutbox` (`EmailOutboxMessages`: FK на `Users`/`AuthCodes` с cascade, индекс `(Status, NextAttemptAt)`); `dotnet ef migrations has-pending-model-changes` → «No changes have been made to the model since the last migration».
+- Документация: `README.md`, `CONTEXT.md` (термины «Очередь писем», «Принятая доставка», разделение кода), `deploy/README.md`, `docs/adr/0011-durable-email-outbox.md`.
+- Ограничения: account/challenge и outbox в одной транзакции гарантированы для публичных путей (регистрация, resend, forgot); закрытый `admin-bootstrap` создаёт аккаунт своей транзакцией, а challenge+outbox — следующей (команда одноразовая, письмо доводится сразу либо при следующем запуске). `EmailOutbox_*` — необязательные настройки с дефолтами; `EMAIL_OUTBOX_KEY` не прокинут в prod-Compose (по умолчанию ключ выводится из `JWT_SECRET`) и может быть задан окружением при собственной конфигурации.

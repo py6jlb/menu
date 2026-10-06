@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth;
 
@@ -42,17 +43,20 @@ public sealed class EmailVerificationService
     private readonly IPasswordHasher<User> _hasher;
     private readonly AuthCodeOptions _options;
     private readonly TimeProvider _clock;
+    private readonly EmailOutbox _outbox;
 
     public EmailVerificationService(
         AuthCodeLifecycle codes,
         IPasswordHasher<User> hasher,
         AuthCodeOptions options,
-        TimeProvider clock)
+        TimeProvider clock,
+        EmailOutbox outbox)
     {
         _codes = codes;
         _hasher = hasher;
         _options = options;
         _clock = clock;
+        _outbox = outbox;
     }
 
     /// <summary>Первичная выдача кода при регистрации: без cooldown и проверок блокировки.</summary>
@@ -60,9 +64,10 @@ public sealed class EmailVerificationService
     {
         var now = Now;
         await using var tx = await _codes.BeginCriticalSectionAsync(user, ct);
-        var code = await _codes.IssueAsync(user.Id, AuthCodeType.Verify, now, ct);
+        var issued = await _codes.IssueAsync(user.Id, AuthCodeType.Verify, now, ct);
+        await _outbox.EnqueueAsync(user, issued.Challenge, issued.Plaintext, ct);
         await _codes.SaveAndCommitAsync(tx, ct);
-        return code;
+        return issued.Plaintext;
     }
 
     public async Task<ResendEmailResult> ResendAsync(User user, CancellationToken ct = default)
@@ -93,9 +98,10 @@ public sealed class EmailVerificationService
             }
         }
 
-        var code = await _codes.IssueAsync(user.Id, AuthCodeType.Verify, now, ct);
+        var issued = await _codes.IssueAsync(user.Id, AuthCodeType.Verify, now, ct);
+        await _outbox.EnqueueAsync(user, issued.Challenge, issued.Plaintext, ct);
         await _codes.SaveAndCommitAsync(tx, ct);
-        return new ResendEmailResult(ResendEmailOutcome.Sent, code, 0);
+        return new ResendEmailResult(ResendEmailOutcome.Sent, issued.Plaintext, 0);
     }
 
     public async Task<VerifyEmailResult> VerifyAsync(User user, string code, CancellationToken ct = default)
