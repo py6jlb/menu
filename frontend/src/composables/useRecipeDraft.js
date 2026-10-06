@@ -256,13 +256,17 @@ export function useRecipeDraft(options = {}) {
     clearPhotoState()
   }
 
+  function clearPhotoResult() {
+    photoPartial.value = false
+    photoUnknown.value = false
+    photoError.value = ''
+  }
+
   function clearPhotoState() {
     pendingPhoto = null
     lastServerTextDraft = null
     photoSaving.value = false
-    photoPartial.value = false
-    photoUnknown.value = false
-    photoError.value = ''
+    clearPhotoResult()
   }
 
   function clearMessages() {
@@ -623,9 +627,7 @@ export function useRecipeDraft(options = {}) {
     if (intent.kind === 'keep') {
       // Действие с фото отменено пользователем: повторять нечего.
       pendingPhoto = null
-      photoPartial.value = false
-      photoUnknown.value = false
-      photoError.value = ''
+      clearPhotoResult()
       return
     }
     pendingPhoto = { ...pendingPhoto, kind: intent.kind, file: intent.file }

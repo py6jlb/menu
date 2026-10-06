@@ -4,9 +4,6 @@ using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Recipes;
 
-/// <summary>Фактический формат и размеры проверенного изображения.</summary>
-public sealed record ValidatedPhoto(string Extension, int Width, int Height);
-
 /// <summary>
 /// Проверяет, что загруженный файл — действительно декодируемое изображение
 /// поддерживаемого формата, и что размеры укладываются в лимиты. Формат
@@ -18,25 +15,26 @@ public static class RecipeImageValidator
     public const string NotImageError =
         "Файл не является изображением или повреждён. Допустимы JPEG, PNG, WebP и GIF.";
 
-    public const string TooLargeDimensionsError =
-        "Изображение слишком большое. Допустимо не более 8000 пикселей по стороне и 25 мегапикселей.";
+    public static readonly string TooLargeDimensionsError =
+        $"Изображение слишком большое. Допустимо не более {RecipeCatalog.PhotoMaxDimension} пикселей "
+        + $"по стороне и {RecipeCatalog.PhotoMaxPixels / 1_000_000} мегапикселей.";
 
     /// <summary>
-    /// Разбирает поток как изображение. Размеры проверяются по заголовку до
-    /// полного декодирования, чтобы малое по объёму изображение с огромными
-    /// размерами не исчерпало ресурсы. Затем выполняется полное декодирование:
-    /// обрезанный или повреждённый файл отклоняется. Поток должен поддерживать
-    /// поиск (pos=0 используется перед декодированием).
+    /// Разбирает поток как изображение и возвращает фактическое расширение.
+    /// Размеры проверяются по заголовку до декодирования пикселей, чтобы малое
+    /// по объёму изображение с огромными размерами не исчерпало ресурсы. Затем
+    /// декодируется первый кадр: обрезанный или повреждённый файл отклоняется.
+    /// Поток должен поддерживать поиск (перед разбором выполняется pos=0).
     /// </summary>
-    public static bool TryValidate(Stream stream, out ValidatedPhoto? photo, out string? error)
+    public static bool TryValidate(Stream stream, out string? extension, out string? error)
     {
-        photo = null;
+        extension = null;
         error = null;
 
         try
         {
             var format = Image.DetectFormat(stream);
-            if (format is null || !TryExtension(format, out var extension))
+            if (format is null || !TryExtension(format, out var detected))
             {
                 error = NotImageError;
                 return false;
@@ -59,20 +57,20 @@ public static class RecipeImageValidator
             }
 
             if (stream.CanSeek) stream.Position = 0;
-            // MaxFrames ограничивает ресурсы на многокадровых GIF; содержимое
-            // не перекодируется, поэтому оригинал со всей анимацией и ориентацией
-            // EXIF сохраняется без изменений.
+            // MaxFrames=1 ограничивает расходы на многокадровых изображениях
+            // (проверяется первый кадр). Оригинал не перекодируется, поэтому
+            // анимация, метаданные и ориентация EXIF сохраняются без изменений.
             using var image = Image.Load(new DecoderOptions { MaxFrames = 1 }, stream);
 
-            photo = new ValidatedPhoto(extension, image.Width, image.Height);
+            extension = detected;
             return true;
         }
-        catch (UnknownImageFormatException)
+        catch (ImageFormatException)
         {
             error = NotImageError;
             return false;
         }
-        catch (InvalidImageContentException)
+        catch (NotSupportedException)
         {
             error = NotImageError;
             return false;

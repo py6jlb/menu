@@ -276,12 +276,12 @@ public static class RecipeEndpoints
         // Формат определяется по содержимому, а не по ContentType/имени файла:
         // поддельный MIME, повреждённый файл и «бомба» отклоняются до записи в БД.
         using var probe = new MemoryStream(bytes, writable: false);
-        if (!RecipeImageValidator.TryValidate(probe, out var photo, out var validationError))
+        if (!RecipeImageValidator.TryValidate(probe, out var extension, out var validationError))
             return Results.BadRequest(new RecipeErrorDto(validationError!));
 
         using var upload = new MemoryStream(bytes, writable: false);
         var result = await mutations.UploadPhotoAsync(
-            new RecipeTarget(id, familyId.Value), revision, photo!.Extension, upload);
+            new RecipeTarget(id, familyId.Value), revision, extension!, upload);
         return MutationResult(result, result.Recipe is null ? null : ToDto(result.Recipe));
     }
 

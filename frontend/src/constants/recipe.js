@@ -100,6 +100,22 @@ export function validatePhotoFile(file) {
   return ''
 }
 
+/**
+ * Проверка фактических размеров изображения (в пикселях) до отправки.
+ * Ограничения совпадают с серверными; окончательное решение за сервером.
+ */
+export function validatePhotoDimensions(width, height) {
+  const w = Number(width)
+  const h = Number(height)
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    return 'Не удалось определить размеры изображения. Загрузите другой файл.'
+  }
+  if (w > PHOTO_MAX_DIMENSION || h > PHOTO_MAX_DIMENSION || w * h > PHOTO_MAX_PIXELS) {
+    return `Изображение слишком большое: допустимо не более ${PHOTO_DIMENSIONS_LABEL}.`
+  }
+  return ''
+}
+
 export function parseList(value) {
   return (value || '')
     .split(',')

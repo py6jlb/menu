@@ -154,7 +154,7 @@ public sealed class RecipePhotoTests
             Encoding.UTF8.GetBytes("это просто текст, а не изображение"), "image/png", "fake.png");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.NotNull(error);
-        Assert.Contains("изображени", error.Error);
+        Assert.Equal(RecipeImageValidator.NotImageError, error.Error);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public sealed class RecipePhotoTests
             corrupted, "image/png", "broken.png");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.NotNull(error);
-        Assert.Contains("изображени", error.Error);
+        Assert.Equal(RecipeImageValidator.NotImageError, error.Error);
     }
 
     [Fact]
@@ -192,7 +192,7 @@ public sealed class RecipePhotoTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.NotNull(error);
-        Assert.Contains("большое", error.Error);
+        Assert.Equal(RecipeImageValidator.TooLargeDimensionsError, error.Error);
         Assert.Empty(Directory.GetFiles(factory.PhotosDir));
     }
 
@@ -210,7 +210,7 @@ public sealed class RecipePhotoTests
             PngHeader(8001, 1), "image/png", "wide.png");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.NotNull(error);
-        Assert.Contains("большое", error.Error);
+        Assert.Equal(RecipeImageValidator.TooLargeDimensionsError, error.Error);
     }
 
     [Fact]
