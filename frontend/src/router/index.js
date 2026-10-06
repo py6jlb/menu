@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '../stores/auth'
+import { ensureSession } from '../composables/useSession'
+import { sanitizeReturnTo } from './returnTo'
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
@@ -46,19 +48,22 @@ const router = createRouter({
   ]
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
+  await ensureSession()
   const { isAuthenticated, isEmailVerified, isAdmin } = useAuth()
   if (to.meta.requiresAuth && !isAuthenticated.value) {
-    return { name: 'login' }
+    const returnTo = sanitizeReturnTo(to.fullPath)
+    return { name: 'login', query: returnTo ? { returnTo } : {} }
   }
   if (to.meta.guestOnly && isAuthenticated.value) {
-    return { name: 'home' }
+    return sanitizeReturnTo(to.query.returnTo) || { name: 'home' }
   }
   if (to.meta.requiresAdmin && !isAdmin.value) {
     return { name: 'home' }
   }
   if (to.meta.requiresVerified && !isEmailVerified.value) {
-    return { name: 'verify' }
+    const returnTo = sanitizeReturnTo(to.fullPath)
+    return { name: 'verify', query: returnTo ? { returnTo } : {} }
   }
   return true
 })

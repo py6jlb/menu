@@ -1,20 +1,29 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from './stores/auth'
-import { getMe } from './api/auth'
+import { ensureSession } from './composables/useSession'
 import EmailVerifyBanner from './components/EmailVerifyBanner.vue'
 
-const { state, isAuthenticated, isAdmin, clearSession, updateUser } = useAuth()
+const route = useRoute()
+const router = useRouter()
+const { state, isAuthenticated, isAdmin, roleLabel, clearSession } = useAuth()
 
 function logout() {
+  // Уход с защищённого маршрута делает наблюдатель ниже — один раз, без гонки.
   clearSession()
-  window.location.href = '/login'
 }
 
-onMounted(async () => {
-  if (!isAuthenticated.value) return
-  const { response, data } = await getMe()
-  if (response.status === 200) updateUser(data)
+onMounted(() => {
+  ensureSession()
+})
+
+// Сессия могла закончиться после 401 фонового запроса или выхода в другой
+// вкладке: уводим с защищённого маршрута на вход с возвратом.
+watch(isAuthenticated, (authenticated) => {
+  if (authenticated || !route.meta.requiresAuth || route.name === 'login') return
+  const returnTo = route.fullPath
+  router.push({ name: 'login', query: returnTo && returnTo !== '/' ? { returnTo } : {} })
 })
 </script>
 
@@ -35,7 +44,7 @@ onMounted(async () => {
       <div v-if="isAuthenticated" class="user-area">
         <span class="email">{{ state.user?.email }}</span>
         <span class="role-badge" :class="{ admin: isAdmin }">
-          {{ isAdmin ? 'Администратор' : 'Пользователь' }}
+          {{ roleLabel }}
         </span>
         <button type="button" class="btn btn--ghost btn--small logout-btn" @click="logout">
           <svg class="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>

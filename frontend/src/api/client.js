@@ -8,7 +8,7 @@ const PUBLIC_PATHS = [
 ]
 
 export async function apiFetch(path, options = {}) {
-  const { state, clearSession } = useAuth()
+  const { state, invalidateSession } = useAuth()
 
   const isPublic = PUBLIC_PATHS.some((publicPath) => path.startsWith(publicPath))
 
@@ -16,15 +16,17 @@ export async function apiFetch(path, options = {}) {
   if (options.body !== undefined && !(options.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json'
   }
-  if (state.token && !isPublic) {
-    headers['Authorization'] = `Bearer ${state.token}`
+  const tokenUsed = isPublic ? '' : state.token
+  if (tokenUsed) {
+    headers['Authorization'] = `Bearer ${tokenUsed}`
   }
 
   const response = await fetch(path, { ...options, headers })
 
   if (response.status === 401 && !isPublic) {
-    clearSession()
-    window.location.href = '/login'
+    // Гасим только сессию этого токена: поздний 401 прежнего запроса не
+    // должен удалить сессию, появившуюся после нового входа.
+    invalidateSession(tokenUsed)
   }
 
   return response
