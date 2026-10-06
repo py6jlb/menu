@@ -236,6 +236,9 @@ export function useRecipeDraft(options = {}) {
   const saving = ref(false)
   const loadError = ref('')
   const saveError = ref('')
+  // Привязка серверной ошибки ввода к полю: машинный код и путь поля формы.
+  const saveErrorCode = ref('')
+  const saveErrorField = ref('')
   const savedMessage = ref('')
 
   let loadRequestId = 0
@@ -265,6 +268,8 @@ export function useRecipeDraft(options = {}) {
   function clearMessages() {
     loadError.value = ''
     saveError.value = ''
+    saveErrorCode.value = ''
+    saveErrorField.value = ''
     savedMessage.value = ''
     conflictMessage.value = ''
     conflictRevision.value = null
@@ -298,6 +303,8 @@ export function useRecipeDraft(options = {}) {
     loadError.value = ''
     savedMessage.value = ''
     saveError.value = ''
+    saveErrorCode.value = ''
+    saveErrorField.value = ''
     conflictMessage.value = ''
     conflictRevision.value = null
     clearPhotoState()
@@ -416,6 +423,8 @@ export function useRecipeDraft(options = {}) {
     ) {
       saving.value = true
       saveError.value = ''
+      saveErrorCode.value = ''
+      saveErrorField.value = ''
       savedMessage.value = ''
       try {
         photoPartial.value = true
@@ -440,6 +449,8 @@ export function useRecipeDraft(options = {}) {
     const requestId = ++saveRequestId
     saving.value = true
     saveError.value = ''
+    saveErrorCode.value = ''
+    saveErrorField.value = ''
     savedMessage.value = ''
     conflictMessage.value = ''
     conflictRevision.value = null
@@ -498,7 +509,10 @@ export function useRecipeDraft(options = {}) {
         return { ok: false, conflict: true }
       }
 
+      // Ошибка ввода: причина и привязка к полю сохраняются, черновик остаётся dirty.
       saveError.value = data?.error || SAVE_ERROR_MESSAGE
+      saveErrorCode.value = data?.code || ''
+      saveErrorField.value = data?.field || ''
       return { ok: false }
     } catch {
       if (requestId === saveRequestId && targetId === editingId.value) {
@@ -623,6 +637,8 @@ export function useRecipeDraft(options = {}) {
     photoError,
     loadError,
     saveError,
+    saveErrorCode,
+    saveErrorField,
     savedMessage,
     setIdentity,
     load,

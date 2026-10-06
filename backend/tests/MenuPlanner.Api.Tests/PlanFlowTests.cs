@@ -143,6 +143,23 @@ public sealed class PlanFlowTests
     }
 
     [Fact]
+    public async Task Put_NullEntryElement_ReturnsFieldError_NotException()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+
+        var body = new { entries = new object?[] { null }, expectedRevision = 0 };
+        var (response, error) = await PutAuthorizedAsync<PlanErrorDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.NotNull(error);
+        Assert.Equal("plan_entry_null", error!.Code);
+        Assert.Equal("entries[0]", error.Field);
+    }
+
+    [Fact]
     public async Task Put_RecipeFromAnotherFamily_ReturnsBadRequest()
     {
         using var client = new ApiFactory().CreateClient();

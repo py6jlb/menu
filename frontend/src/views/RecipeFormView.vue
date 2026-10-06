@@ -31,6 +31,7 @@ const {
   photoError,
   loadError,
   saveError,
+  saveErrorField,
   setIdentity,
   load,
   save,
@@ -44,6 +45,31 @@ const autocomplete = useIngredientAutocomplete()
 const error = ref('')
 const photoValidationError = ref('')
 const visibleError = computed(() => error.value || saveError.value)
+const fieldErrorLabel = computed(() => fieldLabel(saveErrorField.value))
+
+const FIELD_LABELS = {
+  name: 'Название',
+  description: 'Описание',
+  cookTimeMinutes: 'Время приготовления',
+  servings: 'Порции',
+  difficulty: 'Сложность',
+  calories: 'Калорийность',
+  steps: 'Шаги',
+  tags: 'Теги',
+  seasonality: 'Сезонность',
+  diet: 'Диеты',
+  ingredients: 'Ингредиенты'
+}
+
+function fieldLabel(field) {
+  if (!field) return ''
+  const match = field.match(/^(ingredients|entries)\[(\d+)\](?:\.(\w+))?$/)
+  if (match) {
+    const base = match[1] === 'ingredients' ? 'Ингредиент' : 'Запись плана'
+    return `${base} ${Number(match[2]) + 1}${match[3] ? `.${match[3]}` : ''}`
+  }
+  return FIELD_LABELS[field] || field
+}
 
 function ingredientState(ing) {
   return autocomplete.stateFor(ing.uid)
@@ -437,7 +463,10 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <p v-if="visibleError" class="error">{{ visibleError }}</p>
+      <p v-if="visibleError" class="error">
+        {{ visibleError }}
+        <span v-if="fieldErrorLabel" class="hint">Поле: {{ fieldErrorLabel }}</span>
+      </p>
 
       <div class="actions">
         <button type="submit" class="btn btn--primary" :disabled="saving || photoSaving">{{ saving ? 'Сохранение…' : 'Сохранить' }}</button>

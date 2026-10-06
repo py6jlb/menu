@@ -7,6 +7,9 @@ public static class PlanningCatalog
     public const int PortionsMin = 1;
     public const int PortionsMax = 100;
 
+    /// <summary>Число слотов недели: 7 дней × 5 приёмов пищи.</summary>
+    public const int EntriesMax = (DayMax - DayMin + 1) * 5;
+
     public static readonly IReadOnlyList<string> MealTypeCodes =
         new[] { "breakfast", "snack_1", "lunch", "snack_2", "dinner" };
 

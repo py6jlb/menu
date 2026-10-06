@@ -105,8 +105,9 @@ public static class RecipeEndpoints
 
         var result = await mutations.CreateAsync(familyId.Value, request);
         if (result.Outcome == RecipeMutationOutcome.ValidationError)
-            return Results.BadRequest(new RecipeErrorDto(
-                result.Error ?? "Некорректные данные рецепта."));
+            return result.Validation is null
+                ? Results.BadRequest(new RecipeErrorDto(result.Error ?? "Некорректные данные рецепта."))
+                : RecipeErrors.Validation(result.Validation);
 
         return Results.Json(
             ToDto(result.Recipe!),
@@ -164,6 +165,7 @@ public static class RecipeEndpoints
                 ? RecipeErrors.MissingRevision()
                 : Results.BadRequest(new RecipeErrorDto(result.Error)),
             RecipeMutationOutcome.Conflict => RecipeErrors.RevisionConflict(result.Revision),
+            _ when result.Validation is not null => RecipeErrors.Validation(result.Validation),
             _ => Results.BadRequest(new RecipeErrorDto(result.Error ?? "Некорректные данные рецепта."))
         };
 

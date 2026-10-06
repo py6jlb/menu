@@ -378,6 +378,32 @@ describe('useRecipeDraft — сохранение', () => {
     expect(state.dirty.value).toBe(true)
   })
 
+  it('ошибка ввода сохраняет причину, код и поле, черновик остаётся dirty', async () => {
+    const state = make({
+      initialId: 'A',
+      loadRecipe: vi.fn().mockResolvedValue(ok(recipeData('A'))),
+      updateRecipe: vi.fn().mockResolvedValue({
+        response: { status: 400 },
+        data: {
+          error: 'Количество ингредиента «лук» должно иметь не больше двух знаков после запятой.',
+          code: 'ingredient_amount_precision',
+          field: 'ingredients[0].amount'
+        }
+      })
+    })
+    await state.load()
+    state.draft.value.ingredients[0].amount = '0.001'
+
+    const result = await state.save()
+
+    expect(result).toMatchObject({ ok: false })
+    expect(state.saveErrorCode.value).toBe('ingredient_amount_precision')
+    expect(state.saveErrorField.value).toBe('ingredients[0].amount')
+    expect(state.saveError.value).toContain('двух знаков')
+    expect(state.dirty.value).toBe(true)
+    expect(state.draft.value.ingredients[0].amount).toBe('0.001')
+  })
+
   it('валидация не отправляет пустое название', async () => {
     const updateRecipe = vi.fn()
     const state = make({ initialId: 'A', updateRecipe })
