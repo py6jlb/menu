@@ -164,7 +164,7 @@ _Avoid_: Рецепт (рецепт — это сущность рецепта)
 
 **Повторяемость**:
 Сколько раз рецепт готовился за окно повторяемости. Вычисляемый признак, в БД не хранится.
-_Код_: `RepetitionService`.
+_Код_: `RepetitionRules`.
 _Avoid_: Частота, Счётчик повторений
 
 **Окно повторяемости**:
@@ -200,4 +200,4 @@ _Avoid_: Умножение, Ресайз
 
 **БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `SourceFamilyNameResolver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`). Обработчики Minimal API получают его параметром.
 
-_Avoid_: `static`-метод, принимающий `AppDbContext`; service locator; имя `*Service` у чистого правила.
+_Avoid_: `static`-метод, принимающий `AppDbContext`; service locator; имя `*Service` у чистого правила. Исключение для locator — граница фреймворкового события без точки инъекции (событие `OnTokenValidated` у JwtBearer), где scoped-сервис достаётся из `RequestServices` явно одним вызовом.
