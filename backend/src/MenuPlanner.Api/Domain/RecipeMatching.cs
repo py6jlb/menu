@@ -17,10 +17,13 @@ public sealed record MatchPreferences(
 
 // Search (поиск по имени) выполняется на сервере до ограничения выдачи, поэтому
 // рецепт за пределами первых MaxResults всё равно находится. Жёсткий фильтр.
+// WeekStart — понедельник планируемой недели: повторяемость считается по окну,
+// заканчивающемуся этой неделей включительно, а не текущей неделей сервера.
 public sealed record RecipeMatchRequest(
     MatchFilters? Filters = null,
     MatchPreferences? Preferences = null,
-    string? Search = null);
+    string? Search = null,
+    DateOnly? WeekStart = null);
 
 public sealed record RecipeMatch(Recipe Recipe, int MatchScore);
 

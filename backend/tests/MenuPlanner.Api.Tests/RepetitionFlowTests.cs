@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Xunit;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes;
@@ -158,6 +159,163 @@ public sealed class RepetitionFlowTests
     }
 
     [Fact]
+    public async Task Match_Repetition_EndsAtSelectedWeek_NotServerCurrentWeek()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        // Выбранная неделя в будущем относительно текущей недели сервера.
+        var selected = CurrentMonday().AddDays(7);
+        await SaveWeekAsync(client, owner.Token, selected, new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(-7), new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(-14), new[] { Entry(borscht.Id) });
+
+        // Окно из 3 недель заканчивается выбранной будущей неделей: +1, 0, −1 → 3.
+        var (_, future) = await PostMatchAsync<RecipeMatchResponse>(
+            client, owner.Token, new RecipeMatchRequest(WeekStart: selected));
+        var futureItem = Assert.Single(future!.Items);
+        Assert.Equal(3, futureItem.RepetitionCount);
+        Assert.Equal(3, future.RepetitionWindowWeeks);
+
+        // Для текущей недели сервера окно −2, −1, 0: будущей недели там нет → 2.
+        var (_, current) = await PostMatchAsync<RecipeMatchResponse>(
+            client, owner.Token, new RecipeMatchRequest(WeekStart: CurrentMonday()));
+        Assert.Equal(2, Assert.Single(current!.Items).RepetitionCount);
+    }
+
+    [Fact]
+    public async Task Match_Repetition_WindowExcludesWeeksOutsideBounds()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        var selected = new DateOnly(2026, 3, 2);
+        await SaveWeekAsync(client, owner.Token, selected, new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(-7), new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(-14), new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(-21), new[] { Entry(borscht.Id) });
+
+        var (_, result) = await PostMatchAsync<RecipeMatchResponse>(
+            client, owner.Token, new RecipeMatchRequest(WeekStart: selected));
+
+        // Окно из 3 недель: selected, −7, −14. Неделя −21 вне окна.
+        Assert.Equal(3, Assert.Single(result!.Items).RepetitionCount);
+    }
+
+    [Fact]
+    public async Task Match_Repetition_SelectedPastWeek_ExcludesLaterWeeks()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        // Выбранная неделя в прошлом: более поздние недели (в т.ч. текущая) не считаются.
+        var selected = new DateOnly(2026, 3, 16);
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(-14), new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected, new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(7), new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(14), new[] { Entry(borscht.Id) });
+
+        var (_, result) = await PostMatchAsync<RecipeMatchResponse>(
+            client, owner.Token, new RecipeMatchRequest(WeekStart: selected));
+
+        Assert.Equal(2, Assert.Single(result!.Items).RepetitionCount);
+    }
+
+    [Fact]
+    public async Task Match_Repetition_MultipleEntriesSameWeek_CountOnce()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        var selected = new DateOnly(2026, 3, 2);
+        await SaveWeekAsync(client, owner.Token, selected, new[]
+        {
+            new PlanEntryRequest(0, "breakfast", borscht.Id, 4),
+            new PlanEntryRequest(3, "dinner", borscht.Id, 2)
+        });
+
+        var (_, result) = await PostMatchAsync<RecipeMatchResponse>(
+            client, owner.Token, new RecipeMatchRequest(WeekStart: selected));
+
+        Assert.Equal(1, Assert.Single(result!.Items).RepetitionCount);
+    }
+
+    [Fact]
+    public async Task Match_Repetition_UsesPersonalWindowSetting()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        var selected = new DateOnly(2026, 4, 6);
+        await SaveWeekAsync(client, owner.Token, selected, new[] { Entry(borscht.Id) });
+        await SaveWeekAsync(client, owner.Token, selected.AddDays(-7), new[] { Entry(borscht.Id) });
+
+        var (_, defaultWindow) = await PostMatchAsync<RecipeMatchResponse>(
+            client, owner.Token, new RecipeMatchRequest(WeekStart: selected));
+        Assert.Equal(2, Assert.Single(defaultWindow!.Items).RepetitionCount);
+        Assert.Equal(3, defaultWindow.RepetitionWindowWeeks);
+
+        var (updateResponse, _) = await PutAuthorizedAsync<UserSettingsDto>(client, owner.Token,
+            "/api/settings", new UserSettingsRequest(1));
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+        var (_, narrowWindow) = await PostMatchAsync<RecipeMatchResponse>(
+            client, owner.Token, new RecipeMatchRequest(WeekStart: selected));
+        Assert.Equal(1, Assert.Single(narrowWindow!.Items).RepetitionCount);
+        Assert.Equal(1, narrowWindow.RepetitionWindowWeeks);
+    }
+
+    [Fact]
+    public async Task Match_Repetition_NoSavedPlan_IsZero()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        var (_, result) = await PostMatchAsync<RecipeMatchResponse>(
+            client, owner.Token, new RecipeMatchRequest(WeekStart: new DateOnly(2026, 3, 2)));
+
+        Assert.Equal(0, Assert.Single(result!.Items).RepetitionCount);
+    }
+
+    [Fact]
+    public async Task Match_Repetition_OtherFamilyPlans_DoNotCount()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var first = await RegisterAsync(client, "first");
+        var second = await RegisterAsync(client, "second");
+        await CreateFamilyAsync(client, first.Token, "Семья первая");
+        await CreateFamilyAsync(client, second.Token, "Семья вторая");
+        var borscht = await CreateRecipeAsync(client, first.Token, "Борщ");
+        await CreateRecipeAsync(client, second.Token, "Котлеты");
+
+        var selected = new DateOnly(2026, 3, 2);
+        await SaveWeekAsync(client, first.Token, selected, new[] { Entry(borscht.Id) });
+
+        // Во второй семье планов нет: чужая история не подмешивается в подбор.
+        var (_, secondResult) = await PostMatchAsync<RecipeMatchResponse>(
+            client, second.Token, new RecipeMatchRequest(WeekStart: selected));
+        var secondItem = Assert.Single(secondResult!.Items);
+        Assert.Equal("Котлеты", secondItem.Name);
+        Assert.Equal(0, secondItem.RepetitionCount);
+
+        var (_, firstResult) = await PostMatchAsync<RecipeMatchResponse>(
+            client, first.Token, new RecipeMatchRequest(WeekStart: selected));
+        Assert.Equal(1, Assert.Single(firstResult!.Items).RepetitionCount);
+    }
+
+    [Fact]
     public async Task Settings_GetReturnsDefaultAndRoundTripsUpdate()
     {
         using var client = new ApiFactory().CreateClient();
@@ -237,6 +395,8 @@ public sealed class RepetitionFlowTests
         return today.AddDays(-offset);
     }
 
+    private static PlanEntryRequest Entry(Guid recipeId) => new(0, "breakfast", recipeId, 4);
+
     private static async Task SaveWeekAsync(
         HttpClient client, string token, DateOnly monday, IReadOnlyList<PlanEntryRequest> entries)
     {
@@ -283,6 +443,10 @@ public sealed class RepetitionFlowTests
         var (response, _) = await PostAuthorizedAsync<FamilyDto>(client, token, "/api/families", new { name });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
+
+    private static Task<(HttpResponseMessage Response, T? Data)> PostMatchAsync<T>(
+        HttpClient client, string token, object? body) =>
+        PostAuthorizedAsync<T>(client, token, "/api/recipes/match", body ?? new RecipeMatchRequest());
 
     private static async Task<(HttpResponseMessage Response, T? Data)> PostAuthorizedAsync<T>(
         HttpClient client, string token, string path, object? body)

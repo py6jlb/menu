@@ -68,6 +68,11 @@ public sealed record RecipeDto(
     string? CopiedFromFamilyName = null,
     int Revision = 1);
 
+/// <summary>
+/// Кандидат подбора. <c>RepetitionCount</c> — число различных недель окна (до
+/// выбранной включительно), где блюдо стоит в сохранённом плане; повторения
+/// внутри одной недели дают один вклад.
+/// </summary>
 public sealed record RecipeMatchItemDto(
     Guid RecipeId,
     string Name,
@@ -82,9 +87,12 @@ public sealed record RecipeMatchItemDto(
     int MatchScore,
     bool IsExternal = false,
     string? SourceFamilyName = null,
-    string? State = null);
+    string? State = null,
+    int RepetitionCount = 0);
 
-public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items);
+public sealed record RecipeMatchResponse(
+    IReadOnlyList<RecipeMatchItemDto> Items,
+    int RepetitionWindowWeeks = 0);
 
 public sealed record RecipeErrorDto(string Error);
 

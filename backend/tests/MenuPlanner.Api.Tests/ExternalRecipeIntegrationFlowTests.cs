@@ -288,6 +288,36 @@ public sealed class ExternalRecipeIntegrationFlowTests
     }
 
     [Fact]
+    public async Task Match_Repetition_CountsExternalByLocalIdentity()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var (_, recipient, wrapperId, _) = await ImportAsync(client, FullRequest("Борщ"));
+
+        var selected = CurrentMonday();
+        // Две записи в одной неделе и одна в предыдущей: разные недели → 2.
+        await PutAuthorizedAsync<WeekPlanDto>(client, recipient.Token,
+            $"/api/plans/week/{selected:yyyy-MM-dd}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "dinner", wrapperId, 2),
+                new PlanEntryRequest(4, "dinner", wrapperId, 2)
+            }));
+        await PutAuthorizedAsync<WeekPlanDto>(client, recipient.Token,
+            $"/api/plans/week/{selected.AddDays(-7):yyyy-MM-dd}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "dinner", wrapperId, 2)
+            }));
+
+        var (_, match) = await PostMatchAsync<RecipeMatchResponse>(
+            client, recipient.Token, new RecipeMatchRequest(WeekStart: selected));
+
+        var item = Assert.Single(match!.Items);
+        // Внешний рецепт сохраняет локальную identity подсчёта (id обёртки), а не id источника.
+        Assert.Equal(wrapperId, item.RecipeId);
+        Assert.True(item.IsExternal);
+        Assert.Equal(2, item.RepetitionCount);
+    }
+
+    [Fact]
     public async Task RevokedShare_StillContributesLiveIngredientsToShoppingList()
     {
         using var client = new ApiFactory().CreateClient();

@@ -1,12 +1,13 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave, useRoute } from 'vue-router'
-import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel, parseIso } from '../constants/plan'
+import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel, parseIso, toIso } from '../constants/plan'
 import { useWeekDraft } from '../composables/useWeekDraft'
 import { useRecipePicker } from '../composables/useRecipePicker'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 import { SEASONS, DIETS } from '../constants/recipe'
 import { externalState } from '../constants/external'
+import { repetitionChip, repetitionTitle, repetitionWindowNote } from '../constants/repetition'
 import { useDialog } from '../composables/useDialog'
 import { useAuth } from '../stores/auth'
 
@@ -71,6 +72,7 @@ const {
   selection,
   selectionWarning,
   portions: pickerPortions,
+  repetitionWindowWeeks: pickerWindowWeeks,
   open: openPickerState,
   select: selectRecipe,
   setSearch,
@@ -93,7 +95,8 @@ function toggleInList(list, value) {
 
 function openPicker(day, mealType, event) {
   editing.value = { day, mealType }
-  openPickerState(slotEntry(day, mealType))
+  // Повторяемость считаем до выбранной недели включительно, а не до текущей недели сервера.
+  openPickerState(slotEntry(day, mealType), toIso(monday.value))
   openDialog(event?.currentTarget)
 }
 
@@ -492,14 +495,18 @@ onBeforeUnmount(() => {
                 <template v-if="recipe.difficulty">Сл.: {{ recipe.difficulty }}</template>
                 <template v-if="recipe.calories !== null && recipe.calories !== undefined"> · {{ recipe.calories }} ккал</template>
                 <template v-if="recipe.cookTimeMinutes"> · {{ recipe.cookTimeMinutes }} мин</template>
-                <span v-if="recipe.repetitionCount > 0" class="repetition" title="Сколько раз готовилось за последние недели">
-                  ×{{ recipe.repetitionCount }}
+                <span v-if="recipe.repetitionCount > 0" class="repetition" :title="repetitionTitle()">
+                  {{ repetitionChip(recipe.repetitionCount) }}
                 </span>
               </span>
             </button>
           </li>
         </ul>
         <p v-else class="no-results" role="status">Ничего не найдено.</p>
+
+        <p v-if="recipes.length && pickerWindowWeeks > 0" class="repetition-note">
+          {{ repetitionWindowNote(pickerWindowWeeks) }}
+        </p>
 
         <p v-if="isSelectionOutsideResults()" class="selection-kept" role="status">
           Выбрано: <strong>{{ selection.name }}</strong> — вне текущей выдачи.
@@ -999,6 +1006,13 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: 0.6rem 0.75rem;
   color: var(--text-soft);
+}
+
+.repetition-note {
+  margin: 0;
+  padding: 0 0.75rem;
+  color: var(--text-soft);
+  font-size: 0.82rem;
 }
 
 .portions input {

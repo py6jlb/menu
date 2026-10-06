@@ -204,7 +204,8 @@ public static class RecipeEndpoints
         RecipeMatchRequest request,
         ClaimsPrincipal principal,
         CurrentUserContext currentUser,
-        RecipeReader reader)
+        RecipeReader reader,
+        RepetitionCounter repetitionCounter)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
@@ -219,6 +220,13 @@ public static class RecipeEndpoints
         // ограничения выдачи — рецепт за пределами первых MaxResults тоже находится.
         var candidates = await reader.ReadMatchCandidatesAsync(familyId.Value);
         var byId = candidates.ToDictionary(c => c.Recipe.Id);
+
+        // Повторяемость считается по сохранённым планам семьи за личное окно,
+        // заканчивающееся выбранной неделей включительно. Считаются разные недели:
+        // повторения внутри одной недели дают один вклад.
+        var userId = CurrentUser.UserId(principal);
+        var repetition = await repetitionCounter.CountWindowForUserAsync(
+            userId, familyId.Value, request.WeekStart);
 
         var items = RecipeMatcher.Apply(
                 candidates.Select(c => c.Recipe), request.Filters, request.Preferences, request.Search)
@@ -239,11 +247,12 @@ public static class RecipeEndpoints
                     m.MatchScore,
                     candidate.IsExternal,
                     candidate.SourceFamilyName,
-                    candidate.State is { } state ? ExternalRecipeStateRules.Code(state) : null);
+                    candidate.State is { } state ? ExternalRecipeStateRules.Code(state) : null,
+                    repetition.Counts.GetValueOrDefault(m.Recipe.Id));
             })
             .ToList();
 
-        return Results.Json(new RecipeMatchResponse(items));
+        return Results.Json(new RecipeMatchResponse(items, repetition.WindowWeeks));
     }
 
     private static async Task<IResult> UploadPhotoAsync(
