@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getRecipe,
@@ -12,6 +12,7 @@ import {
 } from '../api/recipes'
 import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
+import { useRouteResource } from '../composables/useRouteResource'
 import RecipeBody from '../components/RecipeBody.vue'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 
@@ -19,14 +20,15 @@ const route = useRoute()
 const router = useRouter()
 const { state, isEmailVerified } = useAuth()
 
-const recipe = ref(null)
-const loading = ref(true)
-const error = ref('')
-const deleting = ref(false)
+const { resource: recipe, loading, error, load } = useRouteResource(getRecipe, {
+  notFound: 'Рецепт не найден.'
+})
 
+const deleting = ref(false)
 const removingLocal = ref(false)
 const copying = ref(false)
 const copyError = ref('')
+const actionError = ref('')
 
 const family = ref(null)
 const share = ref(null)
@@ -43,16 +45,16 @@ const shareLink = computed(() => {
   return url.startsWith('http') ? url : `${window.location.origin}${url}`
 })
 
-async function load() {
-  const { response, data } = await getRecipe(route.params.id)
-  if (response.status === 404) {
-    error.value = 'Рецепт не найден.'
-  } else if (response.status === 200) {
-    recipe.value = data
-  } else {
-    error.value = data?.error || 'Не удалось загрузить рецепт.'
-  }
-  loading.value = false
+function resetResourceState() {
+  deleting.value = false
+  removingLocal.value = false
+  copying.value = false
+  copyError.value = ''
+  actionError.value = ''
+  share.value = null
+  shareLoading.value = false
+  shareError.value = ''
+  copied.value = false
 }
 
 async function loadFamily() {
@@ -62,16 +64,38 @@ async function loadFamily() {
   }
 }
 
-async function onShare() {
+async function runShareAction(action, fallbackMessage) {
+  const id = recipe.value?.id
+  if (!id) return
   shareError.value = ''
   shareLoading.value = true
-  const { response, data } = await getRecipeShare(recipe.value.id)
-  if (response.status === 200) {
-    share.value = data
-  } else {
-    shareError.value = data?.error || 'Не удалось получить ссылку.'
+  try {
+    const { response, data } = await action(id)
+    if (recipe.value?.id !== id) return
+    if (response.status === 200) {
+      share.value = data
+    } else {
+      shareError.value = data?.error || fallbackMessage
+    }
+  } catch {
+    if (recipe.value?.id === id) shareError.value = 'Сервер недоступен. Попробуйте ещё раз.'
+  } finally {
+    if (recipe.value?.id === id) shareLoading.value = false
   }
-  shareLoading.value = false
+}
+
+function onShare() {
+  return runShareAction(getRecipeShare, 'Не удалось получить ссылку.')
+}
+
+function onRevoke() {
+  if (!window.confirm('Отозвать ссылку? Новые семьи не смогут добавить рецепт.')) return
+  return runShareAction(revokeRecipeShare, 'Не удалось отозвать ссылку.')
+}
+
+function onRegenerate() {
+  if (!window.confirm('Перегенерировать ссылку? Старая перестанет работать.')) return
+  return runShareAction(regenerateRecipeShare, 'Не удалось перегенерировать ссылку.')
 }
 
 async function onCopyLink() {
@@ -84,46 +108,30 @@ async function onCopyLink() {
   }
 }
 
-async function onRevoke() {
-  if (!window.confirm('Отозвать ссылку? Новые семьи не смогут добавить рецепт.')) return
-  shareError.value = ''
-  shareLoading.value = true
-  const { response, data } = await revokeRecipeShare(recipe.value.id)
-  if (response.status === 200) {
-    share.value = data
-  } else {
-    shareError.value = data?.error || 'Не удалось отозвать ссылку.'
-  }
-  shareLoading.value = false
-}
-
-async function onRegenerate() {
-  if (!window.confirm('Перегенерировать ссылку? Старая перестанет работать.')) return
-  shareError.value = ''
-  shareLoading.value = true
-  const { response, data } = await regenerateRecipeShare(recipe.value.id)
-  if (response.status === 200) {
-    share.value = data
-  } else {
-    shareError.value = data?.error || 'Не удалось перегенерировать ссылку.'
-  }
-  shareLoading.value = false
-}
-
 async function onDelete() {
+  const id = recipe.value?.id
+  if (!id) return
   if (!window.confirm(`Удалить рецепт «${recipe.value.name}»?`)) return
   deleting.value = true
-  error.value = ''
-  const { response } = await deleteRecipe(recipe.value.id)
-  if (response.status === 204) {
-    router.push('/recipes')
-  } else {
-    error.value = 'Не удалось удалить рецепт.'
-    deleting.value = false
+  actionError.value = ''
+  try {
+    const { response } = await deleteRecipe(id)
+    if (recipe.value?.id !== id) return
+    if (response.status === 204) {
+      router.push('/recipes')
+      return
+    }
+    actionError.value = 'Не удалось удалить рецепт.'
+  } catch {
+    if (recipe.value?.id === id) actionError.value = 'Сервер недоступен. Попробуйте ещё раз.'
+  } finally {
+    if (recipe.value?.id === id) deleting.value = false
   }
 }
 
 async function onRemoveExternal() {
+  const id = recipe.value?.id
+  if (!id) return
   if (
     !window.confirm(
       `Убрать рецепт «${recipe.value.name}» из вашей семьи? Семья-источник не пострадает.`
@@ -131,30 +139,53 @@ async function onRemoveExternal() {
   )
     return
   removingLocal.value = true
-  error.value = ''
-  const { response } = await removeExternalRecipe(recipe.value.id)
-  if (response.status === 204) {
-    router.push('/recipes')
-  } else {
-    error.value = 'Не удалось убрать рецепт из семьи.'
-    removingLocal.value = false
+  actionError.value = ''
+  try {
+    const { response } = await removeExternalRecipe(id)
+    if (recipe.value?.id !== id) return
+    if (response.status === 204) {
+      router.push('/recipes')
+      return
+    }
+    actionError.value = 'Не удалось убрать рецепт из семьи.'
+  } catch {
+    if (recipe.value?.id === id) actionError.value = 'Сервер недоступен. Попробуйте ещё раз.'
+  } finally {
+    if (recipe.value?.id === id) removingLocal.value = false
   }
 }
 
 async function onCopy() {
+  const id = recipe.value?.id
+  if (!id) return
   copyError.value = ''
   copying.value = true
-  const { response, data } = await copyRecipe(recipe.value.id)
-  if (response.status === 200 || response.status === 201) {
-    recipe.value = data
-  } else {
-    copyError.value = data?.error || 'Сохранение копии пока недоступно.'
+  try {
+    const { response, data } = await copyRecipe(id)
+    if (recipe.value?.id !== id) return
+    if (response.status === 200 || response.status === 201) {
+      recipe.value = data
+    } else {
+      copyError.value = data?.error || 'Сохранение копии пока недоступно.'
+    }
+  } catch {
+    if (recipe.value?.id === id) copyError.value = 'Сервер недоступен. Попробуйте ещё раз.'
+  } finally {
+    if (recipe.value?.id === id) copying.value = false
   }
-  copying.value = false
 }
 
+watch(
+  () => route.params.id,
+  (id) => {
+    if (!id || id === recipe.value?.id) return
+    resetResourceState()
+    load(id)
+  }
+)
+
 onMounted(() => {
-  load()
+  load(route.params.id)
   loadFamily()
 })
 </script>
@@ -162,7 +193,15 @@ onMounted(() => {
 <template>
   <section>
     <p v-if="loading" class="loading">Загрузка…</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
+
+    <div v-else-if="error" class="card empty-state">
+      <div class="empty-icon">🍽️</div>
+      <p class="empty-title">{{ error }}</p>
+      <div class="actions">
+        <button type="button" class="btn btn--primary" @click="load()">Повторить</button>
+        <router-link to="/recipes" class="btn btn--ghost">К списку рецептов</router-link>
+      </div>
+    </div>
 
     <div v-else-if="recipe">
       <div class="page-heading">
@@ -172,6 +211,8 @@ onMounted(() => {
           <button type="button" class="btn btn--danger" :disabled="deleting" @click="onDelete">Удалить</button>
         </div>
       </div>
+
+      <p v-if="actionError" class="error">{{ actionError }}</p>
 
       <div v-if="isExternal" class="card external-banner">
         <div class="external-badges">
@@ -245,10 +286,7 @@ onMounted(() => {
         </template>
       </div>
 
-      <div
-        v-if="!isExternal && recipe.copiedFromFamilyName"
-        class="card copied-origin"
-      >
+      <div v-if="!isExternal && recipe.copiedFromFamilyName" class="card copied-origin">
         <span class="badge badge--external">Скопировано</span>
         <span class="copied-origin-text">из семьи {{ recipe.copiedFromFamilyName }}</span>
       </div>
