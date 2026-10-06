@@ -64,10 +64,10 @@ public sealed class AuthCodeLifecycle
             .Where(c => c.UserId == userId && c.Type == type && !c.Used)
             .ToListAsync(ct);
         foreach (var stored in unused)
-            AuthCodeService.Burn(stored);
+            AuthCodePolicy.Burn(stored);
 
         var code = _generator.Generate();
-        _db.AuthCodes.Add(AuthCodeService.Create(_hasher, userId, type, code, now));
+        _db.AuthCodes.Add(AuthCodePolicy.Create(_hasher, userId, type, code, now));
         return code;
     }
 

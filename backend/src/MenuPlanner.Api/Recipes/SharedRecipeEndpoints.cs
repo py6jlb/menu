@@ -19,7 +19,8 @@ public static class SharedRecipeEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetAsync(string token, AppDbContext db)
+    private static async Task<IResult> GetAsync(
+        string token, AppDbContext db, SourceFamilyNameResolver sourceNames)
     {
         var share = await db.RecipeShares
             .AsNoTracking()
@@ -37,7 +38,7 @@ public static class SharedRecipeEndpoints
         if (recipe is null)
             return InvalidLink();
 
-        var familyName = await SourceFamilyNameResolver.ResolveAsync(db, recipe.FamilyId);
+        var familyName = await sourceNames.ResolveAsync(recipe.FamilyId);
 
         // Источник ссылки: отдаём семью-владельца, чтобы фронт мог скрыть
         // «Добавить в мою семью» для участников этой же семьи.
@@ -48,13 +49,13 @@ public static class SharedRecipeEndpoints
     }
 
     private static async Task<IResult> ImportAsync(
-        string token, ClaimsPrincipal principal, AppDbContext db)
+        string token, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
     {
         var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
-        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
+        var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Вы не состоите в семье."));
 

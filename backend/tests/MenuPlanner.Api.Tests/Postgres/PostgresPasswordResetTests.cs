@@ -129,7 +129,7 @@ public sealed class PostgresPasswordResetTests : PostgresTestBase
         user.EmailVerifiedAt = FixedNow.UtcDateTime;
         await using var seed = NewContext();
         seed.Users.Add(user);
-        seed.AuthCodes.Add(AuthCodeService.Create(Hasher, user.Id, AuthCodeType.Reset, code, createdAt));
+        seed.AuthCodes.Add(AuthCodePolicy.Create(Hasher, user.Id, AuthCodeType.Reset, code, createdAt));
         await seed.SaveChangesAsync();
         return user;
     }

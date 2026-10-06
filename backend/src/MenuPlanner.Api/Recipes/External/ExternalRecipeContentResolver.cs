@@ -1,37 +1,15 @@
-using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Recipes.External;
 
 /// <summary>
-/// Читает живой контент внешних рецептов из источника. Внешний рецепт хранит только кэш имени;
-/// остальное (ингредиенты, порции, параметры, шаги) живёт у семьи-источника (ADR-0001).
+/// Чистая проекция живого контента внешнего рецепта на источник. Внешний рецепт хранит
+/// только кэш имени; остальное (ингредиенты, порции, параметры, шаги) живёт у семьи-источника
+/// (ADR-0001). Загрузка источников из БД — в scoped <see cref="ExternalRecipeSourceLoader"/>.
 /// Сломанный источник сюда не попадает: вызывающий сам решает, показать кэш имени или ничего.
 /// </summary>
 public static class ExternalRecipeContentResolver
 {
-    /// <summary>
-    /// Загружает источники по их id вместе с ингредиентами и шагами, без отслеживания.
-    /// Возвращает карту «id источника → рецепт-источник»; отсутствующие в БД просто не попадают.
-    /// </summary>
-    public static async Task<Dictionary<Guid, Recipe>> LoadSourcesAsync(
-        AppDbContext db, IEnumerable<Guid> sourceRecipeIds)
-    {
-        var ids = sourceRecipeIds.Distinct().ToList();
-        if (ids.Count == 0)
-            return new Dictionary<Guid, Recipe>();
-
-        var sources = await db.Recipes
-            .AsNoTracking()
-            .Include(r => r.Ingredients)
-            .Include(r => r.Steps)
-            .Where(r => ids.Contains(r.Id))
-            .ToListAsync();
-
-        return sources.ToDictionary(s => s.Id);
-    }
-
     /// <summary>
     /// Проецирует внешний рецепт на живой источник: id и связь остаются от внешнего рецепта
     /// (на них ссылаются план и покупки), контент берётся из источника. Без источника возвращает

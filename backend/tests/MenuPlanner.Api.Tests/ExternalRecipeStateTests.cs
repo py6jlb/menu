@@ -10,7 +10,7 @@ public sealed class ExternalRecipeStateTests
     {
         Assert.Equal(
             ExternalRecipeState.Ok,
-            ExternalRecipeStateService.Resolve(sourceExists: true, tokenMatches: true, shareRevoked: false));
+            ExternalRecipeStateRules.Resolve(sourceExists: true, tokenMatches: true, shareRevoked: false));
     }
 
     [Fact]
@@ -18,7 +18,7 @@ public sealed class ExternalRecipeStateTests
     {
         Assert.Equal(
             ExternalRecipeState.Warning,
-            ExternalRecipeStateService.Resolve(sourceExists: true, tokenMatches: false, shareRevoked: false));
+            ExternalRecipeStateRules.Resolve(sourceExists: true, tokenMatches: false, shareRevoked: false));
     }
 
     [Fact]
@@ -26,7 +26,7 @@ public sealed class ExternalRecipeStateTests
     {
         Assert.Equal(
             ExternalRecipeState.Warning,
-            ExternalRecipeStateService.Resolve(sourceExists: true, tokenMatches: true, shareRevoked: true));
+            ExternalRecipeStateRules.Resolve(sourceExists: true, tokenMatches: true, shareRevoked: true));
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public sealed class ExternalRecipeStateTests
     {
         Assert.Equal(
             ExternalRecipeState.Broken,
-            ExternalRecipeStateService.Resolve(sourceExists: false, tokenMatches: true, shareRevoked: false));
+            ExternalRecipeStateRules.Resolve(sourceExists: false, tokenMatches: true, shareRevoked: false));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class ExternalRecipeStateTests
     {
         Assert.Equal(
             ExternalRecipeState.Broken,
-            ExternalRecipeStateService.Resolve(sourceExists: false, tokenMatches: false, shareRevoked: false));
+            ExternalRecipeStateRules.Resolve(sourceExists: false, tokenMatches: false, shareRevoked: false));
     }
 
     [Theory]
@@ -51,6 +51,6 @@ public sealed class ExternalRecipeStateTests
     [InlineData(ExternalRecipeState.Broken, "broken")]
     public void Code_MapsStateToApiValue(ExternalRecipeState state, string expected)
     {
-        Assert.Equal(expected, ExternalRecipeStateService.Code(state));
+        Assert.Equal(expected, ExternalRecipeStateRules.Code(state));
     }
 }

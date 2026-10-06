@@ -73,8 +73,8 @@ public sealed class EmailVerificationService
         if (user.IsEmailVerified)
             return new ResendEmailResult(ResendEmailOutcome.AlreadyVerified, null, 0);
 
-        AuthCodeService.ClearExpiredLock(user, now);
-        if (AuthCodeService.IsLocked(user, now))
+        AuthCodePolicy.ClearExpiredLock(user, now);
+        if (AuthCodePolicy.IsLocked(user, now))
         {
             await _codes.SaveAndCommitAsync(tx, ct);
             return new ResendEmailResult(ResendEmailOutcome.Locked, null, 0);
@@ -106,8 +106,8 @@ public sealed class EmailVerificationService
         if (user.IsEmailVerified)
             return new VerifyEmailResult(VerifyEmailOutcome.AlreadyVerified, null);
 
-        AuthCodeService.ClearExpiredLock(user, now);
-        if (AuthCodeService.IsLocked(user, now))
+        AuthCodePolicy.ClearExpiredLock(user, now);
+        if (AuthCodePolicy.IsLocked(user, now))
         {
             await _codes.SaveAndCommitAsync(tx, ct);
             return new VerifyEmailResult(VerifyEmailOutcome.Locked, null);
@@ -116,22 +116,22 @@ public sealed class EmailVerificationService
         var stored = await _codes.LatestAsync(user.Id, AuthCodeType.Verify, ct);
         var outcome = stored is null
             ? VerifyEmailOutcome.InvalidCode
-            : Map(AuthCodeService.Check(_hasher, stored, code, now));
+            : Map(AuthCodePolicy.Check(_hasher, stored, code, now));
 
         if (outcome == VerifyEmailOutcome.Verified)
         {
-            AuthCodeService.Burn(stored!);
+            AuthCodePolicy.Burn(stored!);
             user.IsEmailVerified = true;
             user.EmailVerifiedAt = now;
-            AuthCodeService.ResetAttempts(user);
+            AuthCodePolicy.ResetAttempts(user);
             await _codes.SaveAndCommitAsync(tx, ct);
             return new VerifyEmailResult(VerifyEmailOutcome.Verified, user);
         }
 
-        AuthCodeService.RecordFailedAttempt(
+        AuthCodePolicy.RecordFailedAttempt(
             user, now, _options.MaxAttempts, TimeSpan.FromDays(_options.LockDurationDays));
 
-        var locked = AuthCodeService.IsLocked(user, now);
+        var locked = AuthCodePolicy.IsLocked(user, now);
         await _codes.SaveAndCommitAsync(tx, ct);
         return new VerifyEmailResult(locked ? VerifyEmailOutcome.Locked : outcome, null);
     }
@@ -140,7 +140,7 @@ public sealed class EmailVerificationService
     public async Task UnlockAsync(User user, CancellationToken ct = default)
     {
         await using var tx = await _codes.BeginCriticalSectionAsync(user, ct);
-        AuthCodeService.ResetAttempts(user);
+        AuthCodePolicy.ResetAttempts(user);
         await _codes.SaveAndCommitAsync(tx, ct);
     }
 

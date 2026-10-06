@@ -13,12 +13,16 @@ public readonly record struct ExternalSourceLink(
 
 /// <summary>
 /// Загружает из БД факты (жив ли источник, каков текущий токен/отзыв шеринга)
-/// и применяет к ним чистое правило <see cref="ExternalRecipeStateService.Resolve"/>.
+/// и применяет к ним чистое правило <see cref="ExternalRecipeStateRules.Resolve"/>.
+/// Scoped-сервис: читает БД и внедряется в обработчики через DI.
 /// </summary>
-public static class ExternalRecipeStateResolver
+public sealed class ExternalRecipeStateResolver
 {
-    public static async Task<Dictionary<Guid, ExternalRecipeState>> ResolveManyAsync(
-        AppDbContext db,
+    private readonly AppDbContext _db;
+
+    public ExternalRecipeStateResolver(AppDbContext db) => _db = db;
+
+    public async Task<Dictionary<Guid, ExternalRecipeState>> ResolveManyAsync(
         IReadOnlyCollection<ExternalSourceLink> links)
     {
         var result = new Dictionary<Guid, ExternalRecipeState>();
@@ -30,13 +34,13 @@ public static class ExternalRecipeStateResolver
         if (sourceIds.Count == 0)
             return result;
 
-        var alive = (await db.Recipes
+        var alive = (await _db.Recipes
             .AsNoTracking()
             .Where(r => sourceIds.Contains(r.Id))
             .Select(r => r.Id)
             .ToListAsync()).ToHashSet();
 
-        var shares = await db.RecipeShares
+        var shares = await _db.RecipeShares
             .AsNoTracking()
             .Where(s => sourceIds.Contains(s.RecipeId))
             .ToDictionaryAsync(s => s.RecipeId, s => s);
@@ -49,7 +53,7 @@ public static class ExternalRecipeStateResolver
                 && string.Equals(share.Token, link.SourceToken, StringComparison.Ordinal);
             var revoked = share?.RevokedAt is not null;
 
-            result[link.WrapperId] = ExternalRecipeStateService.Resolve(
+            result[link.WrapperId] = ExternalRecipeStateRules.Resolve(
                 sourceExists, tokenMatches, revoked);
         }
 

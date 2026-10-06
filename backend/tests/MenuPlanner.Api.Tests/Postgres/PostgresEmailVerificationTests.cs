@@ -108,7 +108,7 @@ public sealed class PostgresEmailVerificationTests : PostgresTestBase
         await using (var seed = NewContext())
         {
             seed.Users.Add(user);
-            seed.AuthCodes.Add(AuthCodeService.Create(
+            seed.AuthCodes.Add(AuthCodePolicy.Create(
                 Hasher, user.Id, AuthCodeType.Verify, "123456", FixedNow.UtcDateTime));
             await seed.SaveChangesAsync();
         }
@@ -141,7 +141,7 @@ public sealed class PostgresEmailVerificationTests : PostgresTestBase
         var user = PostgresData.NewUser($"race-{Guid.NewGuid():N}@example.com");
         await using var seed = NewContext();
         seed.Users.Add(user);
-        seed.AuthCodes.Add(AuthCodeService.Create(Hasher, user.Id, AuthCodeType.Verify, code, createdAt));
+        seed.AuthCodes.Add(AuthCodePolicy.Create(Hasher, user.Id, AuthCodeType.Verify, code, createdAt));
         await seed.SaveChangesAsync();
         return user;
     }

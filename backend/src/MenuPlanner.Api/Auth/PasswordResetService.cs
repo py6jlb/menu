@@ -109,16 +109,16 @@ public sealed class PasswordResetService
             return new PasswordResetResult(PasswordResetOutcome.InvalidCode, null);
         }
 
-        if (AuthCodeService.IsClosedByAttempts(stored, _options.MaxAttempts))
+        if (AuthCodePolicy.IsClosedByAttempts(stored, _options.MaxAttempts))
         {
             await _codes.SaveAndCommitAsync(tx, ct);
             return new PasswordResetResult(PasswordResetOutcome.ChallengeClosed, null);
         }
 
-        var check = AuthCodeService.Check(_hasher, stored, code, now);
+        var check = AuthCodePolicy.Check(_hasher, stored, code, now);
         if (check == CodeCheckResult.Ok)
         {
-            AuthCodeService.Burn(stored);
+            AuthCodePolicy.Burn(stored);
             user.PasswordHash = _hasher.HashPassword(user, newPassword);
             user.TokenVersion++;
             await _codes.SaveAndCommitAsync(tx, ct);
@@ -127,8 +127,8 @@ public sealed class PasswordResetService
 
         if (check == CodeCheckResult.Invalid)
         {
-            AuthCodeService.RecordChallengeAttempt(stored, _options.MaxAttempts);
-            var outcome = AuthCodeService.IsClosedByAttempts(stored, _options.MaxAttempts)
+            AuthCodePolicy.RecordChallengeAttempt(stored, _options.MaxAttempts);
+            var outcome = AuthCodePolicy.IsClosedByAttempts(stored, _options.MaxAttempts)
                 ? PasswordResetOutcome.ChallengeClosed
                 : PasswordResetOutcome.InvalidCode;
             await _codes.SaveAndCommitAsync(tx, ct);

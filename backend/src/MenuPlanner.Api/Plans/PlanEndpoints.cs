@@ -26,9 +26,12 @@ public static class PlanEndpoints
     private static async Task<IResult> GetWeekAsync(
         string weekStart,
         ClaimsPrincipal principal,
-        AppDbContext db)
+        AppDbContext db,
+        CurrentUserContext currentUser,
+        ExternalRecipeStateResolver stateResolver,
+        ExternalRecipeSourceLoader sourceLoader)
     {
-        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
+        var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
@@ -40,8 +43,8 @@ public static class PlanEndpoints
         if (plan is null)
             return Results.Json(new WeekPlanDto(Format(monday), Array.Empty<PlanEntryDto>()));
 
-        var states = await ResolveStatesAsync(db, plan);
-        var liveSources = await LoadLiveSourcesAsync(db, plan);
+        var states = await ResolveStatesAsync(stateResolver, plan);
+        var liveSources = await LoadLiveSourcesAsync(sourceLoader, plan);
         return Results.Json(ToDto(plan, states, liveSources));
     }
 
@@ -49,9 +52,12 @@ public static class PlanEndpoints
         string weekStart,
         SaveWeekPlanRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db)
+        AppDbContext db,
+        CurrentUserContext currentUser,
+        ExternalRecipeStateResolver stateResolver,
+        ExternalRecipeSourceLoader sourceLoader)
     {
-        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
+        var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
@@ -112,17 +118,18 @@ public static class PlanEndpoints
         var saved = await LoadPlanAsync(db, familyId.Value, monday)
             ?? throw new InvalidOperationException("Сохранённый план недели не найден.");
 
-        var states = await ResolveStatesAsync(db, saved);
-        var liveSources = await LoadLiveSourcesAsync(db, saved);
+        var states = await ResolveStatesAsync(stateResolver, saved);
+        var liveSources = await LoadLiveSourcesAsync(sourceLoader, saved);
         return Results.Json(ToDto(saved, states, liveSources));
     }
 
     private static async Task<IResult> DeleteWeekAsync(
         string weekStart,
         ClaimsPrincipal principal,
-        AppDbContext db)
+        AppDbContext db,
+        CurrentUserContext currentUser)
     {
-        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
+        var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
@@ -170,15 +177,15 @@ public static class PlanEndpoints
     }
 
     private static async Task<Dictionary<Guid, ExternalRecipeState>> ResolveStatesAsync(
-        AppDbContext db, WeekPlan plan)
+        ExternalRecipeStateResolver stateResolver, WeekPlan plan)
     {
         var links = ExternalPlanContent.SourceLinks(plan.Entries);
-        return await ExternalRecipeStateResolver.ResolveManyAsync(db, links);
+        return await stateResolver.ResolveManyAsync(links);
     }
 
-    private static Task<Dictionary<Guid, Recipe>> LoadLiveSourcesAsync(AppDbContext db, WeekPlan plan) =>
-        ExternalRecipeContentResolver.LoadSourcesAsync(
-            db, ExternalPlanContent.SourceRecipeIds(plan.Entries));
+    private static Task<Dictionary<Guid, Recipe>> LoadLiveSourcesAsync(
+        ExternalRecipeSourceLoader sourceLoader, WeekPlan plan) =>
+        sourceLoader.LoadSourcesAsync(ExternalPlanContent.SourceRecipeIds(plan.Entries));
 
     private static WeekPlanDto ToDto(
         WeekPlan plan,
@@ -197,7 +204,7 @@ public static class PlanEndpoints
                     : ExternalRecipeContentResolver.Resolve(e.Recipe, liveSources).Name,
                 e.Portions,
                 states.TryGetValue(e.RecipeId, out var state)
-                    ? ExternalRecipeStateService.Code(state)
+                    ? ExternalRecipeStateRules.Code(state)
                     : null))
             .ToList();
 

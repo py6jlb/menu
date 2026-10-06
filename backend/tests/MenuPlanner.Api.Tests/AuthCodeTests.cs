@@ -12,7 +12,7 @@ public sealed class AuthCodeTests
     [Fact]
     public void GenerateCode_ProducesSixDigits()
     {
-        var code = AuthCodeService.GenerateCode();
+        var code = AuthCodePolicy.GenerateCode();
 
         Assert.Equal(6, code.Length);
         Assert.All(code, ch => Assert.True(char.IsDigit(ch)));
@@ -21,7 +21,7 @@ public sealed class AuthCodeTests
     [Fact]
     public void GenerateCode_ProducesVariedCodes()
     {
-        var codes = Enumerable.Range(0, 20).Select(_ => AuthCodeService.GenerateCode()).ToHashSet();
+        var codes = Enumerable.Range(0, 20).Select(_ => AuthCodePolicy.GenerateCode()).ToHashSet();
 
         Assert.True(codes.Count > 1, "Криптографическая генерация не должна повторять один код.");
     }
@@ -30,10 +30,10 @@ public sealed class AuthCodeTests
     public void CodeMatches_TrueForCorrectCode_FalseForWrong()
     {
         var code = "123456";
-        var hash = AuthCodeService.HashCode(_hasher, code);
+        var hash = AuthCodePolicy.HashCode(_hasher, code);
 
-        Assert.True(AuthCodeService.CodeMatches(_hasher, hash, code));
-        Assert.False(AuthCodeService.CodeMatches(_hasher, hash, "654321"));
+        Assert.True(AuthCodePolicy.CodeMatches(_hasher, hash, code));
+        Assert.False(AuthCodePolicy.CodeMatches(_hasher, hash, "654321"));
     }
 
     [Theory]
@@ -41,7 +41,7 @@ public sealed class AuthCodeTests
     [InlineData(AuthCodeType.Reset, 1)]
     public void LifetimeOf_MatchesSpec(AuthCodeType type, int expectedHours)
     {
-        Assert.Equal(TimeSpan.FromHours(expectedHours), AuthCodeService.LifetimeOf(type));
+        Assert.Equal(TimeSpan.FromHours(expectedHours), AuthCodePolicy.LifetimeOf(type));
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class AuthCodeTests
         var code = "123456";
         var stored = NewCode(_hasher, code);
 
-        Assert.Equal(CodeCheckResult.Ok, AuthCodeService.Check(_hasher, stored, code, stored.ExpiresAt.AddMinutes(-1)));
+        Assert.Equal(CodeCheckResult.Ok, AuthCodePolicy.Check(_hasher, stored, code, stored.ExpiresAt.AddMinutes(-1)));
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class AuthCodeTests
         var code = "123456";
         var stored = NewCode(_hasher, code);
 
-        Assert.Equal(CodeCheckResult.Invalid, AuthCodeService.Check(_hasher, stored, "000000", DateTime.UtcNow));
+        Assert.Equal(CodeCheckResult.Invalid, AuthCodePolicy.Check(_hasher, stored, "000000", DateTime.UtcNow));
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public sealed class AuthCodeTests
         var code = "123456";
         var stored = NewCode(_hasher, code);
 
-        Assert.Equal(CodeCheckResult.Expired, AuthCodeService.Check(_hasher, stored, code, stored.ExpiresAt));
+        Assert.Equal(CodeCheckResult.Expired, AuthCodePolicy.Check(_hasher, stored, code, stored.ExpiresAt));
     }
 
     [Fact]
@@ -78,7 +78,7 @@ public sealed class AuthCodeTests
         var stored = NewCode(_hasher, code);
         stored.Used = true;
 
-        Assert.Equal(CodeCheckResult.AlreadyUsed, AuthCodeService.Check(_hasher, stored, code, DateTime.UtcNow));
+        Assert.Equal(CodeCheckResult.AlreadyUsed, AuthCodePolicy.Check(_hasher, stored, code, DateTime.UtcNow));
     }
 
     [Fact]
@@ -87,11 +87,11 @@ public sealed class AuthCodeTests
         var user = NewUser();
         var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        for (var i = 0; i < AuthCodeService.MaxAttempts; i++)
-            AuthCodeService.RecordFailedAttempt(user, now);
+        for (var i = 0; i < AuthCodePolicy.MaxAttempts; i++)
+            AuthCodePolicy.RecordFailedAttempt(user, now);
 
-        Assert.True(AuthCodeService.IsLocked(user, now.AddSeconds(1)));
-        Assert.Equal(AuthCodeService.MaxAttempts, user.VerificationAttempts);
+        Assert.True(AuthCodePolicy.IsLocked(user, now.AddSeconds(1)));
+        Assert.Equal(AuthCodePolicy.MaxAttempts, user.VerificationAttempts);
     }
 
     [Fact]
@@ -99,13 +99,13 @@ public sealed class AuthCodeTests
     {
         var user = NewUser();
         var lockAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        for (var i = 0; i < AuthCodeService.MaxAttempts; i++)
-            AuthCodeService.RecordFailedAttempt(user, lockAt);
+        for (var i = 0; i < AuthCodePolicy.MaxAttempts; i++)
+            AuthCodePolicy.RecordFailedAttempt(user, lockAt);
 
-        var afterLock = lockAt.Add(AuthCodeService.LockDuration).AddSeconds(1);
-        AuthCodeService.ClearExpiredLock(user, afterLock);
+        var afterLock = lockAt.Add(AuthCodePolicy.LockDuration).AddSeconds(1);
+        AuthCodePolicy.ClearExpiredLock(user, afterLock);
 
-        Assert.False(AuthCodeService.IsLocked(user, afterLock));
+        Assert.False(AuthCodePolicy.IsLocked(user, afterLock));
         Assert.Equal(0, user.VerificationAttempts);
         Assert.Null(user.LockedUntil);
     }
@@ -116,25 +116,25 @@ public sealed class AuthCodeTests
         var userId = Guid.NewGuid();
         var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        var code = AuthCodeService.Create(_hasher, userId, AuthCodeType.Reset, "123456", now);
+        var code = AuthCodePolicy.Create(_hasher, userId, AuthCodeType.Reset, "123456", now);
 
         Assert.Equal(userId, code.UserId);
         Assert.Equal(AuthCodeType.Reset, code.Type);
         Assert.False(code.Used);
         Assert.Equal(now, code.CreatedAt);
-        Assert.Equal(now.Add(AuthCodeService.ResetLifetime), code.ExpiresAt);
-        Assert.True(AuthCodeService.CodeMatches(_hasher, code.CodeHash, "123456"));
+        Assert.Equal(now.Add(AuthCodePolicy.ResetLifetime), code.ExpiresAt);
+        Assert.True(AuthCodePolicy.CodeMatches(_hasher, code.CodeHash, "123456"));
     }
 
     [Fact]
     public void Burn_MarksCodeUsed()
     {
-        var code = AuthCodeService.Create(_hasher, Guid.NewGuid(), AuthCodeType.Verify, "123456", DateTime.UtcNow);
+        var code = AuthCodePolicy.Create(_hasher, Guid.NewGuid(), AuthCodeType.Verify, "123456", DateTime.UtcNow);
 
-        AuthCodeService.Burn(code);
+        AuthCodePolicy.Burn(code);
 
         Assert.True(code.Used);
-        Assert.Equal(CodeCheckResult.AlreadyUsed, AuthCodeService.Check(_hasher, code, "123456", DateTime.UtcNow));
+        Assert.Equal(CodeCheckResult.AlreadyUsed, AuthCodePolicy.Check(_hasher, code, "123456", DateTime.UtcNow));
     }
 
     [Fact]
@@ -142,24 +142,24 @@ public sealed class AuthCodeTests
     {
         var user = NewUser();
         var lockAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        for (var i = 0; i < AuthCodeService.MaxAttempts; i++)
-            AuthCodeService.RecordFailedAttempt(user, lockAt);
+        for (var i = 0; i < AuthCodePolicy.MaxAttempts; i++)
+            AuthCodePolicy.RecordFailedAttempt(user, lockAt);
 
-        Assert.Equal(lockAt.Add(AuthCodeService.LockDuration), user.LockedUntil);
+        Assert.Equal(lockAt.Add(AuthCodePolicy.LockDuration), user.LockedUntil);
 
-        AuthCodeService.RecordFailedAttempt(user, lockAt.AddMinutes(30));
+        AuthCodePolicy.RecordFailedAttempt(user, lockAt.AddMinutes(30));
 
-        Assert.Equal(lockAt.Add(AuthCodeService.LockDuration), user.LockedUntil);
-        Assert.Equal(AuthCodeService.MaxAttempts, user.VerificationAttempts);
+        Assert.Equal(lockAt.Add(AuthCodePolicy.LockDuration), user.LockedUntil);
+        Assert.Equal(AuthCodePolicy.MaxAttempts, user.VerificationAttempts);
     }
 
     [Fact]
     public void ResetAttempts_ClearsCounterAndLock()
     {
         var user = NewUser();
-        AuthCodeService.RecordFailedAttempt(user, DateTime.UtcNow);
+        AuthCodePolicy.RecordFailedAttempt(user, DateTime.UtcNow);
 
-        AuthCodeService.ResetAttempts(user);
+        AuthCodePolicy.ResetAttempts(user);
 
         Assert.Equal(0, user.VerificationAttempts);
         Assert.Null(user.LockedUntil);
@@ -170,34 +170,34 @@ public sealed class AuthCodeTests
     {
         var stored = NewCode(_hasher, "123456");
 
-        for (var i = 0; i < AuthCodeService.MaxAttempts - 1; i++)
-            Assert.False(AuthCodeService.RecordChallengeAttempt(stored, AuthCodeService.MaxAttempts));
+        for (var i = 0; i < AuthCodePolicy.MaxAttempts - 1; i++)
+            Assert.False(AuthCodePolicy.RecordChallengeAttempt(stored, AuthCodePolicy.MaxAttempts));
 
         Assert.False(stored.Used);
 
-        Assert.True(AuthCodeService.RecordChallengeAttempt(stored, AuthCodeService.MaxAttempts));
+        Assert.True(AuthCodePolicy.RecordChallengeAttempt(stored, AuthCodePolicy.MaxAttempts));
         Assert.True(stored.Used);
-        Assert.Equal(AuthCodeService.MaxAttempts, stored.Attempts);
-        Assert.True(AuthCodeService.IsClosedByAttempts(stored, AuthCodeService.MaxAttempts));
+        Assert.Equal(AuthCodePolicy.MaxAttempts, stored.Attempts);
+        Assert.True(AuthCodePolicy.IsClosedByAttempts(stored, AuthCodePolicy.MaxAttempts));
     }
 
     [Fact]
     public void IsClosedByAttempts_FalseForSuccessfullyConsumedCode()
     {
         var stored = NewCode(_hasher, "123456");
-        AuthCodeService.RecordChallengeAttempt(stored, AuthCodeService.MaxAttempts);
-        AuthCodeService.Burn(stored);
+        AuthCodePolicy.RecordChallengeAttempt(stored, AuthCodePolicy.MaxAttempts);
+        AuthCodePolicy.Burn(stored);
 
-        Assert.False(AuthCodeService.IsClosedByAttempts(stored, AuthCodeService.MaxAttempts));
+        Assert.False(AuthCodePolicy.IsClosedByAttempts(stored, AuthCodePolicy.MaxAttempts));
     }
 
     [Fact]
     public void RecordChallengeAttempt_ReturnsClosed_ForAlreadyUsedCode()
     {
         var stored = NewCode(_hasher, "123456");
-        AuthCodeService.Burn(stored);
+        AuthCodePolicy.Burn(stored);
 
-        Assert.True(AuthCodeService.RecordChallengeAttempt(stored, AuthCodeService.MaxAttempts));
+        Assert.True(AuthCodePolicy.RecordChallengeAttempt(stored, AuthCodePolicy.MaxAttempts));
         Assert.Equal(0, stored.Attempts);
     }
 
@@ -209,9 +209,9 @@ public sealed class AuthCodeTests
             Id = Guid.NewGuid(),
             UserId = Guid.NewGuid(),
             Type = AuthCodeType.Verify,
-            CodeHash = AuthCodeService.HashCode(hasher, code),
+            CodeHash = AuthCodePolicy.HashCode(hasher, code),
             CreatedAt = now,
-            ExpiresAt = now.Add(AuthCodeService.LifetimeOf(AuthCodeType.Verify))
+            ExpiresAt = now.Add(AuthCodePolicy.LifetimeOf(AuthCodeType.Verify))
         };
     }
 
