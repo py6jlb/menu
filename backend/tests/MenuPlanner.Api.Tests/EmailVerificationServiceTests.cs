@@ -152,7 +152,8 @@ public sealed class EmailVerificationServiceTests
         var generator = new QueueCodeGenerator(codes);
         var hasher = new PasswordHasher<User>();
         var service = new EmailVerificationService(
-            new AuthCodeLifecycle(db, hasher, generator), hasher, new AuthCodeOptions(), clock);
+            new AuthCodeLifecycle(db, hasher, generator), hasher, new AuthCodeOptions(), clock,
+            TestOutbox.NewOutbox(db, clock));
         return (service, db, clock, generator);
     }
 

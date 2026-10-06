@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
-using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth;
 
@@ -51,7 +51,7 @@ public sealed class AdminBootstrap
     private readonly AppDbContext _db;
     private readonly IPasswordHasher<User> _hasher;
     private readonly EmailVerificationService _verification;
-    private readonly EmailSender _emailSender;
+    private readonly EmailOutboxProcessor _outbox;
     private readonly TimeProvider _clock;
     private readonly ILogger<AdminBootstrap> _logger;
 
@@ -59,14 +59,14 @@ public sealed class AdminBootstrap
         AppDbContext db,
         IPasswordHasher<User> hasher,
         EmailVerificationService verification,
-        EmailSender emailSender,
+        EmailOutboxProcessor outbox,
         TimeProvider clock,
         ILogger<AdminBootstrap> logger)
     {
         _db = db;
         _hasher = hasher;
         _verification = verification;
-        _emailSender = emailSender;
+        _outbox = outbox;
         _clock = clock;
         _logger = logger;
     }
@@ -88,10 +88,9 @@ public sealed class AdminBootstrap
 
         var user = await _db.Users.FirstAsync(u => u.Id == created.UserId, ct);
 
-        string code;
         try
         {
-            code = await _verification.IssueInitialCodeAsync(user, ct);
+            await _verification.IssueInitialCodeAsync(user, ct);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -99,17 +98,21 @@ public sealed class AdminBootstrap
             return new AdminBootstrapResult(AdminBootstrapOutcome.CreatedEmailFailed, user.Id);
         }
 
+        // Команда одноразовая: сразу доводим письмо, но при временном отказе
+        // запись остаётся в очереди и будет повторена при следующем запуске.
         try
         {
-            await _emailSender.SendVerificationCodeAsync(user.Email, code, ct);
+            await _outbox.DispatchDueAsync(ct);
         }
-        catch (EmailDeliveryException failure)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            EmailDeliveryFailure.LogSafe(_logger, failure);
-            return new AdminBootstrapResult(AdminBootstrapOutcome.CreatedEmailFailed, user.Id);
+            _logger.LogError(exception, "Bootstrap администратора: отправка письма из очереди не удалась.");
         }
 
-        return new AdminBootstrapResult(AdminBootstrapOutcome.Created, user.Id);
+        var stillQueued = await _db.EmailOutboxMessages.AnyAsync(m => m.UserId == user.Id, ct);
+        return new AdminBootstrapResult(
+            stillQueued ? AdminBootstrapOutcome.CreatedEmailFailed : AdminBootstrapOutcome.Created,
+            user.Id);
     }
 
     private async Task<AdminBootstrapResult> CreateInitialAdminAsync(

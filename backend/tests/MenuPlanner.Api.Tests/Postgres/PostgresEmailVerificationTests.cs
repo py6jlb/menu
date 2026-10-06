@@ -133,8 +133,13 @@ public sealed class PostgresEmailVerificationTests : PostgresTestBase
         return new AppDbContext(builder.Options);
     }
 
-    private static EmailVerificationService NewService(AppDbContext db, AuthCodeOptions options, IAuthCodeGenerator generator) =>
-        new(new AuthCodeLifecycle(db, Hasher, generator), Hasher, options, new FakeTimeProvider(FixedNow));
+    private static EmailVerificationService NewService(AppDbContext db, AuthCodeOptions options, IAuthCodeGenerator generator)
+    {
+        var clock = new FakeTimeProvider(FixedNow);
+        return new EmailVerificationService(
+            new AuthCodeLifecycle(db, Hasher, generator), Hasher, options, clock,
+            TestOutbox.NewOutbox(db, clock));
+    }
 
     private async Task<User> SeedUserWithCodeAsync(string code, DateTime createdAt)
     {

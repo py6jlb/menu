@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Data;
+using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
 
 namespace MenuPlanner.Api.Tests;
@@ -68,20 +71,29 @@ public sealed class EmailWiringTests
     }
 
     [Fact]
-    public async Task Register_WhenTransportFails_ReturnsServiceUnavailableWithClearMessage()
+    public async Task Register_WhenTransportFails_StillReturnsSessionAndQueuesDelivery()
     {
-        using var factory = new ApiFactory();
+        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
         factory.ConfigureTestServices = services =>
             services.AddSingleton<IEmailTransport>(new FailingEmailTransport(_ => true));
         using var client = factory.CreateClient();
+        var email = $"fail-{Guid.NewGuid():N}@example.com";
 
         var response = await client.PostAsJsonAsync(
-            "/api/auth/register", new { email = $"fail-{Guid.NewGuid():N}@example.com", password = "secret1" });
+            "/api/auth/register", new { email, password = "secret1" });
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<ErrorDto>();
-        Assert.NotNull(body);
-        Assert.Contains("письмо", body.Error, StringComparison.OrdinalIgnoreCase);
+        // Временный отказ SMTP не маскирует создание аккаунта: сессия выдана,
+        // а принятая доставка осталась в очереди на повтор.
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.NotNull(auth);
+        Assert.False(string.IsNullOrWhiteSpace(auth.Token));
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var queued = await db.EmailOutboxMessages.SingleAsync();
+        Assert.Equal(EmailOutboxStatus.Pending, queued.Status);
+        Assert.Equal(1, queued.Attempts);
     }
 
     [Fact]

@@ -1,4 +1,5 @@
 using MenuPlanner.Api.Data;
+using MenuPlanner.Api.Tests;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +47,8 @@ public sealed class PostgresApiFactory : WebApplicationFactory<Program>
                 d => d.ServiceType == typeof(IDbContextOptionsConfiguration<AppDbContext>));
             if (configuration is not null)
                 services.Remove(configuration);
+
+            ApiFactory.RemoveEmailWorker(services);
 
             services.AddDbContext<AppDbContext>(
                 dbOptions => dbOptions.UseNpgsql(_connectionString));

@@ -6,6 +6,9 @@ using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Auth.Codes;
 
+/// <summary>Выданный challenge и его открытый код для постановки письма в очередь.</summary>
+public readonly record struct IssuedCode(AuthCode Challenge, string Plaintext);
+
 /// <summary>
 /// Общий атомарный lifecycle одноразовых кодов: критическая секция по строке
 /// пользователя, единственный действующий challenge на тип, выдача, выбор
@@ -55,9 +58,11 @@ public sealed class AuthCodeLifecycle
 
     /// <summary>
     /// Выдаёт новый challenge указанного типа, закрывая все прежние неиспользованные.
-    /// Вызывается внутри критической секции пользователя.
+    /// Вызывается внутри критической секции пользователя. Возвращает и сущность
+    /// challenge, и открытый код: вызывающий ставит письмо в очередь в той же
+    /// транзакции.
     /// </summary>
-    public async Task<string> IssueAsync(
+    public async Task<IssuedCode> IssueAsync(
         Guid userId, AuthCodeType type, DateTime now, CancellationToken ct = default)
     {
         var unused = await _db.AuthCodes
@@ -67,8 +72,9 @@ public sealed class AuthCodeLifecycle
             AuthCodePolicy.Burn(stored);
 
         var code = _generator.Generate();
-        _db.AuthCodes.Add(AuthCodePolicy.Create(_hasher, userId, type, code, now));
-        return code;
+        var challenge = AuthCodePolicy.Create(_hasher, userId, type, code, now);
+        _db.AuthCodes.Add(challenge);
+        return new IssuedCode(challenge, code);
     }
 
     /// <summary>

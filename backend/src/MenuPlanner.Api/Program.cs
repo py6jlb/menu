@@ -12,6 +12,7 @@ using MenuPlanner.Api.Configuration;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Outbox;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Health;
 using MenuPlanner.Api.Ingredients;
@@ -50,6 +51,18 @@ builder.Services.AddSingleton<IEmailTransport>(services =>
         ? new LoggingEmailTransport(services.GetRequiredService<ILogger<LoggingEmailTransport>>())
         : new SmtpEmailTransport(emailOptions));
 builder.Services.AddSingleton<EmailSender>();
+
+// Надёжная очередь писем: принятая доставка живёт в PostgreSQL, содержимое
+// зашифровано ключом из конфигурации, отправка — фоновая с ограниченными повторами.
+var outboxOptions = EmailOutboxOptions.Read(builder.Configuration);
+builder.Services.AddSingleton(outboxOptions);
+builder.Services.AddSingleton<IOutboxPayloadProtector>(
+    new AesGcmOutboxPayloadProtector(
+        OutboxProtectionKey.Derive(builder.Configuration, jwtOptions.Secret)));
+builder.Services.AddScoped<EmailOutbox>();
+builder.Services.AddScoped<EmailOutboxProcessor>();
+builder.Services.AddSingleton<EmailDispatchTrigger>();
+builder.Services.AddHostedService<EmailDeliveryWorker>();
 
 var authCodeOptions = ReadAuthCodeOptions(builder.Configuration);
 builder.Services.AddSingleton(authCodeOptions);

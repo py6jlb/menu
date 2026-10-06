@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth;
 
@@ -43,17 +44,20 @@ public sealed class PasswordResetService
     private readonly IPasswordHasher<User> _hasher;
     private readonly AuthCodeOptions _options;
     private readonly TimeProvider _clock;
+    private readonly EmailOutbox _outbox;
 
     public PasswordResetService(
         AuthCodeLifecycle codes,
         IPasswordHasher<User> hasher,
         AuthCodeOptions options,
-        TimeProvider clock)
+        TimeProvider clock,
+        EmailOutbox outbox)
     {
         _codes = codes;
         _hasher = hasher;
         _options = options;
         _clock = clock;
+        _outbox = outbox;
     }
 
     /// <summary>
@@ -85,9 +89,10 @@ public sealed class PasswordResetService
             }
         }
 
-        var code = await _codes.IssueAsync(user.Id, AuthCodeType.Reset, now, ct);
+        var issued = await _codes.IssueAsync(user.Id, AuthCodeType.Reset, now, ct);
+        await _outbox.EnqueueAsync(user, issued.Challenge, issued.Plaintext, ct);
         await _codes.SaveAndCommitAsync(tx, ct);
-        return new PasswordResetRequestResult(PasswordResetRequestOutcome.Sent, code, 0);
+        return new PasswordResetRequestResult(PasswordResetRequestOutcome.Sent, issued.Plaintext, 0);
     }
 
     /// <summary>
