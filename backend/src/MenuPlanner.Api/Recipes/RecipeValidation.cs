@@ -51,7 +51,7 @@ public static class RecipeValidation
         recipe.Seasonality = NormalizeStrings(request.Seasonality)
             .Select(s => s.ToLowerInvariant())
             .ToList();
-        recipe.Diet = NormalizeStrings(request.Diet);
+        recipe.Diet = DietCatalog.NormalizeAll(request.Diet);
         recipe.Steps = MapSteps(request);
         recipe.Ingredients = MapIngredients(request);
     }
@@ -148,7 +148,7 @@ public static class RecipeValidation
         if (invalidSeason is not null)
             return $"Недопустимое значение сезона: «{invalidSeason}».";
 
-        var diet = NormalizeStrings(request.Diet);
+        var diet = DietCatalog.NormalizeAll(request.Diet);
         if (diet.Any(d => d.Length > RecipeCatalog.DietMaxLength))
             return $"Метки диеты не должны превышать {RecipeCatalog.DietMaxLength} символов.";
 

@@ -6,7 +6,7 @@ import {
   uploadRecipePhoto,
   deleteRecipePhoto
 } from '../api/recipes'
-import { parseList, joinList } from '../constants/recipe'
+import { parseList, joinList, combineDiets, splitDiets } from '../constants/recipe'
 
 export const LEAVE_MESSAGE = 'Есть несохранённые изменения. Уйти без сохранения?'
 export const LOAD_ERROR_MESSAGE =
@@ -54,6 +54,7 @@ export function emptyDraft() {
     calories: '',
     tagsText: '',
     seasonality: [],
+    diets: [],
     dietText: '',
     steps: [''],
     ingredients: [newIngredientDraft()],
@@ -64,6 +65,7 @@ export function emptyDraft() {
 /** Снимок черновика по данным сервера. */
 export function draftFromRecipe(data) {
   const calories = data.calories === null || data.calories === undefined ? '' : String(data.calories)
+  const { selected: diets, custom: customDiets } = splitDiets(data.diet)
   return {
     name: data.name || '',
     description: data.description || '',
@@ -73,7 +75,8 @@ export function draftFromRecipe(data) {
     calories,
     tagsText: joinList(data.tags),
     seasonality: [...(data.seasonality || [])],
-    dietText: joinList(data.diet),
+    diets,
+    dietText: joinList(customDiets),
     steps: data.steps && data.steps.length ? [...data.steps] : [''],
     ingredients:
       data.ingredients && data.ingredients.length
@@ -104,7 +107,7 @@ export function draftToPayload(draft, revision = null) {
     calories: isBlank(draft.calories) ? null : Number(draft.calories),
     tags: parseList(draft.tagsText),
     seasonality: [...(draft.seasonality || [])],
-    diet: parseList(draft.dietText),
+    diet: combineDiets(draft.diets, draft.dietText),
     steps: (draft.steps || [])
       .map((s) => (s || '').trim())
       .filter((s) => s.length > 0)
@@ -153,7 +156,7 @@ export function serializeDraft(draft) {
     calories: isBlank(draft.calories) ? null : comparableNumber(draft.calories),
     tags: parseList(draft.tagsText),
     seasonality: [...(draft.seasonality || [])].sort(),
-    diet: parseList(draft.dietText),
+    diet: combineDiets(draft.diets, draft.dietText).sort(),
     steps: (draft.steps || []).map((s) => (s || '').trim()).filter((s) => s.length > 0),
     ingredients: (draft.ingredients || [])
       .filter((i) => (i.name || '').trim() || i.amount || i.note)

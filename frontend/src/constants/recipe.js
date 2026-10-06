@@ -24,6 +24,53 @@ export const DIETS = [
   { code: 'keto', label: 'Кетогенное' }
 ]
 
+const DIET_CODES = DIETS.map((d) => d.code)
+
+export function dietLabel(code) {
+  return DIETS.find((d) => d.code === code)?.label || code
+}
+
+/**
+ * Отбрасывает пустые значения и повторы без учёта регистра, сохраняя порядок и
+ * исходный вид первой встреченной метки.
+ */
+function uniqueByLower(values) {
+  const result = []
+  const seen = new Set()
+  for (const value of values) {
+    const trimmed = String(value ?? '').trim()
+    if (!trimmed) continue
+    const key = trimmed.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(trimmed)
+  }
+  return result
+}
+
+/**
+ * Разделяет сохранённые метки диеты на стандартные коды (чекбоксы) и произвольные
+ * метки (свободный ввод). Коды из `DIETS` попадают в `selected`, всё остальное —
+ * в `custom` без потерь и без сведения к стандартному варианту.
+ */
+export function splitDiets(values) {
+  const codes = new Set(DIET_CODES)
+  const selected = []
+  const custom = []
+
+  for (const value of uniqueByLower(values || [])) {
+    if (codes.has(value)) selected.push(value)
+    else custom.push(value)
+  }
+
+  return { selected, custom }
+}
+
+/** Объединяет выбранные стандартные коды и произвольные метки в один набор без дублей. */
+export function combineDiets(diets, text) {
+  return uniqueByLower([...(diets || []), ...parseList(text)])
+}
+
 export function unitLabel(code) {
   return UNITS.find((u) => u.code === code)?.label || code
 }

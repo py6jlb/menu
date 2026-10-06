@@ -128,7 +128,7 @@ public static class RecipeEndpoints
                 var servings = hasLiveSource ? liveSource!.Servings : r.Servings;
                 var tags = hasLiveSource ? liveSource!.Tags : r.Tags;
                 var seasonality = hasLiveSource ? liveSource!.Seasonality : r.Seasonality;
-                var diet = hasLiveSource ? liveSource!.Diet : r.Diet;
+                var diet = DietCatalog.NormalizeAll(hasLiveSource ? liveSource!.Diet : r.Diet);
                 var photoPath = hasLiveSource ? liveSource!.PhotoPath : r.PhotoPath;
 
                 return new RecipeSummaryDto(
@@ -374,7 +374,7 @@ public static class RecipeEndpoints
                 m.Recipe.Servings,
                 m.Recipe.Tags,
                 m.Recipe.Seasonality,
-                m.Recipe.Diet,
+                DietCatalog.NormalizeAll(m.Recipe.Diet),
                 PhotoUrl(m.Recipe.PhotoPath),
                 m.MatchScore))
             .ToList();
@@ -452,7 +452,7 @@ public static class RecipeEndpoints
         recipe.Calories,
         recipe.Tags,
         recipe.Seasonality,
-        recipe.Diet,
+        DietCatalog.NormalizeAll(recipe.Diet),
         recipe.Ingredients.OrderBy(i => i.Order)
             .Select(i => new RecipeIngredientDto(i.Id, i.Name, i.Amount, i.Unit, i.Note))
             .ToList(),
