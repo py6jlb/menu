@@ -39,22 +39,28 @@ public sealed class ExternalRecipePromotionService
     private readonly SourceFamilyNameResolver _sourceNames;
     private readonly PhotoStorage _storage;
     private readonly TimeProvider _clock;
+    private readonly RecipeRevisionReader _revisions;
 
     public ExternalRecipePromotionService(
-        AppDbContext db, SourceFamilyNameResolver sourceNames, PhotoStorage storage, TimeProvider clock)
+        AppDbContext db,
+        SourceFamilyNameResolver sourceNames,
+        PhotoStorage storage,
+        TimeProvider clock,
+        RecipeRevisionReader revisions)
     {
         _db = db;
         _sourceNames = sourceNames;
         _storage = storage;
         _clock = clock;
+        _revisions = revisions;
     }
 
     public async Task<RecipePromotionResult> PromoteAsync(
-        Guid id, Guid familyId, int? expectedRevision, CancellationToken cancellationToken = default)
+        RecipeTarget target, int? expectedRevision, CancellationToken cancellationToken = default)
     {
         var wrapper = await _db.Recipes
             .AsNoTracking()
-            .Where(r => r.Id == id && r.FamilyId == familyId)
+            .Where(r => r.Id == target.Id && r.FamilyId == target.FamilyId)
             .Select(r => new { r.SourceRecipeId, r.SourceFamilyId, r.Revision })
             .FirstOrDefaultAsync(cancellationToken);
         if (wrapper is null)
@@ -85,8 +91,8 @@ public sealed class ExternalRecipePromotionService
 
         return _db.Database.IsRelational()
             ? await PromoteRelationalAsync(
-                id, familyId, sourceId, wrapper.Revision, source, copiedFromFamilyName, cancellationToken)
-            : await PromoteTrackedAsync(id, source, copiedFromFamilyName, cancellationToken);
+                target, sourceId, wrapper.Revision, source, copiedFromFamilyName, cancellationToken)
+            : await PromoteTrackedAsync(target, source, copiedFromFamilyName, cancellationToken);
     }
 
     /// <summary>
@@ -95,8 +101,7 @@ public sealed class ExternalRecipePromotionService
     /// до файловых эффектов и вставки шагов/ингредиентов.
     /// </summary>
     private async Task<RecipePromotionResult> PromoteRelationalAsync(
-        Guid id,
-        Guid familyId,
+        RecipeTarget target,
         Guid sourceId,
         int observedRevision,
         Recipe source,
@@ -106,7 +111,7 @@ public sealed class ExternalRecipePromotionService
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
 
         var claimed = await _db.Recipes
-            .Where(r => r.Id == id && r.FamilyId == familyId
+            .Where(r => r.Id == target.Id && r.FamilyId == target.FamilyId
                 && r.SourceRecipeId == sourceId
                 && r.Revision == observedRevision)
             .ExecuteUpdateAsync(update => update
@@ -118,7 +123,7 @@ public sealed class ExternalRecipePromotionService
         if (claimed == 0)
         {
             await transaction.RollbackAsync(cancellationToken);
-            return new(RecipePromotionOutcome.Conflict, Revision: await CurrentRevisionAsync(id, cancellationToken));
+            return new(RecipePromotionOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
         }
 
         string? copiedPhoto = null;
@@ -127,11 +132,11 @@ public sealed class ExternalRecipePromotionService
             var wrapper = await _db.Recipes
                 .Include(r => r.Steps)
                 .Include(r => r.Ingredients)
-                .FirstAsync(r => r.Id == id, cancellationToken);
+                .FirstAsync(r => r.Id == target.Id, cancellationToken);
 
             copiedPhoto = source.PhotoPath is null
                 ? null
-                : await _storage.CopyAsync(id, source.PhotoPath);
+                : await _storage.CopyAsync(target.Id, source.PhotoPath);
 
             ApplyCopiedContent(wrapper, source, copiedFromFamilyName, copiedPhoto);
             await _db.SaveChangesAsync(cancellationToken);
@@ -153,12 +158,12 @@ public sealed class ExternalRecipePromotionService
     /// достаточно проверки внешнего состояния и ревизии с последующей записью.
     /// </summary>
     private async Task<RecipePromotionResult> PromoteTrackedAsync(
-        Guid id, Recipe source, string? copiedFromFamilyName, CancellationToken cancellationToken)
+        RecipeTarget target, Recipe source, string? copiedFromFamilyName, CancellationToken cancellationToken)
     {
         var wrapper = await _db.Recipes
             .Include(r => r.Steps)
             .Include(r => r.Ingredients)
-            .FirstAsync(r => r.Id == id, cancellationToken);
+            .FirstAsync(r => r.Id == target.Id, cancellationToken);
         if (wrapper.SourceRecipeId is null)
             return new(RecipePromotionOutcome.Conflict, Revision: wrapper.Revision);
 
@@ -167,7 +172,7 @@ public sealed class ExternalRecipePromotionService
         {
             copiedPhoto = source.PhotoPath is null
                 ? null
-                : await _storage.CopyAsync(id, source.PhotoPath);
+                : await _storage.CopyAsync(target.Id, source.PhotoPath);
 
             ApplyCopiedContent(wrapper, source, copiedFromFamilyName, copiedPhoto);
             wrapper.SourceRecipeId = null;
@@ -215,11 +220,4 @@ public sealed class ExternalRecipePromotionService
         wrapper.CopiedFromFamilyName = copiedFromFamilyName;
         wrapper.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
     }
-
-    private async Task<int> CurrentRevisionAsync(Guid id, CancellationToken cancellationToken) =>
-        await _db.Recipes
-            .AsNoTracking()
-            .Where(r => r.Id == id)
-            .Select(r => (int?)r.Revision)
-            .FirstOrDefaultAsync(cancellationToken) ?? 0;
 }

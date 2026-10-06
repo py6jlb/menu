@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
-import { uploadRecipePhoto, deleteRecipePhoto } from '../api/recipes'
 import { autocompleteIngredients } from '../api/ingredients'
 import { UNITS, SEASONS } from '../constants/recipe'
 import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
@@ -19,14 +18,20 @@ const {
   revision,
   conflictMessage,
   conflictRevision,
+  photoSaving,
+  photoError,
   loadError,
   saveError,
   setIdentity,
   load,
   save,
+  setPendingPhoto,
+  savePhoto,
   validate,
   confirmNavigation
 } = useRecipeDraft({ initialId: route.params.id || null })
+
+const photoTarget = ref(null)
 
 const error = ref('')
 const visibleError = computed(() => error.value || saveError.value)
@@ -213,24 +218,17 @@ async function submit() {
   const result = await save()
   if (!result.ok) return
 
-  const id = result.id
-  const savedRevision = result.data?.revision ?? revision.value
-  try {
-    if (photoIntent.removed) {
-      const removed = await deleteRecipePhoto(id, savedRevision)
-      if (removed.response.status !== 204) {
-        console.error('Не удалось удалить фото:', removed.data)
-      }
-    } else if (photoIntent.selected) {
-      const uploaded = await uploadRecipePhoto(id, photoIntent.selected, savedRevision)
-      if (uploaded.response.status !== 200) {
-        console.error('Не удалось загрузить фото:', uploaded.data)
-      }
-    }
-  } catch (err) {
-    console.error('Ошибка при работе с фото:', err)
-  }
-  router.push(`/recipes/${id}`)
+  // Текст сохранён и id зафиксирован: действие с фото применяется отдельно,
+  // поэтому сбой фото не теряет сохранённый рецепт и не создаёт второй.
+  photoTarget.value = { id: result.id, revision: result.data?.revision ?? revision.value }
+  setPendingPhoto(photoIntent)
+  await runPhoto()
+}
+
+async function runPhoto() {
+  if (!photoTarget.value) return
+  const result = await savePhoto(photoTarget.value.id, photoTarget.value.revision)
+  if (result.ok) router.push(`/recipes/${photoTarget.value.id}`)
 }
 
 function reloadLatest() {
@@ -450,10 +448,17 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
+      <div v-if="photoError" class="error conflict-box">
+        <p>{{ photoError }}</p>
+        <button type="button" class="btn btn--ghost" :disabled="photoSaving" @click="runPhoto">
+          {{ photoSaving ? 'Повтор…' : 'Повторить фото' }}
+        </button>
+      </div>
+
       <p v-if="visibleError" class="error">{{ visibleError }}</p>
 
       <div class="actions">
-        <button type="submit" class="btn btn--primary" :disabled="saving">{{ saving ? 'Сохранение…' : 'Сохранить' }}</button>
+        <button type="submit" class="btn btn--primary" :disabled="saving || photoSaving">{{ saving ? 'Сохранение…' : 'Сохранить' }}</button>
         <router-link :to="isEdit ? `/recipes/${editingId}` : '/recipes'" class="btn btn--ghost">Отмена</router-link>
       </div>
     </form>

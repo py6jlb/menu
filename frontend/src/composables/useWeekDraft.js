@@ -74,6 +74,42 @@ export function useWeekDraft(options = {}) {
 
   const dirty = computed(() => confirmedSnapshot.value !== serializeDraft(draft.value))
 
+  /**
+   * Построчные различия локального черновика и серверной версии при конфликте:
+   * какие ячейки на сервере отличаются от черновика. Пусто, если различий нет.
+   */
+  const conflictDiff = computed(() => {
+    if (!conflict.value) return []
+    const server = new Map(
+      (conflict.value.entries || []).map((entry) => [slotKey(entry.day, entry.mealType), entry])
+    )
+    const local = draft.value
+    const keys = new Set([...server.keys(), ...Object.keys(local)])
+    const diff = []
+    for (const key of keys) {
+      const serverEntry = server.get(key)
+      const localEntry = local[key]
+      if (
+        serverEntry &&
+        localEntry &&
+        serverEntry.recipeId === localEntry.recipeId &&
+        serverEntry.portions === localEntry.portions
+      ) {
+        continue
+      }
+      const [day, mealType] = key.split(':')
+      diff.push({
+        day: Number(day),
+        mealType,
+        serverName: serverEntry?.recipeName ?? null,
+        serverPortions: serverEntry?.portions ?? null,
+        localName: localEntry?.recipeName ?? null,
+        localPortions: localEntry?.portions ?? null
+      })
+    }
+    return diff.sort((a, b) => a.day - b.day || a.mealType.localeCompare(b.mealType))
+  })
+
   function slotEntry(day, mealType) {
     return draft.value[slotKey(day, mealType)]
   }
@@ -209,6 +245,7 @@ export function useWeekDraft(options = {}) {
     draft,
     revision,
     conflict,
+    conflictDiff,
     dirty,
     loading,
     saving,

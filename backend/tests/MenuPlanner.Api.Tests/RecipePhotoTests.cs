@@ -96,6 +96,24 @@ public sealed class RecipePhotoTests
     }
 
     [Fact]
+    public async Task DeletePhoto_WithoutPhoto_IsNoOp_AndDoesNotBumpRevision()
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(client, owner.Token, "/api/recipes", FullRequest());
+
+        var deleteResponse = await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{recipe!.Id}/photo?revision={recipe.Revision}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        var (_, detail) = await GetAuthorizedAsync<RecipeDto>(client, owner.Token, $"/api/recipes/{recipe.Id}");
+        // Удалять было нечего: ревизия не растёт и не делает чужие ожидаемые версии устаревшими.
+        Assert.Equal(recipe.Revision, detail!.Revision);
+    }
+
+    [Fact]
     public async Task DeleteRecipe_RemovesStoredPhotoFile()
     {
         using var factory = new ApiFactory();

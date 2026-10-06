@@ -27,6 +27,8 @@ const removingLocal = ref(false)
 const copying = ref(false)
 const copyError = ref('')
 const actionError = ref('')
+const actionConflict = ref(false)
+const actionRevision = ref(null)
 
 const family = ref(null)
 const {
@@ -55,10 +57,28 @@ function resetResourceState() {
   copying.value = false
   copyError.value = ''
   actionError.value = ''
+  actionConflict.value = false
+  actionRevision.value = null
   share.value = null
   shareLoading.value = false
   shareError.value = ''
   copied.value = false
+}
+
+/** Конфликт ревизии действия: показать актуальную версию и предложить перечитать. */
+function markActionConflict(data) {
+  actionConflict.value = true
+  actionRevision.value = Number.isInteger(data?.revision) ? data.revision : null
+  return data?.error || 'Кто-то уже изменил рецепт. Загрузите актуальную версию и повторите.'
+}
+
+/** Перечитать рецепт после конфликта, чтобы пользователь повторил действие с новой ревизией. */
+async function reloadAfterConflict() {
+  actionConflict.value = false
+  actionRevision.value = null
+  actionError.value = ''
+  copyError.value = ''
+  await load(recipe.value?.id)
 }
 
 async function loadFamily() {
@@ -108,11 +128,17 @@ async function onDelete() {
   if (!window.confirm(`Удалить рецепт «${recipe.value.name}»?`)) return
   deleting.value = true
   actionError.value = ''
+  actionConflict.value = false
+  actionRevision.value = null
   try {
-    const { response } = await deleteRecipe(id, recipe.value.revision)
+    const { response, data } = await deleteRecipe(id, recipe.value.revision)
     if (recipe.value?.id !== id) return
     if (response.status === 204) {
       router.push('/recipes')
+      return
+    }
+    if (response.status === 409) {
+      actionError.value = markActionConflict(data)
       return
     }
     actionError.value = 'Не удалось удалить рецепт.'
@@ -134,11 +160,17 @@ async function onRemoveExternal() {
     return
   removingLocal.value = true
   actionError.value = ''
+  actionConflict.value = false
+  actionRevision.value = null
   try {
-    const { response } = await removeExternalRecipe(id, recipe.value.revision)
+    const { response, data } = await removeExternalRecipe(id, recipe.value.revision)
     if (recipe.value?.id !== id) return
     if (response.status === 204) {
       router.push('/recipes')
+      return
+    }
+    if (response.status === 409) {
+      actionError.value = markActionConflict(data)
       return
     }
     actionError.value = 'Не удалось убрать рецепт из семьи.'
@@ -153,12 +185,16 @@ async function onCopy() {
   const id = recipe.value?.id
   if (!id) return
   copyError.value = ''
+  actionConflict.value = false
+  actionRevision.value = null
   copying.value = true
   try {
     const { response, data } = await copyRecipe(id, recipe.value.revision)
     if (recipe.value?.id !== id) return
     if (response.status === 200 || response.status === 201) {
       recipe.value = data
+    } else if (response.status === 409) {
+      copyError.value = markActionConflict(data)
     } else {
       copyError.value = data?.error || 'Сохранение копии пока недоступно.'
     }
@@ -208,7 +244,17 @@ onMounted(async () => {
         </div>
       </div>
 
-      <p v-if="actionError" class="error">{{ actionError }}</p>
+      <div v-if="actionError" class="error action-error">
+        <p>{{ actionError }}</p>
+        <button
+          v-if="actionConflict"
+          type="button"
+          class="btn btn--ghost btn--small"
+          @click="reloadAfterConflict"
+        >
+          Загрузить актуальную версию{{ actionRevision !== null ? ` (ревизия ${actionRevision})` : '' }}
+        </button>
+      </div>
 
       <div v-if="isExternal" class="card external-banner">
         <div class="external-badges">
@@ -356,6 +402,17 @@ onMounted(async () => {
 <style scoped>
 .external-banner {
   margin-bottom: 1rem;
+}
+
+.action-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.action-error p {
+  margin: 0;
 }
 
 .external-badges {

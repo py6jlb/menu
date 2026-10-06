@@ -27,31 +27,35 @@ public sealed record RecipeMutationResult(
     int Revision = 0);
 
 /// <summary>
-/// Правка и удаление собственного рецепта с атомарной проверкой ревизии.
-/// Ревизия — токен конкурентности EF Core: два запроса, прочитавшие одну версию,
-/// не могут оба её перезаписать; проигравший получает согласованный конфликт,
-/// а не смешивает содержимое. Scoped-сервис, читает БД.
+/// Правка, удаление и операции с фото собственного рецепта с атомарной проверкой
+/// ревизии. Ревизия — токен конкурентности EF Core: два запроса, прочитавшие одну
+/// версию, не могут оба её перезаписать; проигравший получает согласованный
+/// конфликт, а не смешивает содержимое. Scoped-сервис, читает БД и работает с
+/// файлом фото.
 /// </summary>
 public sealed class RecipeMutationService
 {
     private readonly AppDbContext _db;
     private readonly PhotoStorage _storage;
     private readonly TimeProvider _clock;
+    private readonly RecipeRevisionReader _revisions;
 
-    public RecipeMutationService(AppDbContext db, PhotoStorage storage, TimeProvider clock)
+    public RecipeMutationService(
+        AppDbContext db, PhotoStorage storage, TimeProvider clock, RecipeRevisionReader revisions)
     {
         _db = db;
         _storage = storage;
         _clock = clock;
+        _revisions = revisions;
     }
 
     public async Task<RecipeMutationResult> UpdateAsync(
-        Guid id, Guid familyId, RecipeRequest request, CancellationToken cancellationToken = default)
+        RecipeTarget target, RecipeRequest request, CancellationToken cancellationToken = default)
     {
         var recipe = await _db.Recipes
             .Include(r => r.Steps)
             .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId, cancellationToken);
+            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
         if (recipe is null)
             return new(RecipeMutationOutcome.NotFound);
         if (recipe.SourceRecipeId is not null)
@@ -78,17 +82,17 @@ public sealed class RecipeMutationService
         }
         catch (DbUpdateConcurrencyException)
         {
-            return new(RecipeMutationOutcome.Conflict, Revision: await CurrentRevisionAsync(id, cancellationToken));
+            return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
         }
 
         return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
     }
 
     public async Task<RecipeMutationResult> DeleteAsync(
-        Guid id, Guid familyId, int? revision, CancellationToken cancellationToken = default)
+        RecipeTarget target, int? revision, CancellationToken cancellationToken = default)
     {
         var recipe = await _db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId, cancellationToken);
+            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
         if (recipe is null)
             return new(RecipeMutationOutcome.NotFound);
         if (recipe.SourceRecipeId is not null)
@@ -102,16 +106,100 @@ public sealed class RecipeMutationService
     /// Ревизия защищает и этот путь: устаревшее удаление не убирает чужую правку.
     /// </summary>
     public async Task<RecipeMutationResult> RemoveExternalAsync(
-        Guid id, Guid familyId, int? revision, CancellationToken cancellationToken = default)
+        RecipeTarget target, int? revision, CancellationToken cancellationToken = default)
     {
         var recipe = await _db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId, cancellationToken);
+            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
         if (recipe is null)
             return new(RecipeMutationOutcome.NotFound);
         if (recipe.SourceRecipeId is null)
             return new(RecipeMutationOutcome.ValidationError, Error: "Это не внешний рецепт.");
 
         return await DeleteTrackedAsync(recipe, revision, cancellationToken);
+    }
+
+    /// <summary>
+    /// Замена фото: файл сохраняется, ревизия растёт атомарно. При гонке новый
+    /// файл удаляется, чтобы не осталось сироты, а клиент получает конфликт.
+    /// </summary>
+    public async Task<RecipeMutationResult> UploadPhotoAsync(
+        RecipeTarget target,
+        int? revision,
+        string extension,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        var recipe = await _db.Recipes
+            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
+        if (recipe is null)
+            return new(RecipeMutationOutcome.NotFound);
+        if (recipe.SourceRecipeId is not null)
+            return new(RecipeMutationOutcome.ExternalReadOnly);
+
+        var stale = RevisionProblem(revision, recipe.Revision);
+        if (stale is not null)
+            return stale;
+
+        var previous = recipe.PhotoPath;
+        var saved = await _storage.SaveAsync(recipe.Id, extension, content);
+        recipe.PhotoPath = saved;
+        recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
+        recipe.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Правка проиграла гонку: не оставляем осиротевший файл и не трогаем чужой.
+            _storage.Delete(saved);
+            return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
+        }
+
+        _storage.Delete(previous);
+
+        return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
+    }
+
+    /// <summary>
+    /// Удаление фото. Если фото нет, это no-op: ревизия не растёт и не делает
+    /// ожидаемые версии других клиентов устаревшими.
+    /// </summary>
+    public async Task<RecipeMutationResult> DeletePhotoAsync(
+        RecipeTarget target, int? revision, CancellationToken cancellationToken = default)
+    {
+        var recipe = await _db.Recipes
+            .FirstOrDefaultAsync(r => r.Id == target.Id && r.FamilyId == target.FamilyId, cancellationToken);
+        if (recipe is null)
+            return new(RecipeMutationOutcome.NotFound);
+        if (recipe.SourceRecipeId is not null)
+            return new(RecipeMutationOutcome.ExternalReadOnly);
+
+        if (recipe.PhotoPath is null)
+            return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
+
+        var stale = RevisionProblem(revision, recipe.Revision);
+        if (stale is not null)
+            return stale;
+
+        var previous = recipe.PhotoPath;
+        recipe.PhotoPath = null;
+        recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
+        recipe.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
+        }
+
+        _storage.Delete(previous);
+
+        return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
     }
 
     /// <summary>
@@ -136,17 +224,20 @@ public sealed class RecipeMutationService
         }
         catch (DbUpdateConcurrencyException)
         {
-            return new(RecipeMutationOutcome.Conflict, Revision: await CurrentRevisionAsync(recipe.Id, cancellationToken));
+            return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(recipe.Id, cancellationToken));
         }
 
         _storage.Delete(photoPath);
         return new(RecipeMutationOutcome.Ok, Revision: RecipeRevisionRules.Next(revision.Value));
     }
 
-    private async Task<int> CurrentRevisionAsync(Guid id, CancellationToken cancellationToken) =>
-        await _db.Recipes
-            .AsNoTracking()
-            .Where(r => r.Id == id)
-            .Select(r => (int?)r.Revision)
-            .FirstOrDefaultAsync(cancellationToken) ?? 0;
+    /// <summary>Проверка ожидаемой ревизии: исход ошибки, если она не передана или устарела.</summary>
+    private static RecipeMutationResult? RevisionProblem(int? revision, int current)
+    {
+        if (revision is null)
+            return new(RecipeMutationOutcome.MissingRevision, Revision: current);
+        if (!RecipeRevisionRules.IsCurrent(revision, current))
+            return new(RecipeMutationOutcome.Conflict, Revision: current);
+        return null;
+    }
 }

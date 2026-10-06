@@ -453,6 +453,109 @@ describe('useRecipeDraft — конкурентное редактировани
   })
 })
 
+describe('useRecipeDraft — действия с фото', () => {
+  function photoOptions(overrides = {}) {
+    return {
+      initialId: 'A',
+      loadRecipe: vi.fn().mockResolvedValue(ok(recipeData('A'))),
+      updateRecipe: vi.fn().mockResolvedValue(ok(recipeData('A', { revision: 2 }))),
+      uploadPhoto: vi.fn(),
+      deletePhoto: vi.fn(),
+      ...overrides
+    }
+  }
+
+  it('успешная загрузка фото завершает отложенное действие', async () => {
+    const uploadPhoto = vi.fn().mockResolvedValue({ response: { status: 200 }, data: recipeData('A') })
+    const state = make(photoOptions({ uploadPhoto }))
+    await state.load()
+    const file = { name: 'a.jpg', size: 1, lastModified: 1 }
+    state.setPendingPhoto({ removed: false, selected: file })
+
+    const result = await state.savePhoto('A', 2)
+
+    expect(uploadPhoto).toHaveBeenCalledWith('A', file, 2)
+    expect(result).toEqual({ ok: true })
+    expect(state.photoPartial.value).toBe(false)
+    expect(state.photoError.value).toBe('')
+  })
+
+  it('сбой фото оставляет текст сохранённым и позволяет повторить только фото', async () => {
+    const uploadPhoto = vi
+      .fn()
+      .mockResolvedValueOnce({ response: { status: 500 }, data: { error: 'Сбой.' } })
+      .mockResolvedValueOnce({ response: { status: 200 }, data: recipeData('A') })
+    const state = make(photoOptions({ uploadPhoto }))
+    await state.load()
+    state.setPendingPhoto({ removed: false, selected: { name: 'a.jpg', size: 1, lastModified: 1 } })
+
+    const failed = await state.savePhoto('A', 2)
+    expect(failed.ok).toBe(false)
+    expect(state.photoPartial.value).toBe(true)
+    expect(state.photoError.value).toContain('фото')
+
+    const retried = await state.savePhoto('A', 2)
+    expect(retried.ok).toBe(true)
+    expect(uploadPhoto).toHaveBeenCalledTimes(2)
+    expect(state.photoPartial.value).toBe(false)
+  })
+
+  it('конфликт ревизии на фото показывает серверную версию', async () => {
+    const uploadPhoto = vi.fn().mockResolvedValue({
+      response: { status: 409 },
+      data: { error: 'Рецепт изменён.', revision: 6 }
+    })
+    const state = make(photoOptions({ uploadPhoto }))
+    await state.load()
+    state.setPendingPhoto({ removed: false, selected: { name: 'a.jpg', size: 1, lastModified: 1 } })
+
+    const result = await state.savePhoto('A', 2)
+
+    expect(result).toMatchObject({ ok: false, conflict: true })
+    expect(state.conflictRevision.value).toBe(6)
+    expect(state.conflictMessage.value).toBe('Рецепт изменён.')
+    expect(state.photoPartial.value).toBe(true)
+  })
+
+  it('удаление фото идёт через deletePhoto', async () => {
+    const deletePhoto = vi.fn().mockResolvedValue({ response: { status: 204 }, data: null })
+    const state = make(photoOptions({ deletePhoto }))
+    await state.load()
+    state.setPendingPhoto({ removed: true, selected: null })
+
+    const result = await state.savePhoto('A', 2)
+
+    expect(deletePhoto).toHaveBeenCalledWith('A', 2)
+    expect(result).toEqual({ ok: true })
+  })
+
+  it('сетевой отказ фото даёт понятное сообщение и сохраняет возможность повтора', async () => {
+    const uploadPhoto = vi.fn().mockRejectedValue(new Error('network'))
+    const state = make(photoOptions({ uploadPhoto }))
+    await state.load()
+    state.setPendingPhoto({ removed: false, selected: { name: 'a.jpg', size: 1, lastModified: 1 } })
+
+    const result = await state.savePhoto('A', 2)
+
+    expect(result.ok).toBe(false)
+    expect(state.photoPartial.value).toBe(true)
+    expect(state.photoError.value).toContain('фото')
+    expect(state.photoSaving.value).toBe(false)
+  })
+
+  it('создание нового рецепта привязывает черновик к id, чтобы повтор обновлял', async () => {
+    const createRecipe = vi.fn().mockResolvedValue(created(recipeData('NEW')))
+    const state = make({ createRecipe })
+    state.draft.value.name = 'Новый'
+
+    const result = await state.save()
+
+    expect(result.id).toBe('NEW')
+    expect(state.editingId.value).toBe('NEW')
+    expect(state.isEdit.value).toBe(true)
+  })
+})
+
 describe('useRecipeDraft — предупреждение об уходе', () => {
   it('отказ от ухода сохраняет пользователя и черновик на месте', async () => {
     const state = make({ confirm: () => false })
