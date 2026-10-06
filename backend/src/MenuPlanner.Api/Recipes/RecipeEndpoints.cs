@@ -2,6 +2,7 @@ using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.External;
+using MenuPlanner.Api.Recipes.Photos;
 using MenuPlanner.Api.Recipes.Repetition;
 
 namespace MenuPlanner.Api.Recipes;
@@ -283,7 +284,7 @@ public static class RecipeEndpoints
         return MutationResult(result);
     }
 
-    private static IResult GetPhotoFileAsync(string fileName, PhotoStorage storage)
+    private static IResult GetPhotoFileAsync(string fileName, IPhotoStore storage)
     {
         var path = storage.ResolveReadPath(fileName);
         if (path is null)

@@ -19,6 +19,7 @@ using MenuPlanner.Api.Ingredients;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.External;
+using MenuPlanner.Api.Recipes.Photos;
 using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.Settings;
 using MenuPlanner.Api.ShoppingList;
@@ -31,7 +32,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
-builder.Services.AddSingleton<PhotoStorage>();
+builder.Services.AddSingleton<IPhotoStore, PhotoStorage>();
+builder.Services.AddScoped<PhotoLifecycle>();
+builder.Services.AddScoped<PhotoGarbageCollector>();
+builder.Services.AddSingleton(PhotoCleanupOptions.Read(builder.Configuration));
+builder.Services.AddHostedService<PhotoCleanupWorker>();
 
 builder.Services.AddSingleton(ReadinessOptions.FromConfiguration(builder.Configuration));
 builder.Services.AddScoped<IDatabaseReadinessProbe, DatabaseReadinessProbe>();
@@ -160,7 +165,7 @@ var forwardedHeaders = ForwardedHeaderConfiguration.Build(app.Configuration);
 if (ForwardedHeaderConfiguration.HasTrustedProxies(forwardedHeaders))
     app.UseForwardedHeaders(forwardedHeaders);
 
-app.Services.GetRequiredService<PhotoStorage>();
+app.Services.GetRequiredService<IPhotoStore>();
 
 app.MapGet("/health", () => Results.Json(
     new { status = "ok", service = "menu-planner-api" }));

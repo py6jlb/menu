@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes.Photos;
 
 namespace MenuPlanner.Api.Recipes;
 
@@ -36,15 +37,15 @@ public sealed record RecipeMutationResult(
 public sealed class RecipeMutationService
 {
     private readonly AppDbContext _db;
-    private readonly PhotoStorage _storage;
+    private readonly PhotoLifecycle _photos;
     private readonly TimeProvider _clock;
     private readonly RecipeRevisionReader _revisions;
 
     public RecipeMutationService(
-        AppDbContext db, PhotoStorage storage, TimeProvider clock, RecipeRevisionReader revisions)
+        AppDbContext db, PhotoLifecycle photos, TimeProvider clock, RecipeRevisionReader revisions)
     {
         _db = db;
-        _storage = storage;
+        _photos = photos;
         _clock = clock;
         _revisions = revisions;
     }
@@ -137,8 +138,9 @@ public sealed class RecipeMutationService
     }
 
     /// <summary>
-    /// Замена фото: файл сохраняется, ревизия растёт атомарно. При гонке новый
-    /// файл удаляется, чтобы не осталось сироты, а клиент получает конфликт.
+    /// Замена фото: файл сохраняется, ревизия растёт атомарно. При любом неуспехе
+    /// записи БД новый файл убирается компенсацией; при гонке чужой файл не
+    /// затрагивается, а клиент получает конфликт.
     /// </summary>
     public async Task<RecipeMutationResult> UploadPhotoAsync(
         RecipeTarget target,
@@ -157,25 +159,35 @@ public sealed class RecipeMutationService
             return stale;
 
         var previous = recipe.PhotoPath;
-        var saved = await _storage.SaveAsync(recipe.Id, extension, content);
-        recipe.PhotoPath = saved;
-        recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
-        recipe.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
+        return await _photos.ReplaceAsync(
+            recipe.Id,
+            extension,
+            content,
+            previous,
+            async staged =>
+            {
+                recipe.PhotoPath = staged;
+                recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
+                recipe.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
 
-        try
-        {
-            await _db.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // Правка проиграла гонку: не оставляем осиротевший файл и не трогаем чужой.
-            _storage.Delete(saved);
-            return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
-        }
-
-        _storage.Delete(previous);
-
-        return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
+                try
+                {
+                    await _db.SaveChangesAsync(cancellationToken);
+                    return new PhotoCommit<RecipeMutationResult>(
+                        true,
+                        new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision));
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    // Правка проиграла гонку: БД не изменилась, новый файл убирается
+                    // компенсацией, чужой актуальный файл не трогается.
+                    return new PhotoCommit<RecipeMutationResult>(
+                        false,
+                        new(RecipeMutationOutcome.Conflict,
+                            Revision: await _revisions.CurrentAsync(target.Id, cancellationToken)));
+                }
+            },
+            cancellationToken);
     }
 
     /// <summary>
@@ -211,7 +223,7 @@ public sealed class RecipeMutationService
             return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
         }
 
-        _storage.Delete(previous);
+        _photos.Retire(previous);
 
         return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
     }
@@ -241,7 +253,7 @@ public sealed class RecipeMutationService
             return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(recipe.Id, cancellationToken));
         }
 
-        _storage.Delete(photoPath);
+        _photos.Retire(photoPath);
         return new(RecipeMutationOutcome.Ok, Revision: RecipeRevisionRules.Next(revision.Value));
     }
 
