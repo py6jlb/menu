@@ -16,6 +16,8 @@ if command -v shellcheck >/dev/null 2>&1; then shellcheck deploy/*.sh; fi
 
 В CI установи Python/Bash/Git/Compose plugin и запускай эти команды отдельным deploy-specific job. Shellcheck, если установлен в CI, должен проходить обязательно. Python-зависимостей и дополнительных библиотек нет. `-B` предотвращает bytecache при проверках; `__pycache__/` и `*.py[cod]` также игнорируются Git. Полный backend suite и frontend build — отдельные проверки основного агента/CI.
 
+Единая точка входа для релиза — `scripts/release-gate.sh` (этап `deploy` запускает этот suite, остальные — backend/PostgreSQL/миграции/frontend/инфраструктуру/зависимости). CI — `.github/workflows/release-gate.yml`; подробности — `deploy/README.md#гейт-релиза`.
+
 Контейнерный Shellcheck для изменённых deploy-скриптов, если инструмента нет на хосте:
 
 ```bash

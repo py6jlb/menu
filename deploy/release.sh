@@ -5,18 +5,23 @@
 
 # Поддерживаемая LTS-версия Node; та же, что в frontend/Dockerfile.
 RELEASE_NODE_IMAGE="${RELEASE_NODE_IMAGE-node:24-alpine}"
+# Закреплённые версии базовых образов, используемые гейтом и воротами инфраструктуры.
+RELEASE_SDK_IMAGE="${RELEASE_SDK_IMAGE-mcr.microsoft.com/dotnet/sdk:10.0}"
+RELEASE_ASPNET_IMAGE="${RELEASE_ASPNET_IMAGE-mcr.microsoft.com/dotnet/aspnet:10.0}"
+RELEASE_CADDY_IMAGE="${RELEASE_CADDY_IMAGE-caddy:2-alpine}"
+RELEASE_COLLECTOR_IMAGE="${RELEASE_COLLECTOR_IMAGE-otel/opentelemetry-collector-contrib:0.161.0}"
 
 # Закреплённые базовые образы. Обновление — отдельным коммитом с проверкой
 # локальной сборки и деплоя на стенде (см. deploy/README.md).
 release_base_images() {
   printf '%s\n' \
-    mcr.microsoft.com/dotnet/sdk:10.0 \
-    mcr.microsoft.com/dotnet/aspnet:10.0 \
-    node:24-alpine \
+    "$RELEASE_SDK_IMAGE" \
+    "$RELEASE_ASPNET_IMAGE" \
+    "$RELEASE_NODE_IMAGE" \
     nginx:1.27-alpine \
     postgres:16 \
-    caddy:2-alpine \
-    otel/opentelemetry-collector-contrib:0.161.0 \
+    "$RELEASE_CADDY_IMAGE" \
+    "$RELEASE_COLLECTOR_IMAGE" \
     alpine:3.20
 }
 
