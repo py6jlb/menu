@@ -25,8 +25,9 @@
 
 ## Evidence
 
-- `python3 -B -m unittest discover -s deploy/tests` — **165 tests OK** (23 новых `test_alerting.py`).
+- `python3 -B -m unittest discover -s deploy/tests` — **168 tests OK** (26 новых `test_alerting.py`).
 - `bash -n deploy/*.sh` — чисто; контейнерный Shellcheck (включая `alert.sh`, `alert-lib.sh`, `install-monitor.sh`) — exit 0.
+- Правки ревью: нечитаемая метрика даёт отдельную причину `unreadable`, а не ложное `RECOVERED`; сбой heartbeat завершает проверку ненулевым кодом; SPA проверяется по HTML, а не только по коду 200; причины сведены к стабильным (`pressure`), чтобы дрейф значений не обходил дедупликацию; пороги читаются по конвенции `${VAR-default}`; `install-monitor.sh` не ставится без настроенного remote и предупреждает при отсутствии `ALERT_HEARTBEAT_URL`.
 
 ## Ограничения
 

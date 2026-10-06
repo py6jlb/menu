@@ -53,6 +53,8 @@ config_require ALERT_WEBHOOK_URL
 alert_url_valid "$ALERT_WEBHOOK_URL" || die "Некорректный ALERT_WEBHOOK_URL (ожидается http(s) URL)"
 if [ -n "${ALERT_HEARTBEAT_URL-}" ]; then
   alert_url_valid "$ALERT_HEARTBEAT_URL" || die "Некорректный ALERT_HEARTBEAT_URL"
+else
+  warn "ALERT_HEARTBEAT_URL не задан: полный отказ VPS внешний монитор не заметит — локальный таймер не является внешним"
 fi
 
 command -v "$CURL_BIN" >/dev/null 2>&1 || die "curl не установлен: apt-get install -y curl"
@@ -86,13 +88,14 @@ done
 run_as_user test -x "$APP_DIR/deploy/alert.sh" \
   || die "Пользователь $DEPLOY_USER не запускает $APP_DIR/deploy/alert.sh"
 
-# remote бэкапа нужен для проверки возраста копии.
+# remote бэкапа нужен для проверки возраста копии: без настроенного remote
+# проверка будет постоянно тревожить «unreadable».
 config_require BACKUP_REMOTE
 remote="${BACKUP_REMOTE%%:*}"
 [ -n "$remote" ] || die "BACKUP_REMOTE должен быть вида remote:bucket"
 remotes="$(run_as_user "$RCLONE_BIN" listremotes 2>/dev/null || true)"
 if ! printf '%s\n' "$remotes" | grep -qx "$remote:"; then
-  warn "rclone remote '$remote' не настроен для $DEPLOY_USER — проверка возраста копии будет падать"
+  die "rclone remote '$remote' не настроен для $DEPLOY_USER: sudo -u $DEPLOY_USER -H rclone config"
 fi
 
 for file in "$SERVICE" "$TIMER"; do

@@ -64,10 +64,10 @@ if [ -n "${ALERT_HEARTBEAT_URL-}" ]; then
   alert_url_valid "$ALERT_HEARTBEAT_URL" || die "Некорректный ALERT_HEARTBEAT_URL"
 fi
 
-ALERT_HTTP_TIMEOUT_SECONDS="${ALERT_HTTP_TIMEOUT_SECONDS:-10}"
+ALERT_HTTP_TIMEOUT_SECONDS="${ALERT_HTTP_TIMEOUT_SECONDS-10}"
 [[ "$ALERT_HTTP_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] \
   || die "ALERT_HTTP_TIMEOUT_SECONDS должен быть целым > 0"
-ALERT_DEDUP_SECONDS="${ALERT_DEDUP_SECONDS:-3600}"
+ALERT_DEDUP_SECONDS="${ALERT_DEDUP_SECONDS-3600}"
 [[ "$ALERT_DEDUP_SECONDS" =~ ^[0-9]+$ ]] \
   || die "ALERT_DEDUP_SECONDS должен быть целым ≥ 0"
 ALERT_STATE_FILE="${ALERT_STATE_FILE:-$APP_DIR/alert-state}"
@@ -96,7 +96,7 @@ alert_send() {
   local message="$1" payload cfg code rc
   payload="$(mktemp "$TMP/payload.XXXXXX")"
   cfg="$(mktemp "$TMP/curl.XXXXXX")"
-  printf 'url = "%s"\n' "$ALERT_WEBHOOK_URL" > "$cfg"
+  alert_curl_url_config "$cfg" "$ALERT_WEBHOOK_URL"
   printf '{"text":"%s"}\n' "$(alert_json_escape "$message")" > "$payload"
   set +e
   code="$("$CURL_BIN" --config "$cfg" -sS -m "$ALERT_HTTP_TIMEOUT_SECONDS" \
@@ -115,7 +115,9 @@ alert_send() {
 
 # alert_process <problem> <cause> <detail>: <cause> пуст — проблема устранена,
 # отправляется отдельное сообщение восстановления. Повтор того же события
-# подавляется в окне ALERT_DEDUP_SECONDS.
+# подавляется в окне ALERT_DEDUP_SECONDS; смена причины — новое событие. Причины
+# сведены к стабильным (например, давление на диск — «pressure»), чтобы дрейф
+# значений не обходил дедупликацию.
 alert_process() {
   local problem="$1" cause="$2" detail="$3" stored last now message
   now="$(date -u +%s)"
@@ -174,11 +176,11 @@ case "$ALERT_PUBLIC_URL" in
       || die "HTTP-адрес допустим только в лабораторном режиме (DEPLOYMENT_MODE=lab)" ;;
 esac
 
-BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS:-26}"
-ALERT_DISK_MIN_FREE_MB="${ALERT_DISK_MIN_FREE_MB:-2048}"
-ALERT_DISK_MAX_USED_PERCENT="${ALERT_DISK_MAX_USED_PERCENT:-90}"
-ALERT_MEM_MIN_MB="${ALERT_MEM_MIN_MB:-256}"
-ALERT_LOAD_MAX_PER_CPU="${ALERT_LOAD_MAX_PER_CPU:-2}"
+BACKUP_MAX_AGE_HOURS="${BACKUP_MAX_AGE_HOURS-26}"
+ALERT_DISK_MIN_FREE_MB="${ALERT_DISK_MIN_FREE_MB-2048}"
+ALERT_DISK_MAX_USED_PERCENT="${ALERT_DISK_MAX_USED_PERCENT-90}"
+ALERT_MEM_MIN_MB="${ALERT_MEM_MIN_MB-256}"
+ALERT_LOAD_MAX_PER_CPU="${ALERT_LOAD_MAX_PER_CPU-2}"
 for key in BACKUP_MAX_AGE_HOURS ALERT_DISK_MIN_FREE_MB ALERT_MEM_MIN_MB \
            ALERT_LOAD_MAX_PER_CPU; do
   value="${!key-}"
@@ -189,13 +191,13 @@ if [[ ! "$ALERT_DISK_MAX_USED_PERCENT" =~ ^[1-9][0-9]{0,2}$ ]] \
   die "ALERT_DISK_MAX_USED_PERCENT должен быть целым 1–100"
 fi
 
-ALERT_BREACH_SAMPLES="${ALERT_BREACH_SAMPLES:-2}"
+ALERT_BREACH_SAMPLES="${ALERT_BREACH_SAMPLES-2}"
 [[ "$ALERT_BREACH_SAMPLES" =~ ^[1-9][0-9]*$ ]] \
   || die "ALERT_BREACH_SAMPLES должен быть целым > 0"
-ALERT_SAMPLE_INTERVAL_SECONDS="${ALERT_SAMPLE_INTERVAL_SECONDS:-15}"
+ALERT_SAMPLE_INTERVAL_SECONDS="${ALERT_SAMPLE_INTERVAL_SECONDS-15}"
 [[ "$ALERT_SAMPLE_INTERVAL_SECONDS" =~ ^[0-9]+$ ]] \
   || die "ALERT_SAMPLE_INTERVAL_SECONDS должен быть целым ≥ 0"
-ALERT_CPU_COUNT="${ALERT_CPU_COUNT:-$(nproc)}"
+ALERT_CPU_COUNT="${ALERT_CPU_COUNT-$(nproc)}"
 [[ "$ALERT_CPU_COUNT" =~ ^[1-9][0-9]*$ ]] \
   || die "ALERT_CPU_COUNT должен быть целым > 0"
 ALERT_PROC_MEMINFO="${ALERT_PROC_MEMINFO:-/proc/meminfo}"
@@ -222,8 +224,8 @@ check_public_path() {
     alert_process public_path connect "нет соединения с публичным $host/"
     return 0
   fi
-  if [ "$code" != "200" ]; then
-    alert_process public_path spa "SPA на $host вернула код $code"
+  if [ "$code" != "200" ] || ! grep -qi '<!doctype html' "$body" 2>/dev/null; then
+    alert_process public_path spa "SPA на $host не отдаёт HTML (код $code)"
     return 0
   fi
   alert_process public_path "" ""
@@ -256,47 +258,64 @@ check_backup() {
 }
 
 # check_resources: устойчивое давление (несколько подряд проб) — иначе краткий
-# всплеск дал бы ложную тревогу.
+# всплеск дал бы ложную тревогу. Нечитаемая метрика — отдельная причина
+# «unreadable», а не «здорово»: иначе сбой чтения давал бы ложное восстановление.
 check_resources() {
   local samples="$ALERT_BREACH_SAMPLES" interval="$ALERT_SAMPLE_INTERVAL_SECONDS"
   local load_limit=$((ALERT_CPU_COUNT * ALERT_LOAD_MAX_PER_CPU * 100))
-  local dfree=0 dused=0 mem=0 load=0 i sample avail used memavail loadh dcause
+  local dfree=0 dused=0 mem=0 load=0 i sample avail used memavail loadh
+  local disk_fail=0 mem_fail=0 load_fail=0 disk_cause
   for ((i = 0; i < samples; i++)); do
     if [ "$i" -gt 0 ]; then sleep "$interval"; fi
     if sample="$(alert_df_sample "$APP_DIR" 2>/dev/null)"; then
       read -r avail used <<< "$sample"
       [ "$avail" -lt "$ALERT_DISK_MIN_FREE_MB" ] && dfree=$((dfree + 1))
       [ "$used" -gt "$ALERT_DISK_MAX_USED_PERCENT" ] && dused=$((dused + 1))
+    else
+      disk_fail=$((disk_fail + 1))
     fi
     if memavail="$(alert_mem_available_mb "$ALERT_PROC_MEMINFO" 2>/dev/null)"; then
       [ "$memavail" -lt "$ALERT_MEM_MIN_MB" ] && mem=$((mem + 1))
+    else
+      mem_fail=$((mem_fail + 1))
     fi
     if loadh="$(alert_load_hundredths "$ALERT_PROC_LOADAVG" 2>/dev/null)"; then
       [ "$loadh" -gt "$load_limit" ] && load=$((load + 1))
+    else
+      load_fail=$((load_fail + 1))
     fi
   done
 
-  dcause=""
-  if [ "$dfree" -ge "$samples" ] && [ "$dused" -ge "$samples" ]; then
-    dcause="full"
-  elif [ "$dfree" -ge "$samples" ]; then
-    dcause="free"
-  elif [ "$dused" -ge "$samples" ]; then
-    dcause="used"
+  disk_cause=""
+  if [ "$disk_fail" -gt 0 ]; then
+    disk_cause="unreadable"
+  elif [ "$dfree" -ge "$samples" ] || [ "$dused" -ge "$samples" ]; then
+    # Стабильная причина «pressure»: free↔used не считаются новым событием.
+    disk_cause="pressure"
   fi
-  if [ -n "$dcause" ]; then
-    alert_process disk "$dcause" \
+  if [ "$disk_cause" = "unreadable" ]; then
+    alert_process disk unreadable "не удалось прочитать свободное место на $APP_DIR"
+  elif [ "$disk_cause" = "pressure" ]; then
+    alert_process disk pressure \
       "опасное давление на диск $APP_DIR (минимум $ALERT_DISK_MIN_FREE_MB МБ, максимум $ALERT_DISK_MAX_USED_PERCENT%)"
   else
     alert_process disk "" ""
   fi
-  if [ "$mem" -ge "$samples" ]; then
+
+  if [ "$mem_fail" -gt 0 ]; then
+    alert_process memory unreadable \
+      "не удалось прочитать доступную память из $ALERT_PROC_MEMINFO"
+  elif [ "$mem" -ge "$samples" ]; then
     alert_process memory available \
       "мало доступной памяти (порог $ALERT_MEM_MIN_MB МБ)"
   else
     alert_process memory "" ""
   fi
-  if [ "$load" -ge "$samples" ]; then
+
+  if [ "$load_fail" -gt 0 ]; then
+    alert_process load unreadable \
+      "не удалось прочитать load из $ALERT_PROC_LOADAVG"
+  elif [ "$load" -ge "$samples" ]; then
     alert_process load high \
       "высокая нагрузка (порог $ALERT_LOAD_MAX_PER_CPU на ядро, ядер $ALERT_CPU_COUNT)"
   else
@@ -311,7 +330,7 @@ send_heartbeat() {
   [ -n "${ALERT_HEARTBEAT_URL-}" ] || return 0
   local cfg code
   cfg="$(mktemp "$TMP/hb.XXXXXX")"
-  printf 'url = "%s"\n' "$ALERT_HEARTBEAT_URL" > "$cfg"
+  alert_curl_url_config "$cfg" "$ALERT_HEARTBEAT_URL"
   code="$("$CURL_BIN" --config "$cfg" -sS -m "$ALERT_HTTP_TIMEOUT_SECONDS" \
     -o /dev/null -w '%{http_code}' 2>/dev/null || true)"
   rm -f "$cfg"
@@ -319,6 +338,7 @@ send_heartbeat() {
     2*) return 0 ;;
   esac
   warn "heartbeat не отправлен (HTTP ${code:-нет}) — внешний монитор может счесть VPS мёртвым"
+  ALERT_FAILED=1
 }
 
 log "Проверка публичного пути, бэкапа и ресурсов"

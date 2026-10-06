@@ -296,6 +296,14 @@ class AvailabilityTests(AlertFixture):
         self.assertTrue(any("heartbeat" in url for url in self.urls()),
                         "heartbeat не отправлен")
 
+    def test_spa_without_html_alerts(self):
+        (self.edge / "index.html").write_text("plain text, not html\n")
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(any("public_path" in post and "spa" in post
+                            for post in self.webhook_posts()),
+                        "SPA без HTML не дала тревоги")
+
 
 class BackupAgeTests(AlertFixture):
     def test_incomplete_upload_does_not_count_as_backup(self):
@@ -354,6 +362,22 @@ class ResourceTests(AlertFixture):
         self.assertTrue(any("load" in post for post in self.webhook_posts()),
                         "высокая нагрузка не дала тревоги")
 
+    def test_unreadable_metric_alerts_without_false_recovery(self):
+        self.write_meminfo(100)
+        first = self.run_script(env={"ALERT_MEM_MIN_MB": "256"})
+        self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+        self.assertTrue(any("memory" in post and "available" in post
+                            for post in self.webhook_posts()))
+        second = self.run_script(env={
+            "ALERT_MEM_MIN_MB": "256",
+            "ALERT_PROC_MEMINFO": str(self.root / "missing-meminfo")})
+        self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
+        posts = self.webhook_posts()
+        self.assertEqual(len(posts), 2, f"нечитаемая метрика не дала отдельной тревоги: {posts}")
+        self.assertIn("unreadable", posts[1])
+        self.assertNotIn("RECOVERED", posts[1],
+                         "нечитаемая метрика выдана за восстановление")
+
 
 class ChannelTests(AlertFixture):
     def test_missing_channel_is_rejected_before_external_actions(self):
@@ -374,6 +398,11 @@ class ChannelTests(AlertFixture):
         result = self.run_script(args=("--test",), env={"WEBHOOK_FAIL": "1"})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("доставка не удалась", result.stderr)
+
+    def test_heartbeat_failure_is_reported_nonzero(self):
+        result = self.run_script(env={"HEARTBEAT_FAIL": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("heartbeat", result.stderr)
 
     def test_secret_channel_is_not_logged_or_put_in_argv(self):
         self.set_edge("ready", status=503, body="")

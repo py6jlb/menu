@@ -60,13 +60,21 @@ alert_alert_message() {
 
 # alert_recovery_message <install> <at> <release> <problem> <cause>
 alert_recovery_message() {
+  local install="$1" at="$2" release="$3" problem="$4" cause="$5"
   printf '[%s] RECOVERED %s (%s). time=%s release=%s next=%s\n' \
-    "$1" "$4" "$5" "$2" "$3" "проблема устранена, действий не требуется"
+    "$install" "$problem" "$cause" "$at" "$release" \
+    "проблема устранена, действий не требуется"
 }
 
 # alert_test_message <install> <at> <release>
 alert_test_message() {
   printf '[%s] TEST: проверочное уведомление канала. time=%s release=%s\n' "$1" "$2" "$3"
+}
+
+# alert_curl_url_config <file> <url>: literal-запись URL для curl --config, чтобы
+# секрет не попадал в argv. URL уже проверен alert_url_valid (без " и \).
+alert_curl_url_config() {
+  printf 'url = "%s"\n' "$2" > "$1"
 }
 
 # alert_df_sample <path>: "свободно_МБ занято_%" одним вызовом df. Одна выборка —
