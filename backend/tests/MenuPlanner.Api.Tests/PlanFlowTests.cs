@@ -71,9 +71,10 @@ public sealed class PlanFlowTests
             {
                 new PlanEntryRequest(0, "breakfast", soup.Id, 5),
                 new PlanEntryRequest(1, "lunch", pancakes.Id, 3)
-            }));
+            }, first.Data!.Revision));
         Assert.Equal(HttpStatusCode.OK, second.Response.StatusCode);
         Assert.Equal(2, second.Data!.Entries.Count);
+        Assert.Equal(2, second.Data.Revision);
 
         var (getResponse, plan) = await GetAuthorizedAsync<WeekPlanDto>(client, owner.Token,
             $"/api/plans/week/{Monday}");
@@ -269,6 +270,149 @@ public sealed class PlanFlowTests
         Assert.Equal(HttpStatusCode.Unauthorized, put.StatusCode);
     }
 
+    [Fact]
+    public async Task SaveWeek_RejectsStaleRevision_WithCurrentServerVersion()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+        var soup = await CreateRecipeAsync(client, owner.Token, "Суп");
+
+        var first = await PutAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "breakfast", borscht.Id, 4)
+            }));
+        Assert.Equal(HttpStatusCode.OK, first.Response.StatusCode);
+        Assert.Equal(1, first.Data!.Revision);
+
+        // Устаревшая ревизия: неделю уже сохранил другой участник.
+        var stale = await PutAuthorizedAsync<PlanConflictDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(1, "lunch", soup.Id, 5)
+            }, WeekPlanRevisions.Initial));
+
+        Assert.Equal(HttpStatusCode.Conflict, stale.Response.StatusCode);
+        Assert.NotNull(stale.Data);
+        Assert.Equal(1, stale.Data!.Revision);
+        var serverEntry = Assert.Single(stale.Data.Entries);
+        Assert.Equal(borscht.Id, serverEntry.RecipeId);
+
+        // Конфликт не смешал два полных запроса — серверная неделя прежняя.
+        var (_, plan) = await GetAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}");
+        Assert.Equal(1, plan!.Revision);
+        var only = Assert.Single(plan.Entries);
+        Assert.Equal(borscht.Id, only.RecipeId);
+    }
+
+    [Fact]
+    public async Task SaveWeek_WhenPlanAbsent_WithNonInitialRevision_ReturnsConflict()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        var conflict = await PutAuthorizedAsync<PlanConflictDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "breakfast", borscht.Id, 4)
+            }, ExpectedRevision: 3));
+
+        Assert.Equal(HttpStatusCode.Conflict, conflict.Response.StatusCode);
+        Assert.Equal(WeekPlanRevisions.Initial, conflict.Data!.Revision);
+        Assert.Empty(conflict.Data.Entries);
+    }
+
+    [Fact]
+    public async Task DeleteWeek_WithMatchingRevision_IsIdempotent()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        var save = await PutAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "breakfast", borscht.Id, 4)
+            }));
+        Assert.Equal(1, save.Data!.Revision);
+
+        var first = await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/plans/week/{Monday}?expectedRevision=1");
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+
+        // Повторное удаление без новых данных идемпотентно.
+        var second = await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/plans/week/{Monday}?expectedRevision=1");
+        Assert.Equal(HttpStatusCode.NoContent, second.StatusCode);
+
+        // Плана уже нет — удаление без ревизии тоже идемпотентно.
+        var empty = await DeleteAuthorizedAsync(client, owner.Token, $"/api/plans/week/{Monday}");
+        Assert.Equal(HttpStatusCode.NoContent, empty.StatusCode);
+
+        var (_, plan) = await GetAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}");
+        Assert.Equal(WeekPlanRevisions.Initial, plan!.Revision);
+        Assert.Empty(plan.Entries);
+    }
+
+    [Fact]
+    public async Task DeleteWeek_WithStaleRevision_ReturnsConflictAndKeepsPlan()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+        var soup = await CreateRecipeAsync(client, owner.Token, "Суп");
+
+        var first = await PutAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "breakfast", borscht.Id, 4)
+            }));
+        var second = await PutAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "breakfast", soup.Id, 5)
+            }, first.Data!.Revision));
+        Assert.Equal(2, second.Data!.Revision);
+
+        var (conflict, data) = await DeleteAuthorizedAsync<PlanConflictDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}?expectedRevision=1");
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Equal(2, data!.Revision);
+
+        var (_, plan) = await GetAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}");
+        var entry = Assert.Single(plan!.Entries);
+        Assert.Equal(soup.Id, entry.RecipeId);
+    }
+
+    [Fact]
+    public async Task DeleteWeek_WithoutRevision_OnExistingPlan_ReturnsConflict()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+        var borscht = await CreateRecipeAsync(client, owner.Token, "Борщ");
+
+        await PutAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "breakfast", borscht.Id, 4)
+            }));
+
+        var (response, data) = await DeleteAuthorizedAsync<PlanConflictDto>(
+            client, owner.Token, $"/api/plans/week/{Monday}");
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal(1, data!.Revision);
+    }
+
     private static async Task<RecipeDto> CreateRecipeAsync(HttpClient client, string token, string name)
     {
         var (response, recipe) = await PostAuthorizedAsync<RecipeDto>(client, token, "/api/recipes",
@@ -336,6 +480,23 @@ public sealed class PlanFlowTests
         HttpClient client, string token, string path)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var response = await client.SendAsync(request);
+        var data = await ReadJsonAsync<T>(response);
+        return (response, data);
+    }
+
+    private static async Task<HttpResponseMessage> DeleteAuthorizedAsync(
+        HttpClient client, string token, string path)
+    {
+        var (response, _) = await DeleteAuthorizedAsync<PlanErrorDto>(client, token, path);
+        return response;
+    }
+
+    private static async Task<(HttpResponseMessage Response, T? Data)> DeleteAuthorizedAsync<T>(
+        HttpClient client, string token, string path)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Delete, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var response = await client.SendAsync(request);
         var data = await ReadJsonAsync<T>(response);

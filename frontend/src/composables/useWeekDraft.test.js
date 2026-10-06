@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { useWeekDraft, slotKey, LOAD_ERROR_MESSAGE, SAVE_ERROR_MESSAGE } from './useWeekDraft'
+import {
+  useWeekDraft,
+  slotKey,
+  LOAD_ERROR_MESSAGE,
+  SAVE_ERROR_MESSAGE,
+  CONFLICT_MESSAGE
+} from './useWeekDraft'
 import { toIso } from '../constants/plan'
 
 const WEEK_A = new Date(2026, 0, 5)
@@ -15,8 +21,8 @@ function deferred() {
   return { promise, resolve, reject }
 }
 
-function ok(entries = []) {
-  return { response: { status: 200 }, data: { entries } }
+function ok(entries = [], revision = 0) {
+  return { response: { status: 200 }, data: { revision, entries } }
 }
 
 function entry(day, mealType, recipeId, portions = 2) {
@@ -204,6 +210,124 @@ describe('useWeekDraft — сетевые отказы', () => {
     expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
     expect(state.draft.value[slotKey(0, 'lunch')].recipeId).toBe(7)
     expect(state.dirty.value).toBe(true)
+  })
+})
+
+describe('useWeekDraft — ревизия и конфликты', () => {
+  it('загрузка сохраняет серверную ревизию недели', async () => {
+    const state = make({
+      loadWeekPlan: vi.fn().mockResolvedValue(ok([entry(0, 'lunch', 1)], 4))
+    })
+
+    await state.loadWeek()
+
+    expect(state.revision.value).toBe(4)
+  })
+
+  it('сохранение отправляет ожидаемую ревизию и принимает новую', async () => {
+    const saveWeekPlan = vi.fn().mockResolvedValue(ok([entry(0, 'lunch', 1)], 5))
+    const state = make({
+      loadWeekPlan: vi.fn().mockResolvedValue(ok([entry(0, 'lunch', 1)], 4)),
+      saveWeekPlan
+    })
+    await state.loadWeek()
+    state.setSlot(0, 'lunch', { recipeId: 1, recipeName: 'A', portions: 3 })
+
+    await state.save()
+
+    expect(saveWeekPlan).toHaveBeenCalledWith(toIso(WEEK_A), expect.any(Array), 4)
+    expect(state.revision.value).toBe(5)
+  })
+
+  it('конфликт 409 сохраняет черновик, ревизию и показывает серверную версию', async () => {
+    const state = make({
+      loadWeekPlan: vi.fn().mockResolvedValue(ok([entry(0, 'lunch', 1)], 1)),
+      saveWeekPlan: vi.fn().mockResolvedValue({
+        response: { status: 409 },
+        data: { error: 'План изменил другой участник.', revision: 7, entries: [entry(1, 'dinner', 9)] }
+      })
+    })
+    await state.loadWeek()
+    state.setSlot(2, 'breakfast', { recipeId: 5, recipeName: 'Моя', portions: 2 })
+
+    await state.save()
+
+    // Черновик не перезаписан и ревизия не сдвинута.
+    expect(state.draft.value[slotKey(2, 'breakfast')].recipeId).toBe(5)
+    expect(state.dirty.value).toBe(true)
+    expect(state.revision.value).toBe(1)
+    expect(state.conflict.value.revision).toBe(7)
+    expect(state.conflict.value.entries).toHaveLength(1)
+    expect(state.saveError.value).toBe('План изменил другой участник.')
+  })
+
+  it('конфликт без тела ответа не снимает защиту и даёт понятное сообщение', async () => {
+    const state = make({
+      loadWeekPlan: vi.fn().mockResolvedValue(ok([], 2)),
+      saveWeekPlan: vi.fn().mockResolvedValue({ response: { status: 409 }, data: null })
+    })
+    await state.loadWeek()
+    state.setSlot(0, 'lunch', { recipeId: 1, recipeName: 'A', portions: 2 })
+
+    await state.save()
+
+    expect(state.revision.value).toBe(2)
+    expect(state.dirty.value).toBe(true)
+    expect(state.conflict.value).toEqual({ revision: null, entries: [] })
+    expect(state.saveError.value).toBe(CONFLICT_MESSAGE)
+  })
+
+  it('загрузка актуальной версии заменяет черновик и ревизию', async () => {
+    const loadWeekPlan = vi
+      .fn()
+      .mockResolvedValueOnce(ok([entry(0, 'lunch', 1)], 1))
+      .mockResolvedValueOnce(ok([entry(1, 'dinner', 9)], 7))
+    const state = make({
+      loadWeekPlan,
+      confirm: () => true,
+      saveWeekPlan: vi.fn().mockResolvedValue({
+        response: { status: 409 },
+        data: { revision: 7, entries: [entry(1, 'dinner', 9)] }
+      })
+    })
+    await state.loadWeek()
+    state.setSlot(2, 'breakfast', { recipeId: 5, recipeName: 'Моя', portions: 2 })
+    await state.save()
+    expect(state.conflict.value).not.toBeNull()
+
+    const loaded = await state.reloadServerVersion()
+
+    expect(loaded).toBe(true)
+    expect(state.revision.value).toBe(7)
+    expect(state.dirty.value).toBe(false)
+    expect(state.conflict.value).toBeNull()
+    expect(state.draft.value[slotKey(1, 'dinner')].recipeId).toBe(9)
+    expect(state.draft.value[slotKey(2, 'breakfast')]).toBeUndefined()
+  })
+
+  it('сетевой отказ не двигает ревизию — повтор проверяет ту же версию', async () => {
+    const saveWeekPlan = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(ok([entry(0, 'lunch', 1)], 2))
+    const state = make({
+      loadWeekPlan: vi.fn().mockResolvedValue(ok([entry(0, 'lunch', 1)], 1)),
+      saveWeekPlan
+    })
+    await state.loadWeek()
+    state.setSlot(0, 'lunch', { recipeId: 1, recipeName: 'A', portions: 3 })
+
+    await state.save()
+
+    expect(state.revision.value).toBe(1)
+    expect(state.dirty.value).toBe(true)
+    expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
+
+    await state.save()
+
+    expect(saveWeekPlan).toHaveBeenNthCalledWith(1, toIso(WEEK_A), expect.any(Array), 1)
+    expect(saveWeekPlan).toHaveBeenNthCalledWith(2, toIso(WEEK_A), expect.any(Array), 1)
+    expect(state.revision.value).toBe(2)
   })
 })
 

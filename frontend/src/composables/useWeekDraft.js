@@ -6,6 +6,10 @@ export const LOAD_ERROR_MESSAGE = 'Не удалось загрузить пла
 export const SAVE_ERROR_MESSAGE = 'Не удалось сохранить план. Проверьте соединение и повторите.'
 export const FAMILY_ERROR_MESSAGE = 'Вы пока не состоите в семье.'
 export const LEAVE_MESSAGE = 'Есть несохранённые изменения. Уйти без сохранения?'
+export const CONFLICT_MESSAGE =
+  'План на этой неделе изменил другой участник. Ваш черновик сохранён. Загрузите актуальную версию, чтобы сравнить и повторить.'
+export const RELOAD_CONFIRM_MESSAGE =
+  'На сервере более новая версия плана. Загрузить её и заменить текущий черновик?'
 
 export function slotKey(day, mealType) {
   return `${day}:${mealType}`
@@ -56,6 +60,8 @@ export function useWeekDraft(options = {}) {
   const weekStart = ref(options.initialWeek || new Date())
   const draft = ref({})
   const confirmedSnapshot = ref(serializeDraft({}))
+  const revision = ref(0)
+  const conflict = ref(null)
 
   const loading = ref(false)
   const saving = ref(false)
@@ -105,10 +111,14 @@ export function useWeekDraft(options = {}) {
         } else {
           draft.value = draftFromEntries(data.entries)
           confirmedSnapshot.value = serializeDraft(draft.value)
+          revision.value = data.revision ?? 0
+          conflict.value = null
         }
       } else if (response.status === 404) {
         draft.value = {}
         confirmedSnapshot.value = serializeDraft({})
+        revision.value = 0
+        conflict.value = null
         loadError.value = data?.error || FAMILY_ERROR_MESSAGE
       } else {
         loadError.value = data?.error || LOAD_ERROR_MESSAGE
@@ -134,13 +144,30 @@ export function useWeekDraft(options = {}) {
   async function save() {
     const savedWeek = toIso(weekStart.value)
     const sentSnapshot = serializeDraft(draft.value)
+    const sentRevision = revision.value
     const requestId = ++saveRequestId
     saving.value = true
     savedMessage.value = ''
     saveError.value = ''
+    conflict.value = null
     try {
-      const { response, data } = await saveWeekPlanRequest(savedWeek, entriesFromDraft(draft.value))
+      const { response, data } = await saveWeekPlanRequest(
+        savedWeek,
+        entriesFromDraft(draft.value),
+        sentRevision
+      )
       if (requestId !== saveRequestId) return
+      if (response.status === 409) {
+        // Устаревшая ревизия: черновик не трогаем, показываем серверную версию.
+        if (savedWeek === toIso(weekStart.value)) {
+          conflict.value = {
+            revision: data?.revision ?? null,
+            entries: data?.entries ?? []
+          }
+          saveError.value = data?.error || CONFLICT_MESSAGE
+        }
+        return
+      }
       if (response.status !== 200) {
         saveError.value = data?.error || SAVE_ERROR_MESSAGE
         return
@@ -152,6 +179,7 @@ export function useWeekDraft(options = {}) {
       }
       // Ответ относится к другой неделе — не отмечаем текущую сохранённой.
       if (savedWeek !== toIso(weekStart.value)) return
+      revision.value = data.revision ?? sentRevision + 1
       if (serializeDraft(draft.value) === sentSnapshot) {
         draft.value = draftFromEntries(data.entries)
         confirmedSnapshot.value = serializeDraft(draft.value)
@@ -161,16 +189,26 @@ export function useWeekDraft(options = {}) {
       }
       savedMessage.value = 'План сохранён.'
     } catch {
-      // Результат мутации неизвестен — не повторяем автоматически, черновик не чистим.
+      // Результат мутации неизвестен — ревизию не двигаем и черновик не чистим:
+      // повторная отправка снова проверит ту же ожидаемую ревизию.
       if (requestId === saveRequestId) saveError.value = SAVE_ERROR_MESSAGE
     } finally {
       if (requestId === saveRequestId) saving.value = false
     }
   }
 
+  async function reloadServerVersion() {
+    if (!confirmLeave(RELOAD_CONFIRM_MESSAGE)) return false
+    conflict.value = null
+    await loadWeek()
+    return true
+  }
+
   return {
     weekStart,
     draft,
+    revision,
+    conflict,
     dirty,
     loading,
     saving,
@@ -182,6 +220,7 @@ export function useWeekDraft(options = {}) {
     removeSlot,
     loadWeek,
     save,
+    reloadServerVersion,
     goToWeek,
     confirmNavigation
   }

@@ -104,6 +104,9 @@ public class AppDbContext : DbContext
         var weekPlan = modelBuilder.Entity<WeekPlan>();
 
         weekPlan.Property(w => w.WeekStart);
+        // Ревизия — токен оптимистичной блокировки: UPDATE/DELETE получают
+        // условие по прочитанной версии, поэтому устаревшая мутация не проходит.
+        weekPlan.Property(w => w.Revision).IsConcurrencyToken().ValueGeneratedNever();
         weekPlan.Property(w => w.CreatedAt).HasColumnType("timestamp with time zone");
         weekPlan.Property(w => w.UpdatedAt).HasColumnType("timestamp with time zone");
         weekPlan.HasIndex(w => new { w.FamilyId, w.WeekStart }).IsUnique();
