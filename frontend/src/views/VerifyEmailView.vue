@@ -1,8 +1,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../stores/auth'
 import { verifyEmail, resendVerification } from '../api/auth'
+import { sanitizeReturnTo } from '../router/returnTo'
 import {
   RESEND_COOLDOWN_SECONDS,
   rateLimitMessage,
@@ -10,8 +11,13 @@ import {
   useCooldown
 } from '../composables/useCooldown'
 
+const route = useRoute()
 const router = useRouter()
 const { state, isEmailVerified, updateUser } = useAuth()
+
+function continueAfterVerification() {
+  router.push(sanitizeReturnTo(route.query.returnTo) || { name: 'home' })
+}
 
 const code = ref('')
 const error = ref('')
@@ -39,7 +45,7 @@ async function submit() {
       updateUser(data)
       code.value = ''
       success.value = 'Почта подтверждена. Спасибо!'
-      setTimeout(() => router.push({ name: 'home' }), 1500)
+      setTimeout(continueAfterVerification, 1500)
     } else if (response.status === 409) {
       success.value = 'Почта уже подтверждена.'
     } else if (response.status === 423) {
@@ -100,7 +106,9 @@ onMounted(() => {
 
       <template v-if="isEmailVerified">
         <p class="success">Почта уже подтверждена.</p>
-        <router-link to="/" class="btn btn--primary btn--block">На главную</router-link>
+        <button type="button" class="btn btn--primary btn--block" @click="continueAfterVerification">
+          Продолжить
+        </button>
       </template>
 
       <template v-else>
