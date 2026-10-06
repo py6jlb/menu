@@ -4,27 +4,29 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** in-progress
+**Status:** resolved (commits 0835180, b4f126e)
 
 ## Standards
 
-- [ ] Правило `CONTEXT.md` («БД-зависимый сервис — scoped-класс через DI») соблюдено: `static`-методы, принимающие `AppDbContext`, устранены; прямые запросы в обработчиках вынесены в scoped-сервисы.
-  - [ ] `Auth/EmailVerificationEndpoints.cs` — `CurrentUserAsync(principal, db)` использует `CurrentUserContext`.
-  - [ ] `Recipes/RecipeEndpoints.cs` — `RepetitionCountsAsync(...)` и прямые запросы (`:51,163,352`) через сервис.
-  - [ ] `Auth/AuthEndpoints.cs` — `MeAsync(principal, db)` и запрос (`:56`) через сервис.
-- [ ] Дедупликация live-source проекции рецепта: `RecipeEndpoints` использует `ExternalRecipeContentResolver`, а не инлайн 9-полевую проекцию.
-- [ ] `RecipeValidation` — общий guard «все ингредиенты пустые → пропустить» и понижение сезона вынесены в один хелпер.
-- [ ] `PlanView.vue` — литерал фильтров не дублируется в `resetFilters()`.
-- [ ] Общие сообщения черновиков вынесены из `useWeekDraft.js` / `useRecipeDraft.js`.
-- [ ] Провайдерная развилка `IsRelational()` не повторяется в пяти местах — один seam.
-- [ ] `EmailVerificationService` / `PasswordResetService` — общий хелпер cooldown→issue→enqueue.
-- [ ] `RecipeMutationService` — guard «load-notfound-external-revision» вынесен в один метод.
+- [x] Правило `CONTEXT.md` («БД-зависимый сервис — scoped-класс через DI») соблюдено: `AppDbContext` убран из обработчиков и приватных static-хелперов; чтения вынесены в scoped-сервисы.
+  - [x] `Auth/EmailVerificationEndpoints.cs` — `CurrentUserAsync(principal, db)` заменён на scoped `CurrentUserContext.UserAsync`.
+  - [x] `Recipes/RecipeEndpoints.cs` — `RepetitionCountsAsync(...)` перенесён в `RepetitionCounter.CountForUserAsync`; запросы списка/детали/подбора — в scoped `RecipeReader`; создание — в `RecipeMutationService.CreateAsync`.
+  - [x] `Auth/AuthEndpoints.cs` — `MeAsync` через `CurrentUserContext`; email-запросы через scoped `UserAccountStore`.
+- [x] Дедупликация live-source проекции рецепта: `RecipeEndpoints` использует `ExternalRecipeContentResolver.Resolve`, а не инлайн 9-полевую проекцию.
+- [x] `RecipeValidation` — общий guard `IsBlankIngredient` и нормализация `NormalizeSeasons` вместо дублей.
+- [x] `PlanView.vue` — литерал фильтров вынесен в `emptyFilters()`.
+- [x] Общий `LEAVE_MESSAGE` черновиков вынесен в `composables/draftMessages.js` (LOAD/SAVE-сообщения остаются ресурсными).
+- [x] Провайдерная развилка сведена к одному seam `DatabaseCapabilities.SupportsRelationalLocking` (блокировки кодов, ссылок, outbox, промоушена, bootstrap).
+- [x] `EmailVerificationService` / `PasswordResetService` — общий расчёт cooldown `AuthCodePolicy.CooldownSecondsLeft`.
+- [x] `RecipeMutationService` — guard «load/not-found/external» вынесен в один `FindAsync`.
 
 ## Spec
 
-- [ ] #38: закреплённый `/opt/menu/current-release` имеет приоритет над `IMAGE_TAG` из `server.conf` (или шаблон не задаёт `IMAGE_TAG=latest`).
-- [ ] #54: поздний `GET /share` старого рецепта не заполняет состояние нового ресурса (`useRecipeShare`/`RecipeDetailView`).
+- [x] #38: `server.conf.example` больше не задаёт `IMAGE_TAG=latest`; закреплённый `/opt/menu/current-release` остаётся тегом обычного перезапуска, env/явный `server.conf` по-прежнему приоритетнее.
+- [x] #54: `useRecipeShare` привязан к identity ресурса (номер запроса + id); поздний `GET /share` старого рецепта не заполняет состояние нового, смена маршрута вызывает `reset`. Покрыто тестами `useRecipeShare.test.js`.
 
 ## Notes
 
-- Партия ревью — один worktree `ticket/76-review-fixes-36-74`; тесты backend в SDK-контейнере, PostgreSQL-гарантии через `scripts/test-postgres.sh`, фронт через `npm run build`.
+- Партия ревью — один worktree `ticket/76-review-fixes-36-74`.
+- Проверки: backend `dotnet test` — 421 passed (50 skipped); PostgreSQL-suite `scripts/test-postgres.sh` — 53 passed; frontend `vitest run` — 107 passed, `npm run build` — ok; deploy `python3 -B -m unittest discover -s deploy/tests` — 128 passed.
+- Обработчики не получают `AppDbContext`: `RecipeEndpoints`, `AuthEndpoints`, `EmailVerificationEndpoints` работают только через scoped-сервисы.
