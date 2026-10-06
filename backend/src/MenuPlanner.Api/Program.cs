@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -16,6 +17,7 @@ using MenuPlanner.Api.Emails.Outbox;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Health;
 using MenuPlanner.Api.Ingredients;
+using MenuPlanner.Api.Observability;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.External;
@@ -104,24 +106,47 @@ builder.Services.AddSingleton(services => new ShareOptions
     BaseUrl = services.GetRequiredService<IConfiguration>()["SHARE_BASE_URL"] ?? ""
 });
 
-var otlpEnabled = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
-var otelResource = ResourceBuilder.CreateDefault().AddService("menu-planner-api");
+var observability = ObservabilityOptions.Read(builder.Configuration);
+builder.Services.AddSingleton(observability);
+
+var otelResource = ResourceBuilder.CreateDefault()
+    .AddService("menu-planner-api", serviceVersion: observability.Release.Id)
+    .AddAttributes(new[] { new KeyValuePair<string, object>("release.id", observability.Release.Id) });
 
 builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => resource.AddService("menu-planner-api"))
+    .ConfigureResource(resource => resource
+        .AddService("menu-planner-api", serviceVersion: observability.Release.Id)
+        .AddAttributes(new[] { new KeyValuePair<string, object>("release.id", observability.Release.Id) }))
     .WithTracing(tracing =>
     {
+        // Activity и trace-id нужны для корреляции журналов всегда. Полные traces
+        // не хранятся согласованно, поэтому их OTLP-экспорт выключен, пока не
+        // появится согласованное хранилище; включается явным флагом.
         tracing.AddAspNetCoreInstrumentation();
-        if (otlpEnabled) tracing.AddOtlpExporter();
+        if (observability.TracesExportEnabled) tracing.AddOtlpExporter();
     });
 
-builder.Logging.AddOpenTelemetry(options =>
+if (observability.LogsExportEnabled)
 {
-    options.SetResourceBuilder(otelResource);
-    options.IncludeScopes = true;
-    options.IncludeFormattedMessage = true;
-    if (otlpEnabled) options.AddOtlpExporter();
-});
+    builder.Logging.AddOpenTelemetry(options =>
+    {
+        options.SetResourceBuilder(otelResource);
+        options.IncludeScopes = true;
+        options.IncludeFormattedMessage = true;
+        // Ограниченная очередь не даёт памяти расти при недоступном Collector,
+        // а экспорт идёт фоном и не блокирует пользовательский запрос.
+        options.AddOtlpExporter((exporter, processor) =>
+        {
+            exporter.TimeoutMilliseconds = observability.ExportTimeoutMilliseconds;
+            processor.ExportProcessorType = ExportProcessorType.Batch;
+            processor.BatchExportProcessorOptions.MaxQueueSize = observability.LogQueueSize;
+            processor.BatchExportProcessorOptions.MaxExportBatchSize = observability.LogBatchSize;
+            processor.BatchExportProcessorOptions.ExporterTimeoutMilliseconds =
+                observability.ExportTimeoutMilliseconds;
+            processor.BatchExportProcessorOptions.ScheduledDelayMilliseconds = 5_000;
+        });
+    });
+}
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -166,13 +191,29 @@ var forwardedHeaders = ForwardedHeaderConfiguration.Build(app.Configuration);
 if (ForwardedHeaderConfiguration.HasTrustedProxies(forwardedHeaders))
     app.UseForwardedHeaders(forwardedHeaders);
 
+// Одна структурированная запись на запрос (operation/trace-id/release-id);
+// оборачивает обработчик сбоев, поэтому пишется и для успешных, и для ошибочных.
+app.UseRequestLogging();
+
 // Неожиданный сбой отдаётся одним JSON-ответом с trace-id, без stack trace/SQL.
 app.UseApiExceptionHandling();
+
+var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
+    .CreateLogger("MenuPlanner.Startup");
+startupLogger.LogInformation(
+    "Старт menu-planner-api. ReleaseId={ReleaseId} ReleaseSource={ReleaseSource}",
+    observability.Release.Id,
+    observability.Release.Source);
+if (!observability.Release.IsKnown)
+    startupLogger.LogWarning(
+        "Release-id недоступен: RELEASE_ID не задан и manifest не прочитан (путь: {ManifestPath}). ReleaseId={ReleaseId}",
+        observability.ManifestPath ?? "(не задан)",
+        observability.Release.Id);
 
 app.Services.GetRequiredService<IPhotoStore>();
 
 app.MapGet("/health", () => Results.Json(
-    new { status = "ok", service = "menu-planner-api" }));
+    new { status = "ok", service = "menu-planner-api", release = observability.Release.Id }));
 
 app.MapGet("/ready", ReadinessEndpoint.GetReadinessAsync);
 

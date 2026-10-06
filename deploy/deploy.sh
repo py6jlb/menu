@@ -90,7 +90,7 @@ scp -P "$VPS_SSH_PORT" deploy/otel-collector.yaml "$TARGET:$APP_DIR/otel-collect
 scp -P "$VPS_SSH_PORT" deploy/config.sh deploy/compose.sh deploy/release.sh \
   deploy/backup-lib.sh deploy/deploy-lib.sh deploy/remote-deploy.sh deploy/rollback.sh \
   deploy/backup.sh deploy/restore-drill.sh \
-  deploy/install-backup.sh deploy/smoke.sh "$TARGET:$APP_DIR/deploy/"
+  deploy/install-backup.sh deploy/smoke.sh deploy/logs.sh "$TARGET:$APP_DIR/deploy/"
 scp -P "$VPS_SSH_PORT" deploy/systemd/menu-backup.service deploy/systemd/menu-backup.timer \
   "$TARGET:$APP_DIR/deploy/systemd/"
 if [ -f "$MANIFEST" ]; then

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using MenuPlanner.Api.Observability;
 
 namespace MenuPlanner.Api.Configuration;
 
@@ -35,7 +36,7 @@ public sealed class ApiExceptionHandlingMiddleware
                 exception,
                 "Некорректный запрос {Method} {Path}. TraceId={TraceId}",
                 context.Request.Method,
-                context.Request.Path,
+                SensitivePath.Minimize(context.Request.Path),
                 TraceId(context));
 
             await WriteAsync(context, StatusCodes.Status400BadRequest,
@@ -47,7 +48,7 @@ public sealed class ApiExceptionHandlingMiddleware
                 exception,
                 "Необработанная ошибка {Method} {Path}. TraceId={TraceId}",
                 context.Request.Method,
-                context.Request.Path,
+                SensitivePath.Minimize(context.Request.Path),
                 TraceId(context));
 
             await WriteAsync(context, StatusCodes.Status500InternalServerError,

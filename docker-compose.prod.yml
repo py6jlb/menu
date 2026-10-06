@@ -60,14 +60,40 @@ services:
           memory: 1g
     logging: *logging
 
+  # Готовит volume журналов под непривилегированного пользователя коллектора
+  # (образ otel-collector-contrib работает от uid 10001). Одноразовый root-шаг.
+  otel-logs-init:
+    image: alpine:3.20
+    command:
+      - sh
+      - -c
+      - "mkdir -p /var/log/otel && chown -R 10001:10001 /var/log/otel"
+    user: "0:0"
+    volumes:
+      - otel_logs:/var/log/otel
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          memory: 32m
+    logging: *logging
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.161.0
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    user: "10001:10001"
     volumes:
       - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
       - otel_logs:/var/log/otel
     networks:
       - internal
+    depends_on:
+      otel-logs-init:
+        condition: service_completed_successfully
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -102,7 +128,11 @@ services:
       EMAIL_TRANSPORT: "${EMAIL_TRANSPORT-smtp}"
       PHOTOS_DIR: /app/photos
       SHARE_BASE_URL: "${SHARE_BASE_URL-}"
+      # Release-id для корреляции журналов: закреплённый тег релиза.
+      RELEASE_ID: "${IMAGE_TAG-latest}"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      # Полные traces не хранятся согласованно — экспорт выключен явно.
+      OTEL_TRACES_EXPORT_ENABLED: "false"
       # X-Forwarded-* принимаются только от Caddy (172.29.0.10): backend не
       # публикует порт, а прямой внутренний запрос не подделает IP семьи.
       TRUSTED_PROXY_ADDRESSES: "172.29.0.10"
