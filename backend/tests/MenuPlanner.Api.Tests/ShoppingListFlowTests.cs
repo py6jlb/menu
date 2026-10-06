@@ -26,7 +26,28 @@ public sealed class ShoppingListFlowTests
             $"/api/shopping-list?weekStart={Monday}");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(Monday, list!.WeekStart);
+        Assert.False(list.HasPlan);
         Assert.Empty(list.Items);
+        Assert.Empty(list.Excluded);
+    }
+
+    [Fact]
+    public async Task Get_WithEmptyPlan_ReportsExistingPlanWithoutItems()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+
+        var put = await PutAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(Array.Empty<PlanEntryRequest>()));
+        Assert.Equal(HttpStatusCode.OK, put.Response.StatusCode);
+
+        var (response, list) = await GetAuthorizedAsync<ShoppingListDto>(client, owner.Token,
+            $"/api/shopping-list?weekStart={Monday}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(list!.HasPlan);
+        Assert.Empty(list.Items);
+        Assert.Empty(list.Excluded);
     }
 
     [Fact]

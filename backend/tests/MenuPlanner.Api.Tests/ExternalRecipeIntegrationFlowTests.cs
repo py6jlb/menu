@@ -316,6 +316,86 @@ public sealed class ExternalRecipeIntegrationFlowTests
         Assert.Equal("warning", Assert.Single(plan!.Entries).State);
     }
 
+    [Fact]
+    public async Task ShoppingList_BrokenSource_IsExcludedWithPlanEntryAndReason()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var (owner, recipient, wrapperId, sourceId) = await ImportAsync(client,
+            FullRequest("Салат", servings: 2, ingredients: new[] { ("Мука", 100m, "g") }));
+
+        await PutAuthorizedAsync<WeekPlanDto>(client, recipient.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(2, "dinner", wrapperId, 2)
+            }));
+
+        var (_, sourceDetail) = await GetAuthorizedAsync<RecipeDto>(
+            client, owner.Token, $"/api/recipes/{sourceId}");
+        await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{sourceId}?revision={sourceDetail!.Revision}");
+
+        var (_, list) = await GetAuthorizedAsync<ShoppingListDto>(
+            client, recipient.Token, $"/api/shopping-list?weekStart={Monday}");
+
+        Assert.True(list!.HasPlan);
+        Assert.Empty(list.Items);
+        var excluded = Assert.Single(list.Excluded);
+        Assert.Equal(2, excluded.Day);
+        Assert.Equal("dinner", excluded.MealType);
+        Assert.Equal(wrapperId, excluded.RecipeId);
+        Assert.Equal("Салат", excluded.RecipeName);
+        Assert.Equal(ShoppingListContentBuilder.SourceMissingReason, excluded.Reason);
+    }
+
+    [Fact]
+    public async Task ShoppingList_MixedOwnWarningBroken_SumsAvailableAndReportsBroken()
+    {
+        using var client = new ApiFactory().CreateClient();
+        // Внешний с отозванной ссылкой: source жив → warning, живой контент участвует в расчёте.
+        var (owner, recipient, warningWrapperId, warningSourceId) = await ImportAsync(client,
+            FullRequest("Салат", servings: 2, ingredients: new[] { ("Мука", 100m, "g") }));
+        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{warningSourceId}/share");
+
+        // Второй внешний, чей источник будет удалён → broken.
+        var brokenSource = await CreateRecipeAsync(client, owner.Token,
+            FullRequest("Суп", servings: 2, ingredients: new[] { ("Мука", 500m, "g") }));
+        var brokenShare = await ShareAsync(client, owner.Token, brokenSource.Id);
+        var (_, brokenImport) = await PostAuthorizedAsync<RecipeImportResultDto>(
+            client, recipient.Token, $"/api/shared/{brokenShare.Token}/import", body: null);
+
+        // Свой рецепт семьи-получателя.
+        var own = await CreateRecipeAsync(client, recipient.Token,
+            FullRequest("Блины", servings: 2, ingredients: new[] { ("Мука", 200m, "g") }));
+
+        var (_, brokenDetail) = await GetAuthorizedAsync<RecipeDto>(
+            client, owner.Token, $"/api/recipes/{brokenSource.Id}");
+        await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{brokenSource.Id}?revision={brokenDetail!.Revision}");
+
+        await PutAuthorizedAsync<WeekPlanDto>(client, recipient.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "breakfast", own.Id, 2),
+                new PlanEntryRequest(1, "lunch", warningWrapperId, 2),
+                new PlanEntryRequest(2, "dinner", brokenImport!.RecipeId, 2)
+            }));
+
+        var (_, list) = await GetAuthorizedAsync<ShoppingListDto>(
+            client, recipient.Token, $"/api/shopping-list?weekStart={Monday}");
+
+        // own 200 + warning 100 = 300; удалённый источник не подставлен.
+        var flour = Assert.Single(list!.Items);
+        Assert.Equal("Мука", flour.Name);
+        Assert.Equal(300m, flour.Amount);
+
+        var excluded = Assert.Single(list.Excluded);
+        Assert.Equal(2, excluded.Day);
+        Assert.Equal("dinner", excluded.MealType);
+        Assert.Equal(brokenImport.RecipeId, excluded.RecipeId);
+        Assert.Equal("Суп", excluded.RecipeName);
+        Assert.Equal(ShoppingListContentBuilder.SourceMissingReason, excluded.Reason);
+    }
+
     private static async Task<(AuthResponse Owner, AuthResponse Recipient, Guid WrapperId, Guid SourceId)> ImportAsync(
         HttpClient client, RecipeRequest source)
     {

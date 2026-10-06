@@ -197,12 +197,22 @@ _Avoid_: Период, Окно
 _Код_: `/api/recipes/match`, `RecipeMatcher`.
 _Avoid_: Поиск, Подборка
 
+**Контент недели**:
+Актуальное чтение записей плана для карточки и списка покупок: состояние внешних ссылок разрешено модулем, карточка получает только имена (без дочерних коллекций источника), список покупок — живые ингредиенты и порции источников; для сломанной ссылки контент не подставляется.
+_Код_: `WeekPlanReader`, `WeekPlanContent`, `PlanContentEntry`, `PlanProjection` (`Plans/WeekPlanReader.cs`).
+_Avoid_: Repository, CQRS, Обёртка чтения
+
 ### Покупки
 
 **Список покупок**:
-Агрегированный список из ингредиентов записей плана, масштабированный по порциям и сгруппированный по единицам.
-_Код_: `ShoppingListBuilder`.
+Агрегированный список из ингредиентов записей плана, масштабированный по порциям и сгруппированный по единицам; отдельно несёт диагностику полноты.
+_Код_: `ShoppingListContentBuilder` (сборка из контента недели), `ShoppingListBuilder` (агрегация количеств).
 _Avoid_: Покупки, Закупка
+
+**Диагностика полноты списка покупок**:
+Перечень записей плана, исключённых из расчёта, с местом (день и приём пищи), рецептом и причиной; неполный список честно сообщает о пропуске, а не выглядит полным.
+_Код_: `ShoppingListContentBuilder.Build` → `ExcludedPlanEntry`, `ShoppingListContent`.
+_Avoid_: Ошибки списка, Пропуски
 
 **Позиция списка**:
 Продукт с итоговым количеством и единицей измерения.
@@ -223,7 +233,7 @@ _Avoid_: Версия, Номер, ETag
 
 ## Разделение кода
 
-**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, `DietCatalog`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
+**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `ShoppingListContentBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, `DietCatalog`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
 
 **БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `RecipeReader`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`). Обработчики Minimal API получают его параметром. Фоновая отправка очереди — hosted-сервис `EmailDeliveryWorker`.
 

@@ -334,9 +334,11 @@ unset ADMIN_PW
 
 | Метод | Путь | Описание |
 |-------|------|----------|
-| GET  | `/api/shopping-list?weekStart={weekStart}` | Список покупок на неделю: `{ weekStart, items: [{ name, amount, unit, display }] }`; рецепты с состоянием `broken` (источник удалён) исключаются; если плана нет — `200` с пустым `items` |
+| GET  | `/api/shopping-list?weekStart={weekStart}` | Список покупок на неделю: `{ weekStart, hasPlan, items: [{ name, amount, unit, display }], excluded: [{ day, mealType, recipeId, recipeName, reason }] }`; рецепты с состоянием `broken` (источник удалён) исключаются из `items` и возвращаются в `excluded`; `hasPlan` отличает отсутствующий план (`false`) от пустого (`true`) |
 
 `weekStart` — дата понедельника в формате `yyyy-MM-dd` (не понедельник → `400`). Пользователь без семьи → `404`.
+
+`excluded` — диагностика полноты: записи плана, которые не удалось посчитать. Сейчас единственная причина — `reason: "source_missing"` (рецепт-источник внешней ссылки удалён): такая запись исключается из сумм, её устаревшие ингредиенты не подставляются. Это отличает план только из недоступных блюд (`items` пуст, `excluded` непуст) от отсутствующего (`hasPlan: false`) и пустого (`hasPlan: true`, оба списка пусты).
 
 ### Форма позиции
 

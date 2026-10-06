@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
-import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel } from '../constants/plan'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
+import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel, parseIso } from '../constants/plan'
 import { useWeekDraft } from '../composables/useWeekDraft'
 import { useRecipePicker } from '../composables/useRecipePicker'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
@@ -9,6 +9,15 @@ import { SEASONS, DIETS } from '../constants/recipe'
 import { useAuth } from '../stores/auth'
 
 const { isEmailVerified } = useAuth()
+
+const route = useRoute()
+
+/** Неделя из адреса (переход из списка покупок): принимаем только валидную дату. */
+function weekFromQuery(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const date = parseIso(value)
+  return Number.isNaN(date.getTime()) ? null : mondayOf(date)
+}
 
 const {
   weekStart: monday,
@@ -29,7 +38,7 @@ const {
   reloadServerVersion,
   goToWeek,
   confirmNavigation
-} = useWeekDraft({ initialWeek: mondayOf(new Date()) })
+} = useWeekDraft({ initialWeek: weekFromQuery(route.query.week) || mondayOf(new Date()) })
 
 const editing = ref(null)
 

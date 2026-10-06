@@ -1,7 +1,7 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { getShoppingList } from '../api/shopping'
-import { mondayOf, addDays, toIso, weekRangeLabel } from '../constants/plan'
+import { computed, onMounted } from 'vue'
+import { useShoppingList } from '../composables/useShoppingList'
+import { DAYS, MEALS, weekRangeLabel, toIso } from '../constants/plan'
 
 const GROUPS = [
   { key: 'weight', label: 'Вес', icon: '⚖️', units: ['g', 'kg'] },
@@ -14,13 +14,25 @@ function groupOf(unit) {
   return GROUPS.find((g) => g.units.includes(unit)) || GROUPS[GROUPS.length - 1]
 }
 
-const monday = ref(mondayOf(new Date()))
-const items = ref([])
-const loading = ref(true)
-const loadingError = ref('')
-const refreshing = ref(false)
+const {
+  weekStart,
+  items,
+  excluded,
+  hasPlan,
+  loading,
+  refreshing,
+  error,
+  resultIsCurrent,
+  resultWeekDate,
+  load,
+  goToWeek,
+  refresh
+} = useShoppingList()
 
-const weekLabel = computed(() => weekRangeLabel(monday.value))
+const weekLabel = computed(() => weekRangeLabel(weekStart.value))
+const resultWeekLabel = computed(() =>
+  resultWeekDate.value ? weekRangeLabel(resultWeekDate.value) : ''
+)
 
 const groups = computed(() =>
   GROUPS.map((g) => ({
@@ -29,33 +41,25 @@ const groups = computed(() =>
   })).filter((g) => g.items.length > 0)
 )
 
-const empty = computed(() => !loadingError.value && items.value.length === 0)
+const planWeek = computed(() => resultWeekDate.value || weekStart.value)
+const planLink = computed(() => ({ name: 'plan', query: { week: toIso(planWeek.value) } }))
 
-async function load() {
-  loading.value = true
-  loadingError.value = ''
-  const { response, data } = await getShoppingList(toIso(monday.value))
-  if (response.status === 200) {
-    items.value = data?.items || []
-  } else if (response.status === 404) {
-    items.value = []
-    loadingError.value = data?.error || 'Вы пока не состоите в семье.'
-  } else {
-    items.value = []
-    loadingError.value = data?.error || 'Не удалось загрузить список покупок.'
-  }
-  loading.value = false
+const showMissingPlan = computed(() => !hasPlan.value && !error.value && items.value.length === 0)
+const showEmptyPlan = computed(
+  () => hasPlan.value && items.value.length === 0 && excluded.value.length === 0
+)
+const showStaleNotice = computed(() => !resultIsCurrent.value && Boolean(resultWeekLabel.value))
+
+function dayLabel(day) {
+  return DAYS[day]?.label || `День ${day + 1}`
 }
 
-async function changeWeek(offset) {
-  monday.value = addDays(monday.value, offset * 7)
-  await load()
+function mealLabel(code) {
+  return MEALS.find((m) => m.code === code)?.label || code
 }
 
-async function refresh() {
-  refreshing.value = true
-  await load()
-  refreshing.value = false
+function reasonLabel(reason) {
+  return reason === 'source_missing' ? 'источник удалён' : 'недоступно'
 }
 
 onMounted(load)
@@ -76,23 +80,51 @@ onMounted(load)
     </div>
 
     <div class="week-nav">
-      <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(-1)">←</button>
+      <button type="button" class="btn btn--ghost btn--small" @click="goToWeek(-1)">←</button>
       <span class="week-label">{{ weekLabel }}</span>
-      <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(1)">→</button>
+      <button type="button" class="btn btn--ghost btn--small" @click="goToWeek(1)">→</button>
     </div>
 
     <p v-if="loading" class="loading">Загрузка…</p>
-    <p v-else-if="loadingError" class="error">
-      {{ loadingError }}
-      <router-link to="/family">Перейти на страницу «Семья»</router-link>
-    </p>
 
     <template v-else>
-      <div v-if="empty" class="card empty-state">
+      <p v-if="error" class="error">
+        {{ error }}
+        <router-link v-if="!resultWeekLabel" to="/family">Перейти на страницу «Семья»</router-link>
+      </p>
+
+      <p v-if="showStaleNotice" class="notice">
+        Показан результат за {{ resultWeekLabel }} — его не удалось обновить.
+      </p>
+
+      <div v-if="excluded.length" class="card incomplete">
+        <h3 class="incomplete-title">Список неполный</h3>
+        <p class="incomplete-desc">
+          Для {{ excluded.length }} {{ excluded.length === 1 ? 'блюда' : 'блюд' }} не удалось
+          рассчитать продукты. Замените или удалите их в плане.
+        </p>
+        <ul class="excluded-list">
+          <li v-for="entry in excluded" :key="`${entry.day}:${entry.mealType}:${entry.recipeId}`">
+            <strong>{{ dayLabel(entry.day) }} · {{ mealLabel(entry.mealType) }}</strong> —
+            {{ entry.recipeName }}
+            <span class="excluded-reason">({{ reasonLabel(entry.reason) }})</span>
+          </li>
+        </ul>
+        <router-link :to="planLink" class="btn btn--primary">Перейти к плану недели</router-link>
+      </div>
+
+      <div v-if="showMissingPlan" class="card empty-state">
+        <div class="empty-icon">🗓️</div>
+        <div class="empty-title">На эту неделю план не составлен</div>
+        <p class="empty-desc">Составьте план, чтобы сформировать список покупок.</p>
+        <router-link :to="planLink" class="btn btn--primary">Перейти к плану</router-link>
+      </div>
+
+      <div v-else-if="showEmptyPlan" class="card empty-state">
         <div class="empty-icon">🛒</div>
-        <div class="empty-title">Список покупок пуст</div>
-        <p class="empty-desc">Заполните план на неделю, чтобы сформировать список покупок.</p>
-        <router-link to="/plan" class="btn btn--primary">Перейти к плану</router-link>
+        <div class="empty-title">В плане этой недели нет блюд</div>
+        <p class="empty-desc">Добавьте блюда в план, чтобы сформировать список покупок.</p>
+        <router-link :to="planLink" class="btn btn--primary">Перейти к плану</router-link>
       </div>
 
       <div v-for="group in groups" :key="group.key" class="card group">
@@ -130,6 +162,35 @@ onMounted(load)
   font-size: 0.95rem;
   flex: 1;
   text-align: center;
+}
+
+.incomplete {
+  max-width: none;
+  margin-bottom: 1rem;
+  border-color: var(--warning-border, #d9a441);
+}
+
+.incomplete-title {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.incomplete-desc {
+  margin: 0 0 0.6rem;
+  color: var(--text-soft);
+}
+
+.excluded-list {
+  margin: 0 0 0.9rem;
+  padding-left: 1.1rem;
+}
+
+.excluded-list li {
+  margin-bottom: 0.25rem;
+}
+
+.excluded-reason {
+  color: var(--text-soft);
 }
 
 .group {
