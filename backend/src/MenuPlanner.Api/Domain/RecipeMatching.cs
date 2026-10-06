@@ -68,7 +68,7 @@ public static class RecipeMatcher
         if (!Overlaps(recipe.Seasonality, filters.Seasons))
             return false;
 
-        if (!Overlaps(recipe.Diet, filters.Diets))
+        if (!Overlaps(recipe.Diet, filters.Diets, NormalizeDiet))
             return false;
 
         if (!Overlaps(recipe.Tags, filters.Tags))
@@ -87,7 +87,7 @@ public static class RecipeMatcher
         if (HasValue(preferences.PreferSeasons) && Overlaps(recipe.Seasonality, preferences.PreferSeasons))
             score++;
 
-        if (HasValue(preferences.PreferDiets) && Overlaps(recipe.Diet, preferences.PreferDiets))
+        if (HasValue(preferences.PreferDiets) && Overlaps(recipe.Diet, preferences.PreferDiets, NormalizeDiet))
             score++;
 
         return score;
@@ -98,7 +98,13 @@ public static class RecipeMatcher
 
     private static bool Overlaps(
         IReadOnlyCollection<string>? recipeValues,
-        IReadOnlyCollection<string>? requestedValues)
+        IReadOnlyCollection<string>? requestedValues) =>
+        Overlaps(recipeValues, requestedValues, Normalize);
+
+    private static bool Overlaps(
+        IReadOnlyCollection<string>? recipeValues,
+        IReadOnlyCollection<string>? requestedValues,
+        Func<string, string> normalize)
     {
         if (!HasValue(requestedValues))
             return true;
@@ -106,8 +112,8 @@ public static class RecipeMatcher
         if (recipeValues is null || recipeValues.Count == 0)
             return false;
 
-        var wanted = NormalizedSet(requestedValues);
-        var present = NormalizedSet(recipeValues);
+        var wanted = NormalizedSet(requestedValues, normalize);
+        var present = NormalizedSet(recipeValues, normalize);
         return wanted.Overlaps(present);
     }
 
@@ -125,7 +131,10 @@ public static class RecipeMatcher
         return ingredients.Any(i => wanted.Contains(Normalize(i.Name)));
     }
 
-    private static HashSet<string> NormalizedSet(IEnumerable<string>? values)
+    private static HashSet<string> NormalizedSet(IEnumerable<string>? values) =>
+        NormalizedSet(values, Normalize);
+
+    private static HashSet<string> NormalizedSet(IEnumerable<string>? values, Func<string, string> normalize)
     {
         var result = new HashSet<string>(StringComparer.Ordinal);
         if (values is null)
@@ -133,7 +142,7 @@ public static class RecipeMatcher
 
         foreach (var value in values)
         {
-            var normalized = Normalize(value);
+            var normalized = normalize(value);
             if (normalized.Length > 0)
                 result.Add(normalized);
         }
@@ -142,4 +151,11 @@ public static class RecipeMatcher
     }
 
     private static string Normalize(string value) => value.Trim().ToLowerInvariant();
+
+    /// <summary>
+    /// Канонизация диеты для сравнения: известные варианты сводятся к коду, а
+    /// произвольные метки сравниваются без учёта регистра, как и остальные поля.
+    /// Хранение при этом сохраняет исходный вид метки.
+    /// </summary>
+    private static string NormalizeDiet(string value) => DietCatalog.Normalize(value).ToLowerInvariant();
 }

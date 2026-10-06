@@ -47,7 +47,7 @@ public static class RecipeEndpoints
         var result = summaries
             .Select(s => new RecipeSummaryDto(
                 s.Id, s.Name, s.Difficulty, s.Calories, s.CookTimeMinutes, s.Servings,
-                s.Tags, s.Seasonality, s.Diet,
+                s.Tags, s.Seasonality, DietCatalog.NormalizeAll(s.Diet),
                 counts.GetValueOrDefault(s.Id),
                 PhotoUrl(s.PhotoPath),
                 s.IsExternal,
@@ -233,7 +233,7 @@ public static class RecipeEndpoints
                 m.Recipe.Servings,
                 m.Recipe.Tags,
                 m.Recipe.Seasonality,
-                m.Recipe.Diet,
+                DietCatalog.NormalizeAll(m.Recipe.Diet),
                 PhotoUrl(m.Recipe.PhotoPath),
                 m.MatchScore))
             .ToList();
@@ -311,7 +311,7 @@ public static class RecipeEndpoints
         recipe.Calories,
         recipe.Tags,
         recipe.Seasonality,
-        recipe.Diet,
+        DietCatalog.NormalizeAll(recipe.Diet),
         recipe.Ingredients.OrderBy(i => i.Order)
             .Select(i => new RecipeIngredientDto(i.Id, i.Name, i.Amount, i.Unit, i.Note))
             .ToList(),

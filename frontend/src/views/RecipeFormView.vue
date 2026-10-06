@@ -4,6 +4,7 @@ import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vu
 import {
   UNITS,
   SEASONS,
+  DIETS,
   PHOTO_ACCEPT,
   PHOTO_MAX_LABEL,
   PHOTO_TYPES_LABEL,
@@ -165,6 +166,12 @@ function toggleSeason(code) {
   const index = draft.value.seasonality.indexOf(code)
   if (index >= 0) draft.value.seasonality.splice(index, 1)
   else draft.value.seasonality.push(code)
+}
+
+function toggleDiet(code) {
+  const index = draft.value.diets.indexOf(code)
+  if (index >= 0) draft.value.diets.splice(index, 1)
+  else draft.value.diets.push(code)
 }
 
 async function submit() {
@@ -340,9 +347,24 @@ onBeforeUnmount(() => {
           </div>
         </fieldset>
 
+        <fieldset class="fieldset-inline">
+          <legend>Стандартные диеты</legend>
+          <div class="chips">
+            <label v-for="diet in DIETS" :key="diet.code" class="chip">
+              <input
+                type="checkbox"
+                :value="diet.code"
+                :checked="draft.diets.includes(diet.code)"
+                @change="toggleDiet(diet.code)"
+              />
+              {{ diet.label }}
+            </label>
+          </div>
+        </fieldset>
+
         <label class="field">
-          <span>Диета (через запятую)</span>
-          <input v-model="draft.dietText" type="text" placeholder="вегетарианское, безглютеновое" />
+          <span>Свои метки диеты (через запятую)</span>
+          <input v-model="draft.dietText" type="text" placeholder="напр. без лактозы" />
         </label>
       </div>
 

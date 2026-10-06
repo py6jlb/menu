@@ -200,7 +200,7 @@ public sealed class ExternalRecipePromotionService
         wrapper.Calories = source.Calories;
         wrapper.Tags = new List<string>(source.Tags);
         wrapper.Seasonality = new List<string>(source.Seasonality);
-        wrapper.Diet = new List<string>(source.Diet);
+        wrapper.Diet = DietCatalog.NormalizeAll(source.Diet);
         wrapper.PhotoPath = copiedPhoto;
         wrapper.Steps = source.Steps
             .OrderBy(s => s.Order)
