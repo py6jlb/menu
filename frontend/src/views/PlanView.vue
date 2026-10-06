@@ -25,8 +25,7 @@ const {
   loadWeek: load,
   save,
   goToWeek,
-  confirmNavigation,
-  hasUnsavedChanges
+  confirmNavigation
 } = useWeekDraft({ initialWeek: mondayOf(new Date()) })
 
 const recipes = ref([])
@@ -193,7 +192,7 @@ function removeSlot(day, mealType) {
 }
 
 function handleBeforeUnload(event) {
-  if (!hasUnsavedChanges()) return
+  if (!dirty.value) return
   event.preventDefault()
   event.returnValue = ''
 }

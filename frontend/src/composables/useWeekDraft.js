@@ -66,7 +66,6 @@ export function useWeekDraft(options = {}) {
   let loadRequestId = 0
   let saveRequestId = 0
 
-  const weekKey = computed(() => toIso(weekStart.value))
   const dirty = computed(() => confirmedSnapshot.value !== serializeDraft(draft.value))
 
   function slotEntry(day, mealType) {
@@ -121,10 +120,6 @@ export function useWeekDraft(options = {}) {
     }
   }
 
-  function hasUnsavedChanges() {
-    return dirty.value
-  }
-
   function confirmNavigation() {
     return !dirty.value || confirmLeave(LEAVE_MESSAGE)
   }
@@ -175,7 +170,6 @@ export function useWeekDraft(options = {}) {
 
   return {
     weekStart,
-    weekKey,
     draft,
     dirty,
     loading,
@@ -189,7 +183,6 @@ export function useWeekDraft(options = {}) {
     loadWeek,
     save,
     goToWeek,
-    hasUnsavedChanges,
     confirmNavigation
   }
 }
