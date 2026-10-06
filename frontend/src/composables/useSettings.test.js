@@ -141,6 +141,8 @@ describe('useSettings — сохранение', () => {
     expect(state.windowWeeks.value).toBe(12)
     expect(state.confirmedWindowWeeks.value).toBe(4)
     expect(state.dirty.value).toBe(true)
+    // Новую правку не объявляем сохранённой.
+    expect(state.savedMessage.value).toBe('')
   })
 
   it('устаревший ответ сохранения не подменяет более новую правку', async () => {

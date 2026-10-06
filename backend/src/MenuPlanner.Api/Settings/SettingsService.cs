@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
@@ -58,11 +59,12 @@ public sealed class SettingsService
         {
             await _db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             // Строку успел создать параллельный запрос: попытка вставки откачена,
-            // очищаем трекер и применяем значение к существующей строке. Если строки
-            // всё же нет, это не гонка вставки — не подменяем исходную ошибку.
+            // очищаем трекер и применяем значение к существующей строке. Ошибки, не
+            // связанные с гонкой вставки, не подавляются этим catch.
             _db.ChangeTracker.Clear();
             settings = await _db.UserSettings
                 .FirstOrDefaultAsync(s => s.UserId == userId, cancellationToken);

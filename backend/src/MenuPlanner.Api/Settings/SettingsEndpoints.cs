@@ -15,19 +15,19 @@ public static class SettingsEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetAsync(ClaimsPrincipal principal, SettingsService settings)
+    private static async Task<IResult> GetAsync(ClaimsPrincipal principal, SettingsService settingsService)
     {
         var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
-        return Results.Json(await settings.ReadAsync(userId.Value));
+        return Results.Json(await settingsService.ReadAsync(userId.Value));
     }
 
     private static async Task<IResult> UpdateAsync(
         UserSettingsRequest request,
         ClaimsPrincipal principal,
-        SettingsService settings)
+        SettingsService settingsService)
     {
         var userId = CurrentUser.UserId(principal);
         if (userId is null)
@@ -37,7 +37,7 @@ public static class SettingsEndpoints
         if (error is not null)
             return Results.BadRequest(new SettingsErrorDto(error));
 
-        return Results.Json(await settings.SaveAsync(userId.Value, request.RepetitionWindowWeeks!.Value));
+        return Results.Json(await settingsService.SaveAsync(userId.Value, request.RepetitionWindowWeeks!.Value));
     }
 
     private static string? Validate(UserSettingsRequest request)

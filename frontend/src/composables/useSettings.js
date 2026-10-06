@@ -85,8 +85,8 @@ export function useSettings(options = {}) {
       confirmedWindowWeeks.value = data.repetitionWindowWeeks
       if (windowWeeks.value === sentWeeks) {
         windowWeeks.value = data.repetitionWindowWeeks
+        savedMessage.value = 'Настройки сохранены.'
       }
-      savedMessage.value = 'Настройки сохранены.'
     } catch {
       if (requestId === saveRequestId) saveError.value = SETTINGS_SAVE_ERROR
     } finally {
