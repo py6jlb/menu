@@ -25,6 +25,14 @@ function readStoredUser() {
   return parseUser(localStore.get(USER_KEY))
 }
 
+function localStoreArea() {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
 const state = reactive({
   token: localStore.get(TOKEN_KEY) || '',
   user: readStoredUser()
@@ -32,19 +40,23 @@ const state = reactive({
 
 const status = ref(SESSION_STATUS.IDLE)
 
+function persistUser(user) {
+  if (user) localStore.set(USER_KEY, JSON.stringify(user))
+  else localStore.remove(USER_KEY)
+}
+
 function setSession(token, user) {
   state.token = token || ''
   state.user = user || null
   if (state.token) localStore.set(TOKEN_KEY, state.token)
   else localStore.remove(TOKEN_KEY)
-  if (user) localStore.set(USER_KEY, JSON.stringify(user))
-  else localStore.remove(USER_KEY)
+  persistUser(user)
 }
 
 function updateUser(user) {
   if (!user) return
   state.user = user
-  localStore.set(USER_KEY, JSON.stringify(user))
+  persistUser(user)
 }
 
 function clearSession() {
@@ -59,7 +71,7 @@ function clearSession() {
  * ответ с прежним токеном не должен гасить новую сессию, вошедшую позже.
  */
 function invalidateSession(token) {
-  if (token && state.token !== token) return false
+  if (!token || state.token !== token) return false
   clearSession()
   return true
 }
@@ -70,6 +82,8 @@ function invalidateSession(token) {
  */
 function onStorage(event) {
   if (!event) return
+  // Сессия живёт только в localStorage: событие из sessionStorage мимо.
+  if (event.storageArea && event.storageArea !== localStoreArea()) return
   if (event.key === TOKEN_KEY) {
     if (!event.newValue) {
       state.token = ''

@@ -95,6 +95,15 @@ describe('auth — 401 и токены', () => {
     expect(auth.state.token).toBe('')
     expect(auth.state.user).toBeNull()
   })
+
+  it('401 запроса без токена не гасит существующую сессию', async () => {
+    const { useAuth } = await loadStore()
+    const auth = useAuth()
+    auth.setSession('tok', { id: 'u1' })
+
+    expect(auth.invalidateSession('')).toBe(false)
+    expect(auth.state.token).toBe('tok')
+  })
 })
 
 describe('auth — синхронизация вкладок', () => {

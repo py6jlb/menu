@@ -18,3 +18,9 @@ export function sanitizeReturnTo(value) {
     return null
   }
 }
+
+/** Готовый query для перехода на вход с возвратом, либо пустой объект. */
+export function returnToQuery(fullPath) {
+  const returnTo = sanitizeReturnTo(fullPath)
+  return returnTo ? { returnTo } : {}
+}

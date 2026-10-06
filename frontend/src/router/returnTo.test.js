@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sanitizeReturnTo } from './returnTo'
+import { sanitizeReturnTo, returnToQuery } from './returnTo'
 
 describe('sanitizeReturnTo', () => {
   it('разрешает внутренний маршрут с query и hash', () => {
@@ -21,5 +21,15 @@ describe('sanitizeReturnTo', () => {
     expect(sanitizeReturnTo('')).toBeNull()
     expect(sanitizeReturnTo(undefined)).toBeNull()
     expect(sanitizeReturnTo(['/a'])).toBeNull()
+  })
+})
+
+describe('returnToQuery', () => {
+  it('даёт query для внутреннего маршрута', () => {
+    expect(returnToQuery('/plan?d=1')).toEqual({ returnTo: '/plan?d=1' })
+  })
+
+  it('не даёт query для внешнего маршрута', () => {
+    expect(returnToQuery('https://evil.example.com')).toEqual({})
   })
 })

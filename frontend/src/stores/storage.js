@@ -3,7 +3,7 @@
  * куки/хранилища обращение к `window.localStorage`/`setItem` бросает
  * исключение; обёртка не даёт белому экрану и деградирует в память.
  */
-function accessor(getStore) {
+function safeStore(getStore) {
   return {
     get(key) {
       try {
@@ -32,5 +32,5 @@ function accessor(getStore) {
   }
 }
 
-export const localStore = accessor(() => window.localStorage)
-export const sessionStore = accessor(() => window.sessionStorage)
+export const localStore = safeStore(() => window.localStorage)
+export const sessionStore = safeStore(() => window.sessionStorage)

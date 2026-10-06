@@ -3,6 +3,7 @@ import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from './stores/auth'
 import { ensureSession } from './composables/useSession'
+import { returnToQuery } from './router/returnTo'
 import EmailVerifyBanner from './components/EmailVerifyBanner.vue'
 
 const route = useRoute()
@@ -22,8 +23,7 @@ onMounted(() => {
 // вкладке: уводим с защищённого маршрута на вход с возвратом.
 watch(isAuthenticated, (authenticated) => {
   if (authenticated || !route.meta.requiresAuth || route.name === 'login') return
-  const returnTo = route.fullPath
-  router.push({ name: 'login', query: returnTo && returnTo !== '/' ? { returnTo } : {} })
+  router.push({ name: 'login', query: returnToQuery(route.fullPath) })
 })
 </script>
 
