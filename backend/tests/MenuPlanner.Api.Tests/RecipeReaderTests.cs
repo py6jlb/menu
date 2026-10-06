@@ -140,6 +140,7 @@ public sealed class RecipeReaderTests
         db.Families.AddRange(sourceFamily, recipientFamily);
         var source = NewRecipe(sourceFamily.Id, "Борщ");
         source.Description = "Классический";
+        source.CreatedAt = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         source.Steps.Add(new RecipeStep { Order = 0, Text = "Сварить." });
         source.Ingredients.Add(new RecipeIngredient { Order = 0, Name = "Свёкла", Amount = 2m, Unit = "pcs" });
         db.Recipes.Add(source);
@@ -160,6 +161,7 @@ public sealed class RecipeReaderTests
         Assert.Equal(7, detail.Recipe.Revision);
         Assert.Equal("Борщ", detail.Recipe.Name);
         Assert.Equal("Классический", detail.Recipe.Description);
+        Assert.Equal(source.CreatedAt, detail.Recipe.CreatedAt);
         Assert.Single(detail.Recipe.Steps);
         Assert.Single(detail.Recipe.Ingredients);
         Assert.True(detail.IsExternal);
@@ -168,13 +170,39 @@ public sealed class RecipeReaderTests
     }
 
     [Fact]
+    public async Task ReadDetail_RevokedShare_IsWarning_AndKeepsLiveContent()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+        var source = NewRecipe(sourceFamily.Id, "Борщ");
+        source.Steps.Add(new RecipeStep { Order = 0, Text = "Сварить." });
+        db.Recipes.Add(source);
+        var wrapper = NewRecipe(recipientFamily.Id, "Борщ");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "stale";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "fresh"));
+        await db.SaveChangesAsync();
+
+        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+
+        Assert.NotNull(detail);
+        Assert.Equal(ExternalRecipeState.Warning, detail!.State);
+        Assert.Equal("Борщ", detail.Recipe.Name);
+        Assert.Single(detail.Recipe.Steps);
+    }
+
+    [Fact]
     public async Task ReadDetail_DeletedSource_ReturnsCachedNameWithoutInventedContent()
     {
         await using var db = NewDb();
         var recipientFamily = NewFamily();
         db.Families.Add(recipientFamily);
-        var wrapper = NewRecipe(recipientFamily.Id, "Кэш имени")
-            .WithSource(Guid.NewGuid());
+        var wrapper = NewRecipe(recipientFamily.Id, "Кэш имени");
+        wrapper.SourceRecipeId = Guid.NewGuid();
         db.Recipes.Add(wrapper);
         await db.SaveChangesAsync();
 
@@ -275,13 +303,4 @@ public sealed class RecipeReaderTests
         Token = token,
         CreatedAt = DateTime.UtcNow
     };
-}
-
-internal static class RecipeReaderTestExtensions
-{
-    public static Recipe WithSource(this Recipe recipe, Guid sourceId)
-    {
-        recipe.SourceRecipeId = sourceId;
-        return recipe;
-    }
 }

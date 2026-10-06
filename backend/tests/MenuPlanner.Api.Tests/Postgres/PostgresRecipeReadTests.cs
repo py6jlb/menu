@@ -64,6 +64,8 @@ public sealed class PostgresRecipeReadTests : PostgresTestBase
         Assert.True(detail.IsExternal);
         Assert.Equal(4, detail.Recipe.Steps.Count);
         Assert.Equal(4, detail.Recipe.Ingredients.Count);
+        // Записанный baseline детального чтения: 7 команд, источник с 4 шагами и 4 ингредиентами.
+        Assert.InRange(commands.Commands.Count, 1, 8);
     }
 
     private async Task<(Family Recipient, List<Recipe> Sources)> SeedAsync(

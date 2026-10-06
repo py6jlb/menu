@@ -182,8 +182,9 @@ public sealed class RecipeReader
             cancellationToken);
 
         var effective = ExternalRecipeContentResolver.Materialize(recipe, source);
-        // Ревизия — свойство локальной строки-получателя, а не живого источника:
-        // именно её передают при удалении/промоушене.
+        // Контент и даты создания/правки — живого источника (как и до рефакторинга),
+        // а id, принадлежность семьи, ревизия и метка копии — локальной строки-получателя.
+        effective.CreatedAt = source.CreatedAt;
         effective.Revision = recipe.Revision;
         effective.CopiedFromFamilyName = recipe.CopiedFromFamilyName;
 
