@@ -20,10 +20,15 @@ export const CONFLICT_MESSAGE =
 export const PHOTO_ERROR_MESSAGE =
   'Рецепт сохранён, но фото не удалось сохранить. Повторите действие с фото.'
 export const PHOTO_UNKNOWN_MESSAGE =
-  'Рецепт сохранён, но результат действия с фото неизвестен из-за обрыва связи. Повторите — сначала проверим актуальное фото.'
+  'Рецепт сохранён, но результат действия с фото неизвестен из-за обрыва связи. Повторите — действие защищено от дубля.'
 
 export function newIngredientDraft() {
   return { name: '', amount: '', unit: 'g', note: '' }
+}
+
+/** Пустое фото-состояние черновика. */
+export function emptyPhoto() {
+  return { existing: null, removed: false, selected: null }
 }
 
 /** Пустой черновик нового рецепта: только поля, значимые для сохранения. */
@@ -40,7 +45,7 @@ export function emptyDraft() {
     dietText: '',
     steps: [''],
     ingredients: [newIngredientDraft()],
-    photo: { existing: null, removed: false, selected: null }
+    photo: emptyPhoto()
   }
 }
 
@@ -151,6 +156,11 @@ export function serializeDraft(draft) {
       selected: photoIdentity(draft.photo?.selected)
     }
   })
+}
+
+/** Сигнатура текстовой части черновика без учёта фото. */
+export function textSignature(draft) {
+  return serializeDraft({ ...draft, photo: emptyPhoto() })
 }
 
 /**
@@ -332,6 +342,11 @@ export function useRecipeDraft(options = {}) {
     confirmedSnapshot.value = serializeDraft(serverDraft)
   }
 
+  /** Фото-запрос всё ещё принадлежит текущему ресурсу (не устарел после ухода). */
+  function isCurrentPhoto(target) {
+    return pendingPhoto === target && target.id === editingId.value
+  }
+
   /** Совпадает ли текущее фото-состояние черновика с замороженным intent. */
   function photoMatchesIntent(photo, intent) {
     if (!intent) return true
@@ -352,19 +367,21 @@ export function useRecipeDraft(options = {}) {
     const intent = pendingPhoto
     const latePhotoChange = !photoMatchesIntent(draft.value.photo, intent)
     const serverDraft = data ? draftFromRecipe(data) : null
+    const serverPhoto = serverDraft ? serverDraft.photo : emptyPhoto()
     if (!latePhotoChange) {
+      draft.value = { ...draft.value, photo: { ...serverPhoto } }
+    } else {
+      // Поздний выбор файла не затираем, но подтягиваем актуальный URL с сервера,
+      // чтобы снятие позднего выбора возвращало черновик к подтверждённому виду.
       draft.value = {
         ...draft.value,
-        photo: serverDraft ? { ...serverDraft.photo } : { existing: null, removed: false, selected: null }
+        photo: { ...draft.value.photo, existing: serverPhoto.existing }
       }
     }
     if (serverDraft) {
       confirmedSnapshot.value = serializeDraft(serverDraft)
     } else if (lastServerTextDraft) {
-      confirmedSnapshot.value = serializeDraft({
-        ...lastServerTextDraft,
-        photo: { existing: null, removed: false, selected: null }
-      })
+      confirmedSnapshot.value = serializeDraft({ ...lastServerTextDraft, photo: emptyPhoto() })
     }
   }
 
@@ -374,6 +391,32 @@ export function useRecipeDraft(options = {}) {
    * При успехе текста и сбое фото возвращается честный частичный результат.
    */
   async function save() {
+    // Текст уже сохранён, а изменилось только фото — не перезаписываем поля,
+    // а повторяем исключительно действие с фото (в т.ч. защищённо после обрыва).
+    if (
+      pendingPhoto &&
+      lastServerTextDraft &&
+      textSignature(draft.value) === textSignature(lastServerTextDraft)
+    ) {
+      saving.value = true
+      saveError.value = ''
+      savedMessage.value = ''
+      try {
+        photoPartial.value = true
+        const photoResult = await retryPhoto()
+        if (photoResult.ok) return { ok: true, id: editingId.value, data: photoResult.data }
+        return {
+          ok: false,
+          textSaved: true,
+          id: editingId.value,
+          photoFailed: true,
+          conflict: Boolean(photoResult.conflict)
+        }
+      } finally {
+        saving.value = false
+      }
+    }
+
     const targetId = editingId.value
     const sentSnapshot = serializeDraft(draft.value)
     const sentPayload = draftToPayload(draft.value, revision.value)
@@ -468,6 +511,7 @@ export function useRecipeDraft(options = {}) {
         target.kind === 'delete'
           ? await deletePhotoRequest(target.id, target.revision)
           : await uploadPhotoRequest(target.id, target.file, target.revision)
+      if (!isCurrentPhoto(target)) return { ok: false, stale: true }
       const status = result.response.status
       if (status === 204 || status === 200) {
         if (target.kind === 'upload' && result.data == null) {
@@ -498,12 +542,13 @@ export function useRecipeDraft(options = {}) {
       photoPartial.value = true
       return { ok: false }
     } catch {
+      if (!isCurrentPhoto(target)) return { ok: false, stale: true }
       photoUnknown.value = true
       photoError.value = PHOTO_UNKNOWN_MESSAGE
       photoPartial.value = true
       return { ok: false, unknown: true }
     } finally {
-      photoSaving.value = false
+      if (isCurrentPhoto(target)) photoSaving.value = false
     }
   }
 
@@ -517,10 +562,13 @@ export function useRecipeDraft(options = {}) {
     if (!target) return { ok: true }
     try {
       const { response, data } = await loadRecipe(target.id)
+      if (!isCurrentPhoto(target)) return { ok: false, stale: true }
       if (response.status !== 200 || data == null) return { ok: false }
       if (target.kind === 'delete' && !data.photoUrl) {
         lastServerTextDraft = draftFromRecipe(data)
         applySavedPhoto(data)
+        // DELETE без тела: сервер уже поднял ревизию — фиксируем её для следующего сохранения.
+        revision.value = Number.isInteger(data.revision) ? data.revision : revision.value
         pendingPhoto = null
         photoPartial.value = false
         photoUnknown.value = false

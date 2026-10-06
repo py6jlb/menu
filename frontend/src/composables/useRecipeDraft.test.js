@@ -742,6 +742,7 @@ describe('useRecipeDraft — действия с фото', () => {
     expect(deletePhoto).toHaveBeenCalledTimes(1)
     expect(state.draft.value.photo.existing).toBeNull()
     expect(state.photoPartial.value).toBe(false)
+    expect(state.revision.value).toBe(2)
   })
 
   it('выбор другого фото во время сохранения не подменяет отправленное действие', async () => {
@@ -767,6 +768,86 @@ describe('useRecipeDraft — действия с фото', () => {
     // позднее выбранный файл сохраняется как новый dirty-черновик
     expect(state.draft.value.photo.selected).toEqual(late)
     expect(state.dirty.value).toBe(true)
+  })
+
+  it('повторное «Сохранить» после частичного успеха не перезаписывает поля', async () => {
+    const uploadPhoto = vi
+      .fn()
+      .mockResolvedValueOnce({ response: { status: 500 }, data: { error: 'Сбой.' } })
+      .mockResolvedValueOnce({
+        response: { status: 200 },
+        data: recipeData('A', { revision: 3, photoUrl: '/photos/new.jpg' })
+      })
+    const updateRecipe = vi.fn().mockResolvedValue(ok(recipeData('A', { revision: 2 })))
+    const state = make(photoOptions({ uploadPhoto, updateRecipe }))
+    await state.load()
+    state.draft.value.name = 'Новое'
+    state.draft.value.photo.selected = file
+
+    const first = await state.save()
+    expect(first).toMatchObject({ ok: false, textSaved: true })
+    expect(updateRecipe).toHaveBeenCalledTimes(1)
+
+    const second = await state.save()
+
+    expect(second).toMatchObject({ ok: true })
+    expect(updateRecipe).toHaveBeenCalledTimes(1)
+    expect(uploadPhoto).toHaveBeenCalledTimes(2)
+    expect(state.dirty.value).toBe(false)
+  })
+
+  it('снятие позднего выбора после успешного фото возвращает черновик к чистому', async () => {
+    const pendingUpdate = deferred()
+    const updateRecipe = vi.fn().mockImplementation(() => pendingUpdate.promise)
+    const uploadPhoto = vi.fn().mockResolvedValue({
+      response: { status: 200 },
+      data: recipeData('A', { revision: 3, name: 'Новое', photoUrl: '/photos/first.jpg' })
+    })
+    const state = make(photoOptions({ updateRecipe, uploadPhoto }))
+    await state.load()
+    state.draft.value.name = 'Новое'
+    state.draft.value.photo.selected = file
+
+    const savePromise = state.save()
+    const late = { name: 'b.jpg', size: 2, lastModified: 2, type: 'image/jpeg' }
+    state.draft.value.photo.selected = late
+    pendingUpdate.resolve(ok(recipeData('A', { revision: 2, name: 'Новое' })))
+    await savePromise
+
+    expect(state.dirty.value).toBe(true)
+    expect(state.draft.value.photo.existing).toBe('/photos/first.jpg')
+
+    state.draft.value.photo.selected = null
+
+    expect(state.dirty.value).toBe(false)
+  })
+
+  it('поздний ответ фото после смены ресурса не подменяет новый черновик', async () => {
+    const pendingPhotoReq = deferred()
+    const uploadPhoto = vi.fn().mockImplementation(() => pendingPhotoReq.promise)
+    const updateRecipe = vi.fn().mockResolvedValue(ok(recipeData('A', { revision: 2 })))
+    const state = make(photoOptions({ uploadPhoto, updateRecipe }))
+    await state.load()
+    state.draft.value.name = 'Новое'
+    state.draft.value.photo.selected = file
+
+    const savePromise = state.save()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(uploadPhoto).toHaveBeenCalled()
+
+    state.setIdentity('B')
+    state.draft.value.name = 'черновик B'
+    pendingPhotoReq.resolve({
+      response: { status: 200 },
+      data: recipeData('A', { revision: 3, photoUrl: '/photos/new.jpg' })
+    })
+    const result = await savePromise
+
+    expect(result.ok).toBe(false)
+    expect(state.editingId.value).toBe('B')
+    expect(state.draft.value.name).toBe('черновик B')
+    expect(state.draft.value.photo.existing).toBeNull()
+    expect(state.photoSaving.value).toBe(false)
   })
 
   it('предупреждение об уходе учитывает несохранённое фото после частичного успеха', async () => {

@@ -220,7 +220,6 @@ function toggleSeason(code) {
 async function submit() {
   error.value = validate()
   if (error.value) return
-  if (photoValidationError.value) return
 
   // save() сам фиксирует id и действие с фото до первого await; при частичном
   // успехе (текст сохранён, фото — нет) он возвращает textSaved и мы остаёмся
