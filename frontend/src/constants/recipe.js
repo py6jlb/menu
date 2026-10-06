@@ -32,6 +32,24 @@ export function seasonLabel(code) {
   return SEASONS.find((s) => s.code === code)?.label || code
 }
 
+export const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+export const PHOTO_ACCEPT = PHOTO_TYPES.join(',')
+export const PHOTO_MAX_BYTES = 5 * 1024 * 1024
+export const PHOTO_MAX_LABEL = '5 МБ'
+export const PHOTO_TYPES_LABEL = 'JPEG, PNG, WebP или GIF'
+
+/** Проверка файла до отправки; серверная валидация остаётся окончательной. */
+export function validatePhotoFile(file) {
+  if (!file) return ''
+  if (!PHOTO_TYPES.includes(file.type)) {
+    return `Файл должен быть изображением: ${PHOTO_TYPES_LABEL}.`
+  }
+  if (file.size > PHOTO_MAX_BYTES) {
+    return `Размер фото не должен превышать ${PHOTO_MAX_LABEL}.`
+  }
+  return ''
+}
+
 export function parseList(value) {
   return (value || '')
     .split(',')
