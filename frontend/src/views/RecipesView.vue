@@ -2,6 +2,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { listRecipes } from '../api/recipes'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
+import { repetitionChip, repetitionTitle } from '../constants/repetition'
 import { useAuth } from '../stores/auth'
 
 const { isEmailVerified } = useAuth()
@@ -107,9 +108,9 @@ onMounted(load)
             <span
               v-if="recipe.repetitionCount > 0"
               class="chip chip--repetition"
-              title="Готовилось за последние недели"
+              :title="repetitionTitle()"
             >
-              🔁 ×{{ recipe.repetitionCount }}
+              {{ repetitionChip(recipe.repetitionCount) }}
             </span>
           </div>
           <div v-if="recipe.tags.length" class="tags">

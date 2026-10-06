@@ -49,6 +49,7 @@ export function toPickerItem(item) {
     seasonality: item.seasonality,
     diet: item.diet,
     matchScore: item.matchScore,
+    repetitionCount: item.repetitionCount ?? 0,
     isExternal: item.isExternal || false,
     sourceFamilyName: item.sourceFamilyName || null,
     state: item.state || null
@@ -76,10 +77,11 @@ function selectionFrom(source) {
   }
 }
 
-function matchBody(filters, search) {
+function matchBody(filters, search, weekStart) {
   const query = search.trim()
   return {
     search: query.length ? query : null,
+    weekStart: weekStart || null,
     filters: {
       maxDifficulty: filters.maxDifficulty || null,
       maxCalories: filters.maxCalories === '' ? null : Number(filters.maxCalories),
@@ -116,6 +118,8 @@ export function useRecipePicker(options = {}) {
   const appliedFilters = ref(emptyFilters())
   const selection = ref(null)
   const portions = ref(1)
+  const weekStart = ref(null)
+  const repetitionWindowWeeks = ref(0)
 
   let requestId = 0
 
@@ -140,10 +144,13 @@ export function useRecipePicker(options = {}) {
     loading.value = true
     error.value = ''
     try {
-      const { response, data } = await matchRecipe(matchBody(appliedFilters.value, search.value))
+      const { response, data } = await matchRecipe(
+        matchBody(appliedFilters.value, search.value, weekStart.value)
+      )
       if (id !== requestId) return
       if (response.status === 200 && data && Array.isArray(data.items)) {
         recipes.value = data.items.map(toPickerItem)
+        repetitionWindowWeeks.value = data.repetitionWindowWeeks || 0
         syncSelection()
       } else {
         error.value = data?.error || MATCH_ERROR_MESSAGE
@@ -155,12 +162,18 @@ export function useRecipePicker(options = {}) {
     }
   }
 
-  /** Открыть подбор для ячейки плана; entry — текущая запись или null. */
-  function open(entry) {
+  /**
+   * Открыть подбор для ячейки плана; entry — текущая запись или null.
+   * weekStart — понедельник планируемой недели (ISO): повторяемость считается
+   * по окну, заканчивающемуся этой неделей включительно, а не текущей неделей сервера.
+   */
+  function open(entry, selectedWeekStart = null) {
     search.value = ''
     draftFilters.value = emptyFilters()
     appliedFilters.value = emptyFilters()
     error.value = ''
+    weekStart.value = selectedWeekStart
+    repetitionWindowWeeks.value = 0
     if (entry) {
       selection.value = selectionFrom(entry)
       portions.value = entry.portions || 1
@@ -218,6 +231,8 @@ export function useRecipePicker(options = {}) {
     selection,
     selectionWarning,
     portions,
+    weekStart,
+    repetitionWindowWeeks,
     reload,
     open,
     select,

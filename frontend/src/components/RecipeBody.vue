@@ -1,5 +1,6 @@
 <script setup>
 import { unitLabel, seasonLabel, dietLabel } from '../constants/recipe'
+import { repetitionChip, repetitionTitle } from '../constants/repetition'
 
 defineProps({
   recipe: { type: Object, required: true }
@@ -21,8 +22,8 @@ defineProps({
     <span v-if="recipe.calories !== null && recipe.calories !== undefined" class="chip">
       🔥 {{ recipe.calories }} ккал/порция
     </span>
-    <span v-if="recipe.repetitionCount > 0" class="chip chip--repetition">
-      🔁 Готовилось ×{{ recipe.repetitionCount }}
+    <span v-if="recipe.repetitionCount > 0" class="chip chip--repetition" :title="repetitionTitle()">
+      {{ repetitionChip(recipe.repetitionCount) }}
     </span>
   </div>
 

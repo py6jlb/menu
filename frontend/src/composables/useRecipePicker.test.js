@@ -264,4 +264,72 @@ describe('toPickerItem — метаданные внешнего рецепта'
       sourceFamilyName: null
     })
   })
+
+  it('сохраняет повторяемость, отсутствующее значение — 0', () => {
+    expect(toPickerItem(item('r1', 'Борщ', { repetitionCount: 4 })).repetitionCount).toBe(4)
+    expect(toPickerItem(item('r2', 'Блины')).repetitionCount).toBe(0)
+  })
+})
+
+describe('useRecipePicker — повторяемость для выбранной недели', () => {
+  it('передаёт выбранную неделю в запрос подбора', async () => {
+    const matchRecipes = vi.fn().mockResolvedValue(ok([]))
+    const picker = make({ matchRecipes })
+
+    await picker.open(null, '2026-03-02')
+
+    expect(matchRecipes.mock.calls.at(-1)[0].weekStart).toBe('2026-03-02')
+  })
+
+  it('без явной недели weekStart пустой — сервер считает до текущей', async () => {
+    const matchRecipes = vi.fn().mockResolvedValue(ok([]))
+    const picker = make({ matchRecipes })
+
+    await picker.open(null)
+
+    expect(matchRecipes.mock.calls.at(-1)[0].weekStart).toBeNull()
+  })
+
+  it('смена фильтров не теряет выбранную неделю', async () => {
+    const matchRecipes = vi.fn().mockResolvedValue(ok([]))
+    const picker = make({ matchRecipes })
+
+    await picker.open(null, '2026-03-02')
+    await picker.apply()
+
+    expect(matchRecipes.mock.calls.at(-1)[0].weekStart).toBe('2026-03-02')
+  })
+
+  it('сохраняет показатель и окно из выдачи для отображения', async () => {
+    const matchRecipes = vi.fn().mockResolvedValue({
+      response: { status: 200 },
+      data: { items: [item('r1', 'Борщ', { repetitionCount: 4 })], repetitionWindowWeeks: 3 }
+    })
+    const picker = make({ matchRecipes })
+
+    await picker.open(null)
+
+    expect(picker.recipes.value[0].repetitionCount).toBe(4)
+    expect(picker.repetitionWindowWeeks.value).toBe(3)
+  })
+
+  it('ошибка подбора не оставляет чужое окно', async () => {
+    const matchRecipes = vi
+      .fn()
+      .mockResolvedValueOnce({
+        response: { status: 200 },
+        data: { items: [item('r1', 'Борщ')], repetitionWindowWeeks: 3 }
+      })
+      .mockRejectedValueOnce(new Error('network'))
+    const picker = make({ matchRecipes })
+
+    await picker.open(null, '2026-03-02')
+    expect(picker.repetitionWindowWeeks.value).toBe(3)
+
+    await picker.open(null)
+    await picker.reload()
+
+    expect(picker.repetitionWindowWeeks.value).toBe(0)
+    expect(picker.error.value).toBe(MATCH_ERROR_MESSAGE)
+  })
 })
