@@ -74,7 +74,7 @@ public static class FamilyEndpoints
     private static IResult Map(FamilyAccess access) => access.Outcome switch
     {
         FamilyOutcome.Unauthorized => Results.Unauthorized(),
-        FamilyOutcome.Invalid => Results.BadRequest(new FamilyErrorDto(access.Error!)),
+        FamilyOutcome.Invalid => Results.BadRequest(new FamilyErrorDto(access.Error!, access.Code, access.Field)),
         FamilyOutcome.Conflict => Results.Conflict(new FamilyErrorDto(access.Error!)),
         FamilyOutcome.NotFound => Results.NotFound(new FamilyErrorDto(access.Error!)),
         FamilyOutcome.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),

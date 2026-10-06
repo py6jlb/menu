@@ -63,7 +63,7 @@ public static class PlanEndpoints
         var entries = request.Entries ?? new List<PlanEntryRequest>();
         var validationError = Validate(entries);
         if (validationError is not null)
-            return Results.BadRequest(new PlanErrorDto(validationError));
+            return Results.BadRequest(validationError);
 
         var recipeIds = entries.Select(e => e.RecipeId).Distinct().ToList();
         if (recipeIds.Count > 0)
@@ -125,20 +125,43 @@ public static class PlanEndpoints
             statusCode: StatusCodes.Status409Conflict);
     }
 
-    private static string? Validate(IReadOnlyList<PlanEntryRequest> entries)
+    private static PlanErrorDto? Validate(IReadOnlyList<PlanEntryRequest> entries)
     {
+        if (entries.Count > PlanningCatalog.EntriesMax)
+            return new(
+                $"В плане не может быть больше {PlanningCatalog.EntriesMax} записей.",
+                "plan_entries_too_many",
+                "entries");
+
         var seen = new HashSet<(int Day, string MealType)>();
 
-        foreach (var entry in entries)
+        for (var index = 0; index < entries.Count; index++)
         {
+            var entry = entries[index];
+            var field = $"entries[{index}]";
+
+            // Malformed payload может прислать null вместо записи: отказ должен быть
+            // контролируемым, а не исключением обращения к null.
+            if (entry is null)
+                return new("Запись плана пуста.", "plan_entry_null", field);
+
             if (entry.Day < PlanningCatalog.DayMin || entry.Day > PlanningCatalog.DayMax)
-                return $"Номер дня недели должен быть от {PlanningCatalog.DayMin} до {PlanningCatalog.DayMax}.";
+                return new(
+                    $"Номер дня недели должен быть от {PlanningCatalog.DayMin} до {PlanningCatalog.DayMax}.",
+                    "plan_day_range",
+                    $"{field}.day");
             if (!PlanningCatalog.IsKnownMealType(entry.MealType))
-                return $"Недопустимый приём пищи «{entry.MealType}».";
+                return new($"Недопустимый приём пищи «{entry.MealType}».", "plan_meal_type_invalid", $"{field}.mealType");
             if (entry.Portions < PlanningCatalog.PortionsMin || entry.Portions > PlanningCatalog.PortionsMax)
-                return $"Количество порций должно быть от {PlanningCatalog.PortionsMin} до {PlanningCatalog.PortionsMax}.";
+                return new(
+                    $"Количество порций должно быть от {PlanningCatalog.PortionsMin} до {PlanningCatalog.PortionsMax}.",
+                    "plan_portions_range",
+                    $"{field}.portions");
             if (!seen.Add((entry.Day, entry.MealType)))
-                return "В плане не может быть двух записей для одного дня и приёма пищи.";
+                return new(
+                    "В плане не может быть двух записей для одного дня и приёма пищи.",
+                    "plan_duplicate_slot",
+                    field);
         }
 
         return null;

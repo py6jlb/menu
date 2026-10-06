@@ -22,7 +22,9 @@ public sealed record FamilyAccess(
     FamilyOutcome Outcome,
     FamilyDto? Family = null,
     string? Error = null,
-    string? InviteCode = null);
+    string? InviteCode = null,
+    string? Code = null,
+    string? Field = null);
 
 /// <summary>
 /// Операции с семьёй поверх БД. Гонка уникального членства (один пользователь —
@@ -45,7 +47,14 @@ public sealed class FamilyService
 
         var trimmed = name?.Trim();
         if (string.IsNullOrEmpty(trimmed))
-            return new FamilyAccess(FamilyOutcome.Invalid, Error: "Укажите название семьи.");
+            return new FamilyAccess(
+                FamilyOutcome.Invalid, Error: "Укажите название семьи.", Code: "family_name_required", Field: "name");
+        if (trimmed.Length > FamilyCatalog.NameMaxLength)
+            return new FamilyAccess(
+                FamilyOutcome.Invalid,
+                Error: $"Название семьи не должно превышать {FamilyCatalog.NameMaxLength} символов.",
+                Code: "family_name_too_long",
+                Field: "name");
 
         if (await _db.FamilyMembers.AnyAsync(m => m.UserId == userId.Value))
             return new FamilyAccess(FamilyOutcome.Conflict, Error: AlreadyMemberError);

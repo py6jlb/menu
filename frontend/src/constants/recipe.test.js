@@ -5,6 +5,7 @@ import {
   PHOTO_TYPES,
   combineDiets,
   dietLabel,
+  recipeFieldLabel,
   splitDiets,
   validatePhotoFile
 } from './recipe'
@@ -91,5 +92,18 @@ describe('dietLabel', () => {
   it('переводит код в подпись, незнакомое значение отдаёт как есть', () => {
     expect(dietLabel('vegetarian')).toBe('Вегетарианское')
     expect(dietLabel('моя диета')).toBe('моя диета')
+  })
+})
+
+describe('recipeFieldLabel', () => {
+  it('подписывает простое поле и путь ингредиента', () => {
+    expect(recipeFieldLabel('name')).toBe('Название')
+    expect(recipeFieldLabel('ingredients[1].amount')).toBe('Ингредиент 2: количество')
+    expect(recipeFieldLabel('ingredients[0]')).toBe('Ингредиент 1')
+  })
+
+  it('неизвестный путь отдаёт как есть, пустой — пустой строкой', () => {
+    expect(recipeFieldLabel('weird.path')).toBe('weird.path')
+    expect(recipeFieldLabel('')).toBe('')
   })
 })

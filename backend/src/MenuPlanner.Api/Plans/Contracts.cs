@@ -30,4 +30,8 @@ public sealed record PlanConflictDto(
     int Revision,
     IReadOnlyList<PlanEntryDto> Entries);
 
-public sealed record PlanErrorDto(string Error);
+/// <summary>
+/// Ошибка ввода плана: русское объяснение, машинный код и путь поля (например,
+/// `entries[2].portions`) для привязки причины к конкретной записи.
+/// </summary>
+public sealed record PlanErrorDto(string Error, string? Code = null, string? Field = null);

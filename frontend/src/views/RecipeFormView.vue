@@ -8,7 +8,8 @@ import {
   PHOTO_ACCEPT,
   PHOTO_MAX_LABEL,
   PHOTO_TYPES_LABEL,
-  validatePhotoFile
+  validatePhotoFile,
+  recipeFieldLabel
 } from '../constants/recipe'
 import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
 import { useIngredientAutocomplete } from '../composables/useIngredientAutocomplete'
@@ -31,6 +32,7 @@ const {
   photoError,
   loadError,
   saveError,
+  saveErrorField,
   setIdentity,
   load,
   save,
@@ -44,6 +46,7 @@ const autocomplete = useIngredientAutocomplete()
 const error = ref('')
 const photoValidationError = ref('')
 const visibleError = computed(() => error.value || saveError.value)
+const fieldErrorLabel = computed(() => recipeFieldLabel(saveErrorField.value))
 
 function ingredientState(ing) {
   return autocomplete.stateFor(ing.uid)
@@ -437,7 +440,10 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <p v-if="visibleError" class="error">{{ visibleError }}</p>
+      <p v-if="visibleError" class="error">
+        {{ visibleError }}
+        <span v-if="fieldErrorLabel" class="hint">Поле: {{ fieldErrorLabel }}</span>
+      </p>
 
       <div class="actions">
         <button type="submit" class="btn btn--primary" :disabled="saving || photoSaving">{{ saving ? 'Сохранение…' : 'Сохранить' }}</button>

@@ -89,6 +89,12 @@ public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items
 public sealed record RecipeErrorDto(string Error);
 
 /// <summary>
+/// Ошибка ввода рецепта: русское объяснение, машинный код и путь поля формы для
+/// привязки причины к конкретному вводу.
+/// </summary>
+public sealed record RecipeValidationErrorDto(string Error, string Code, string? Field = null);
+
+/// <summary>
 /// Конфликт ревизий: сохранение основано на устаревшей версии. <see cref="Revision"/>
 /// — актуальная серверная ревизия, чтобы UI мог сравнить, не перезаписывая черновик.
 /// </summary>

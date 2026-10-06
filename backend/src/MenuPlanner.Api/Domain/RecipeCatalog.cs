@@ -7,6 +7,7 @@ public static class RecipeCatalog
     public const int TagMaxLength = 50;
     public const int DietMaxLength = 100;
     public const int IngredientNameMaxLength = 200;
+    public const int UnitMaxLength = 32;
     public const int NoteMaxLength = 500;
     public const int CookTimeMin = 1;
     public const int CookTimeMax = 1440;
@@ -15,6 +16,18 @@ public static class RecipeCatalog
     public const int DifficultyMin = 1;
     public const int DifficultyMax = 5;
     public const int CaloriesMax = 10000;
+
+    // Точность количества согласована с хранилищем: numeric(10,2) в PostgreSQL.
+    // Больше двух знаков после запятой БД молча округлила бы, поэтому такое
+    // значение отклоняется до записи. Хвостовые нули большей точностью не считаются.
+    public const int AmountScale = 2;
+    public const decimal AmountMax = 99_999_999.99m;
+
+    // Пределы коллекций: защищают от чрезмерной полезной нагрузки до записи.
+    public const int StepsMax = 500;
+    public const int IngredientsMax = 500;
+    public const int TagsMax = 100;
+    public const int DietsMax = 100;
 
     public const int PhotoMaxBytes = 5 * 1024 * 1024;
     public static readonly IReadOnlyDictionary<string, string> PhotoContentTypes =

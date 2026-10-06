@@ -25,7 +25,8 @@ public sealed record RecipeMutationResult(
     RecipeMutationOutcome Outcome,
     Recipe? Recipe = null,
     string? Error = null,
-    int Revision = 0);
+    int Revision = 0,
+    RecipeFieldError? Validation = null);
 
 /// <summary>
 /// Правка, удаление и операции с фото собственного рецепта с атомарной проверкой
@@ -56,7 +57,7 @@ public sealed class RecipeMutationService
     {
         var error = RecipeValidation.Validate(request);
         if (error is not null)
-            return new(RecipeMutationOutcome.ValidationError, Error: error);
+            return new(RecipeMutationOutcome.ValidationError, Error: error.Message, Validation: error);
 
         var now = _clock.GetUtcNow().UtcDateTime;
         var recipe = new Recipe
@@ -84,7 +85,7 @@ public sealed class RecipeMutationService
 
         var error = RecipeValidation.Validate(request);
         if (error is not null)
-            return new(RecipeMutationOutcome.ValidationError, Error: error);
+            return new(RecipeMutationOutcome.ValidationError, Error: error.Message, Validation: error);
 
         if (request.Revision is null)
             return new(RecipeMutationOutcome.MissingRevision, Revision: recipe.Revision);

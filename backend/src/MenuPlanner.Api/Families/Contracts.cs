@@ -4,7 +4,7 @@ public sealed record CreateFamilyRequest(string? Name);
 
 public sealed record JoinFamilyRequest(string? InviteCode);
 
-public sealed record FamilyErrorDto(string Error);
+public sealed record FamilyErrorDto(string Error, string? Code = null, string? Field = null);
 
 public sealed record FamilyMemberDto(Guid Id, string Email, string Role);
 

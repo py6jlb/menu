@@ -165,6 +165,9 @@ var forwardedHeaders = ForwardedHeaderConfiguration.Build(app.Configuration);
 if (ForwardedHeaderConfiguration.HasTrustedProxies(forwardedHeaders))
     app.UseForwardedHeaders(forwardedHeaders);
 
+// Неожиданный сбой отдаётся одним JSON-ответом с trace-id, без stack trace/SQL.
+app.UseApiExceptionHandling();
+
 app.Services.GetRequiredService<IPhotoStore>();
 
 app.MapGet("/health", () => Results.Json(
