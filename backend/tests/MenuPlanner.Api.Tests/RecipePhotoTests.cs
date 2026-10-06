@@ -24,7 +24,7 @@ public sealed class RecipePhotoTests
         Assert.Null(recipe.PhotoUrl);
 
         var bytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
-        var (response, dto) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe!.Id, bytes, "image/png", "photo.png");
+        var (response, dto) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe!.Id, recipe.Revision, bytes, "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(dto);
         Assert.NotNull(dto.PhotoUrl);
@@ -54,14 +54,14 @@ public sealed class RecipePhotoTests
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(client, owner.Token, "/api/recipes", FullRequest());
 
         var firstBytes = Encoding.ASCII.GetBytes("first-png-bytes");
-        var (_, first) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe!.Id, firstBytes, "image/png", "a.png");
+        var (_, first) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe!.Id, recipe.Revision, firstBytes, "image/png", "a.png");
         var firstFile = Path.Combine(factory.PhotosDir, Path.GetFileName(first!.PhotoUrl!));
         Assert.True(File.Exists(firstFile));
 
         var secondBytes = Encoding.ASCII.GetBytes("second-jpeg-bytes");
-        var (response, second) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe.Id, secondBytes, "image/jpeg", "b.jpg");
+        var (response, second) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe.Id, first!.Revision, secondBytes, "image/jpeg", "b.jpg");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotNull(second.PhotoUrl);
+        Assert.NotNull(second!.PhotoUrl);
         Assert.NotEqual(first.PhotoUrl, second.PhotoUrl);
         Assert.False(File.Exists(firstFile));
         Assert.True(File.Exists(Path.Combine(factory.PhotosDir, Path.GetFileName(second.PhotoUrl!))));
@@ -76,12 +76,13 @@ public sealed class RecipePhotoTests
         await CreateFamilyAsync(client, owner.Token, "Семья");
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(client, owner.Token, "/api/recipes", FullRequest());
 
-        var (_, uploaded) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe!.Id,
+        var (_, uploaded) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe!.Id, recipe.Revision,
             Encoding.ASCII.GetBytes("png-bytes"), "image/png", "a.png");
         var storedFile = Path.Combine(factory.PhotosDir, Path.GetFileName(uploaded!.PhotoUrl!));
         Assert.True(File.Exists(storedFile));
 
-        var deleteResponse = await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{recipe.Id}/photo");
+        var deleteResponse = await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{recipe.Id}/photo?revision={uploaded.Revision}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
         Assert.False(File.Exists(storedFile));
 
@@ -89,7 +90,8 @@ public sealed class RecipePhotoTests
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         Assert.Null(detail!.PhotoUrl);
 
-        var secondDelete = await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{recipe.Id}/photo");
+        var secondDelete = await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{recipe.Id}/photo?revision={detail.Revision}");
         Assert.Equal(HttpStatusCode.NoContent, secondDelete.StatusCode);
     }
 
@@ -102,12 +104,13 @@ public sealed class RecipePhotoTests
         await CreateFamilyAsync(client, owner.Token, "Семья");
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(client, owner.Token, "/api/recipes", FullRequest());
 
-        var (_, uploaded) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe!.Id,
+        var (_, uploaded) = await PutPhotoAsync<RecipeDto>(client, owner.Token, recipe!.Id, recipe.Revision,
             Encoding.ASCII.GetBytes("png-bytes"), "image/png", "a.png");
         var storedFile = Path.Combine(factory.PhotosDir, Path.GetFileName(uploaded!.PhotoUrl!));
         Assert.True(File.Exists(storedFile));
 
-        var deleteResponse = await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{recipe.Id}");
+        var deleteResponse = await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{recipe.Id}?revision={uploaded.Revision}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
         Assert.False(File.Exists(storedFile));
     }
@@ -121,7 +124,7 @@ public sealed class RecipePhotoTests
         await CreateFamilyAsync(client, owner.Token, "Семья");
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(client, owner.Token, "/api/recipes", FullRequest());
 
-        var (response, error) = await PutPhotoAsync<RecipeErrorDto>(client, owner.Token, recipe!.Id,
+        var (response, error) = await PutPhotoAsync<RecipeErrorDto>(client, owner.Token, recipe!.Id, recipe.Revision,
             Encoding.ASCII.GetBytes("not-an-image"), "application/pdf", "doc.pdf");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.NotNull(error);
@@ -138,7 +141,7 @@ public sealed class RecipePhotoTests
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(client, owner.Token, "/api/recipes", FullRequest());
 
         var tooLarge = new byte[5 * 1024 * 1024 + 1];
-        var (response, error) = await PutPhotoAsync<RecipeErrorDto>(client, owner.Token, recipe!.Id,
+        var (response, error) = await PutPhotoAsync<RecipeErrorDto>(client, owner.Token, recipe!.Id, recipe.Revision,
             tooLarge, "image/png", "big.png");
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.NotNull(error);
@@ -157,11 +160,12 @@ public sealed class RecipePhotoTests
 
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(client, first.Token, "/api/recipes", FullRequest());
 
-        var (uploadResponse, _) = await PutPhotoAsync<RecipeErrorDto>(client, second.Token, recipe!.Id,
+        var (uploadResponse, _) = await PutPhotoAsync<RecipeErrorDto>(client, second.Token, recipe!.Id, recipe.Revision,
             Encoding.ASCII.GetBytes("png-bytes"), "image/png", "a.png");
         Assert.Equal(HttpStatusCode.NotFound, uploadResponse.StatusCode);
 
-        var deleteResponse = await DeleteAuthorizedAsync(client, second.Token, $"/api/recipes/{recipe.Id}/photo");
+        var deleteResponse = await DeleteAuthorizedAsync(
+            client, second.Token, $"/api/recipes/{recipe.Id}/photo?revision={recipe.Revision}");
         Assert.Equal(HttpStatusCode.NotFound, deleteResponse.StatusCode);
     }
 
@@ -172,7 +176,7 @@ public sealed class RecipePhotoTests
         using var client = factory.CreateClient();
         var user = await RegisterAsync(client, "lonely");
 
-        var (response, _) = await PutPhotoAsync<RecipeErrorDto>(client, user.Token, Guid.NewGuid(),
+        var (response, _) = await PutPhotoAsync<RecipeErrorDto>(client, user.Token, Guid.NewGuid(), 1,
             Encoding.ASCII.GetBytes("png-bytes"), "image/png", "a.png");
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -201,14 +205,15 @@ public sealed class RecipePhotoTests
     }
 
     private static async Task<(HttpResponseMessage Response, T? Data)> PutPhotoAsync<T>(
-        HttpClient client, string token, Guid recipeId, byte[] bytes, string contentType, string fileName)
+        HttpClient client, string token, Guid recipeId, int revision, byte[] bytes, string contentType, string fileName)
     {
         using var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(bytes);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         content.Add(fileContent, "file", fileName);
 
-        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/recipes/{recipeId}/photo");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put, $"/api/recipes/{recipeId}/photo?revision={revision}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Content = content;
         var response = await client.SendAsync(request);

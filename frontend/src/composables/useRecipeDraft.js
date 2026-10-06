@@ -9,6 +9,8 @@ export const SAVE_ERROR_MESSAGE =
   'Не удалось сохранить рецепт. Проверьте соединение и повторите.'
 export const NOT_FOUND_MESSAGE = 'Рецепт не найден.'
 export const EMPTY_NAME_MESSAGE = 'Укажите название рецепта.'
+export const CONFLICT_MESSAGE =
+  'Рецепт изменён другим участником. Ваш черновик сохранён — загрузите актуальную версию, сравните изменения и сохраните снова.'
 
 export function newIngredientDraft() {
   return { name: '', amount: '', unit: 'g', note: '' }
@@ -59,9 +61,13 @@ export function draftFromRecipe(data) {
   }
 }
 
-/** Тело запроса на сохранение, построенное из черновика. */
-export function draftToPayload(draft) {
+/**
+ * Тело запроса на сохранение, построенное из черновика. Ожидаемая ревизия
+ * передаётся отдельно: сервер отклонит сохранение, если основано на устаревшей.
+ */
+export function draftToPayload(draft, revision = null) {
   return {
+    ...(revision === null || revision === undefined ? {} : { revision }),
     name: (draft.name || '').trim(),
     description: (draft.description || '').trim() || null,
     cookTimeMinutes: Number(draft.cookTimeMinutes),
@@ -155,6 +161,11 @@ export function useRecipeDraft(options = {}) {
   const editingId = ref(options.initialId ?? null)
   const draft = ref(emptyDraft())
   const confirmedSnapshot = ref(serializeDraft(draft.value))
+  // Ревизия загруженного рецепта — ожидаемая версия для следующего сохранения.
+  const revision = ref(null)
+  // Конфликт ревизии: сообщение и актуальная серверная версия для сравнения.
+  const conflictMessage = ref('')
+  const conflictRevision = ref(null)
 
   const loading = ref(false)
   const saving = ref(false)
@@ -171,12 +182,17 @@ export function useRecipeDraft(options = {}) {
   function resetDraft() {
     draft.value = emptyDraft()
     confirmedSnapshot.value = serializeDraft(draft.value)
+    revision.value = null
+    conflictMessage.value = ''
+    conflictRevision.value = null
   }
 
   function clearMessages() {
     loadError.value = ''
     saveError.value = ''
     savedMessage.value = ''
+    conflictMessage.value = ''
+    conflictRevision.value = null
   }
 
   /**
@@ -206,6 +222,8 @@ export function useRecipeDraft(options = {}) {
     loadError.value = ''
     savedMessage.value = ''
     saveError.value = ''
+    conflictMessage.value = ''
+    conflictRevision.value = null
 
     if (requestedId == null) {
       resetDraft()
@@ -225,6 +243,7 @@ export function useRecipeDraft(options = {}) {
         }
         draft.value = draftFromRecipe(data)
         confirmedSnapshot.value = serializeDraft(draft.value)
+        revision.value = Number.isInteger(data.revision) ? data.revision : null
       } else if (response.status === 404) {
         loadError.value = data?.error || NOT_FOUND_MESSAGE
       } else {
@@ -253,11 +272,13 @@ export function useRecipeDraft(options = {}) {
   async function save() {
     const targetId = editingId.value
     const sentSnapshot = serializeDraft(draft.value)
-    const sentPayload = draftToPayload(draft.value)
+    const sentPayload = draftToPayload(draft.value, revision.value)
     const requestId = ++saveRequestId
     saving.value = true
     saveError.value = ''
     savedMessage.value = ''
+    conflictMessage.value = ''
+    conflictRevision.value = null
     try {
       const { response, data } = targetId
         ? await updateRecipeRequest(targetId, sentPayload)
@@ -281,8 +302,16 @@ export function useRecipeDraft(options = {}) {
           // Правки, сделанные после отправки, остаются dirty.
           confirmedSnapshot.value = sentSnapshot
         }
+        revision.value = Number.isInteger(data.revision) ? data.revision : revision.value
         savedMessage.value = 'Рецепт сохранён.'
         return { ok: true, id: savedId, data }
+      }
+
+      if (response.status === 409) {
+        // Конфликт ревизий: локальный черновик не трогаем, даём сравнить с актуальным.
+        conflictRevision.value = Number.isInteger(data?.revision) ? data.revision : null
+        conflictMessage.value = data?.error || CONFLICT_MESSAGE
+        return { ok: false, conflict: true }
       }
 
       saveError.value = data?.error || SAVE_ERROR_MESSAGE
@@ -304,6 +333,9 @@ export function useRecipeDraft(options = {}) {
     dirty,
     loading,
     saving,
+    revision,
+    conflictMessage,
+    conflictRevision,
     loadError,
     saveError,
     savedMessage,

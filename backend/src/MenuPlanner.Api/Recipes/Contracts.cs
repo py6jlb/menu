@@ -15,7 +15,10 @@ public sealed record RecipeRequest(
     List<string>? Seasonality,
     List<string>? Diet,
     List<RecipeStepRequest>? Steps,
-    List<RecipeIngredientRequest>? Ingredients);
+    List<RecipeIngredientRequest>? Ingredients,
+    // Ожидаемая ревизия при редактировании. Чтение отдаёт её в RecipeDto;
+    // изменение с устаревшей ревизией не выполняется. Для создания не нужна.
+    int? Revision = null);
 
 public sealed record RecipeSummaryDto(
     Guid Id,
@@ -62,7 +65,8 @@ public sealed record RecipeDto(
     string? SourceFamilyName = null,
     Guid? SourceFamilyId = null,
     string? State = null,
-    string? CopiedFromFamilyName = null);
+    string? CopiedFromFamilyName = null,
+    int Revision = 1);
 
 public sealed record RecipeMatchItemDto(
     Guid RecipeId,
@@ -80,6 +84,12 @@ public sealed record RecipeMatchItemDto(
 public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items);
 
 public sealed record RecipeErrorDto(string Error);
+
+/// <summary>
+/// Конфликт ревизий: сохранение основано на устаревшей версии. <see cref="Revision"/>
+/// — актуальная серверная ревизия, чтобы UI мог сравнить, не перезаписывая черновик.
+/// </summary>
+public sealed record RecipeConflictDto(string Error, int Revision = 0);
 
 public sealed record RecipeImportResultDto(Guid RecipeId);
 

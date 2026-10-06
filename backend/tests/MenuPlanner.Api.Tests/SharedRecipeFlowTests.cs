@@ -22,7 +22,7 @@ public sealed class SharedRecipeFlowTests
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(
             client, owner.Token, "/api/recipes", FullRequest());
         var (_, uploaded) = await PutPhotoAuthorizedAsync<RecipeDto>(
-            client, owner.Token, recipe!.Id,
+            client, owner.Token, recipe!.Id, recipe.Revision,
             Encoding.ASCII.GetBytes("png-bytes"), "image/png", "photo.png");
         var (_, share) = await CreateShareAsync(client, owner.Token, recipe.Id);
 
@@ -67,13 +67,14 @@ public sealed class SharedRecipeFlowTests
             CookTimeMinutes = 120,
             Servings = 8,
             Steps = new List<RecipeStepRequest> { new("Потушить свёклу.") },
-            Ingredients = new List<RecipeIngredientRequest> { new("Капуста", 1, "kg", "свежая") }
+            Ingredients = new List<RecipeIngredientRequest> { new("Капуста", 1, "kg", "свежая") },
+            Revision = recipe!.Revision
         };
-        var (updateResponse, _) = await PutAuthorizedAsync<RecipeDto>(
+        var (updateResponse, updated) = await PutAuthorizedAsync<RecipeDto>(
             client, owner.Token, $"/api/recipes/{recipe.Id}", updateRequest);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
         var (_, uploaded) = await PutPhotoAuthorizedAsync<RecipeDto>(
-            client, owner.Token, recipe.Id,
+            client, owner.Token, recipe.Id, updated!.Revision,
             Encoding.ASCII.GetBytes("new-png-bytes"), "image/png", "new.png");
 
         var (response, shared) = await GetAsync<RecipeDto>(client, $"/api/shared/{share!.Token}");
@@ -131,7 +132,8 @@ public sealed class SharedRecipeFlowTests
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(
             client, owner.Token, "/api/recipes", FullRequest());
         var (_, share) = await CreateShareAsync(client, owner.Token, recipe!.Id);
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{recipe.Id}");
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{recipe.Id}?revision={recipe.Revision}");
 
         var (response, error) = await GetAsync<RecipeErrorDto>(client, $"/api/shared/{share!.Token}");
 
@@ -207,14 +209,15 @@ public sealed class SharedRecipeFlowTests
     }
 
     private static async Task<(HttpResponseMessage Response, T? Data)> PutPhotoAuthorizedAsync<T>(
-        HttpClient client, string token, Guid recipeId, byte[] bytes, string contentType, string fileName)
+        HttpClient client, string token, Guid recipeId, int revision, byte[] bytes, string contentType, string fileName)
     {
         using var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(bytes);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         content.Add(fileContent, "file", fileName);
 
-        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/recipes/{recipeId}/photo");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put, $"/api/recipes/{recipeId}/photo?revision={revision}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Content = content;
         var response = await client.SendAsync(request);

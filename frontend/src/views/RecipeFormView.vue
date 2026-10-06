@@ -16,6 +16,9 @@ const {
   dirty,
   loading,
   saving,
+  revision,
+  conflictMessage,
+  conflictRevision,
   loadError,
   saveError,
   setIdentity,
@@ -211,14 +214,15 @@ async function submit() {
   if (!result.ok) return
 
   const id = result.id
+  const savedRevision = result.data?.revision ?? revision.value
   try {
     if (photoIntent.removed) {
-      const removed = await deleteRecipePhoto(id)
+      const removed = await deleteRecipePhoto(id, savedRevision)
       if (removed.response.status !== 204) {
         console.error('Не удалось удалить фото:', removed.data)
       }
     } else if (photoIntent.selected) {
-      const uploaded = await uploadRecipePhoto(id, photoIntent.selected)
+      const uploaded = await uploadRecipePhoto(id, photoIntent.selected, savedRevision)
       if (uploaded.response.status !== 200) {
         console.error('Не удалось загрузить фото:', uploaded.data)
       }
@@ -227,6 +231,11 @@ async function submit() {
     console.error('Ошибка при работе с фото:', err)
   }
   router.push(`/recipes/${id}`)
+}
+
+function reloadLatest() {
+  if (!window.confirm('Загрузить актуальную версию? Локальные изменения будут потеряны.')) return
+  load()
 }
 
 function handleBeforeUnload(event) {
@@ -432,6 +441,14 @@ onBeforeUnmount(() => {
         </div>
         <button type="button" class="btn btn--ghost" @click="addStep">+ Добавить шаг</button>
       </fieldset>
+
+      <div v-if="conflictMessage" class="error conflict-box">
+        <p>{{ conflictMessage }}</p>
+        <p v-if="conflictRevision" class="hint">Актуальная версия на сервере: {{ conflictRevision }}</p>
+        <button type="button" class="btn btn--ghost" @click="reloadLatest">
+          Загрузить актуальную версию
+        </button>
+      </div>
 
       <p v-if="visibleError" class="error">{{ visibleError }}</p>
 

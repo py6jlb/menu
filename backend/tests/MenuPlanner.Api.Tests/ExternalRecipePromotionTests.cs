@@ -22,7 +22,7 @@ public sealed class ExternalRecipePromotionTests
         var (owner, recipient, imported) = await ImportAsync(client);
 
         var (response, copied) = await PostAuthorizedAsync<RecipeDto>(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy", body: null);
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy?revision={imported.WrapperRevision}", body: null);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(copied);
@@ -54,17 +54,18 @@ public sealed class ExternalRecipePromotionTests
         var (owner, recipient, imported) = await ImportAsync(client);
 
         await PostAuthorizedAsync<RecipeDto>(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy", body: null);
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy?revision={imported.WrapperRevision}", body: null);
 
-        await PutAuthorizedAsync<RecipeDto>(
+        var (_, sourceUpdated) = await PutAuthorizedAsync<RecipeDto>(
             client, owner.Token, $"/api/recipes/{imported.SourceId}",
-            FullRequest() with { Name = "Борщ по-домашнему" });
+            FullRequest() with { Name = "Борщ по-домашнему", Revision = imported.SourceRevision });
 
         var (_, beforeDelete) = await GetAuthorizedAsync<RecipeDto>(
             client, recipient.Token, $"/api/recipes/{imported.WrapperId}");
         Assert.Equal("Борщ", beforeDelete!.Name);
 
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{imported.SourceId}");
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{imported.SourceId}?revision={sourceUpdated!.Revision}");
 
         var (detailResponse, detail) = await GetAuthorizedAsync<RecipeDto>(
             client, recipient.Token, $"/api/recipes/{imported.WrapperId}");
@@ -82,12 +83,12 @@ public sealed class ExternalRecipePromotionTests
         using var client = new ApiFactory().CreateClient();
         var (_, recipient, imported) = await ImportAsync(client);
 
-        await PostAuthorizedAsync<RecipeDto>(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy", body: null);
+        var (_, copied) = await PostAuthorizedAsync<RecipeDto>(
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy?revision={imported.WrapperRevision}", body: null);
 
         var (updateResponse, updated) = await PutAuthorizedAsync<RecipeDto>(
             client, recipient.Token, $"/api/recipes/{imported.WrapperId}",
-            FullRequest() with { Name = "Мой борщ" });
+            FullRequest() with { Name = "Мой борщ", Revision = copied!.Revision });
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
         Assert.Equal("Мой борщ", updated!.Name);
         Assert.Null(updated.CopiedFromFamilyName);
@@ -98,7 +99,7 @@ public sealed class ExternalRecipePromotionTests
         Assert.Null(detail!.CopiedFromFamilyName);
 
         var deleteResponse = await DeleteAuthorizedAsync(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}");
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}?revision={updated.Revision}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         var (listResponse, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
@@ -121,7 +122,7 @@ public sealed class ExternalRecipePromotionTests
         Assert.Equal(HttpStatusCode.OK, save.Response.StatusCode);
 
         var (copyResponse, _) = await PostAuthorizedAsync<RecipeDto>(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy", body: null);
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy?revision={imported.WrapperRevision}", body: null);
         Assert.Equal(HttpStatusCode.OK, copyResponse.StatusCode);
 
         var (_, plan) = await GetAuthorizedAsync<WeekPlanDto>(
@@ -132,7 +133,8 @@ public sealed class ExternalRecipePromotionTests
         Assert.Equal(3, entry.Portions);
         Assert.Null(entry.State);
 
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{imported.SourceId}");
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{imported.SourceId}?revision={imported.SourceRevision}");
 
         var (_, planAfter) = await GetAuthorizedAsync<WeekPlanDto>(
             client, recipient.Token, $"/api/plans/week/{Monday}");
@@ -151,12 +153,12 @@ public sealed class ExternalRecipePromotionTests
 
         var bytes = Encoding.ASCII.GetBytes("source-photo-bytes");
         var (photoResponse, source) = await PutPhotoAuthorizedAsync<RecipeDto>(
-            client, owner.Token, imported.SourceId, bytes, "image/png", "photo.png");
+            client, owner.Token, imported.SourceId, imported.SourceRevision, bytes, "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.OK, photoResponse.StatusCode);
         Assert.NotNull(source!.PhotoUrl);
 
         var (copyResponse, copied) = await PostAuthorizedAsync<RecipeDto>(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy", body: null);
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy?revision={imported.WrapperRevision}", body: null);
         Assert.Equal(HttpStatusCode.OK, copyResponse.StatusCode);
         Assert.NotNull(copied!.PhotoUrl);
         Assert.NotEqual(source.PhotoUrl, copied.PhotoUrl);
@@ -167,7 +169,8 @@ public sealed class ExternalRecipePromotionTests
         Assert.True(File.Exists(copiedFile));
         Assert.Equal(await File.ReadAllBytesAsync(sourceFile), await File.ReadAllBytesAsync(copiedFile));
 
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{imported.SourceId}");
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{imported.SourceId}?revision={source!.Revision}");
         Assert.False(File.Exists(sourceFile));
 
         var served = await client.GetAsync(copied.PhotoUrl!);
@@ -181,10 +184,11 @@ public sealed class ExternalRecipePromotionTests
         using var client = new ApiFactory().CreateClient();
         var (owner, recipient, imported) = await ImportAsync(client);
 
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{imported.SourceId}");
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{imported.SourceId}?revision={imported.SourceRevision}");
 
         var (response, error) = await PostAuthorizedAsync<RecipeErrorDto>(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy", body: null);
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy?revision={imported.WrapperRevision}", body: null);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.NotNull(error);
@@ -200,7 +204,7 @@ public sealed class ExternalRecipePromotionTests
         var own = await CreateRecipeAsync(client, owner.Token, "Свой суп");
 
         var (response, error) = await PostAuthorizedAsync<RecipeErrorDto>(
-            client, owner.Token, $"/api/recipes/{own.Id}/copy", body: null);
+            client, owner.Token, $"/api/recipes/{own.Id}/copy?revision={own.Revision}", body: null);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("Это не внешний рецепт.", error!.Error);
@@ -213,10 +217,10 @@ public sealed class ExternalRecipePromotionTests
         var (_, recipient, imported) = await ImportAsync(client);
 
         await PostAuthorizedAsync<RecipeDto>(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy", body: null);
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy?revision={imported.WrapperRevision}", body: null);
 
         var (response, error) = await PostAuthorizedAsync<RecipeErrorDto>(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy", body: null);
+            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/copy?revision={imported.WrapperRevision}", body: null);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("Это не внешний рецепт.", error!.Error);
@@ -235,7 +239,12 @@ public sealed class ExternalRecipePromotionTests
         var (_, imported) = await PostAuthorizedAsync<RecipeImportResultDto>(
             client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
 
-        return (owner, recipient, new Imported(imported!.RecipeId, source.Id));
+        // Обёртка-получатель — отдельная строка со своей ревизией; читаем её как клиент.
+        var (_, wrapper) = await GetAuthorizedAsync<RecipeDto>(
+            client, recipient.Token, $"/api/recipes/{imported!.RecipeId}");
+        Assert.NotNull(wrapper);
+
+        return (owner, recipient, new Imported(imported.RecipeId, source.Id, wrapper!.Revision, source.Revision));
     }
 
     private static RecipeRequest FullRequest() => new(
@@ -313,14 +322,15 @@ public sealed class ExternalRecipePromotionTests
     }
 
     private static async Task<(HttpResponseMessage Response, T? Data)> PutPhotoAuthorizedAsync<T>(
-        HttpClient client, string token, Guid recipeId, byte[] bytes, string contentType, string fileName)
+        HttpClient client, string token, Guid recipeId, int revision, byte[] bytes, string contentType, string fileName)
     {
         using var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(bytes);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         content.Add(fileContent, "file", fileName);
 
-        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/recipes/{recipeId}/photo");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put, $"/api/recipes/{recipeId}/photo?revision={revision}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Content = content;
         var response = await client.SendAsync(request);
@@ -358,5 +368,5 @@ public sealed class ExternalRecipePromotionTests
         }
     }
 
-    private sealed record Imported(Guid WrapperId, Guid SourceId);
+    private sealed record Imported(Guid WrapperId, Guid SourceId, int WrapperRevision, int SourceRevision);
 }

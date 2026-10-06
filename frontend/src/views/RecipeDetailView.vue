@@ -109,7 +109,7 @@ async function onDelete() {
   deleting.value = true
   actionError.value = ''
   try {
-    const { response } = await deleteRecipe(id)
+    const { response } = await deleteRecipe(id, recipe.value.revision)
     if (recipe.value?.id !== id) return
     if (response.status === 204) {
       router.push('/recipes')
@@ -135,7 +135,7 @@ async function onRemoveExternal() {
   removingLocal.value = true
   actionError.value = ''
   try {
-    const { response } = await removeExternalRecipe(id)
+    const { response } = await removeExternalRecipe(id, recipe.value.revision)
     if (recipe.value?.id !== id) return
     if (response.status === 204) {
       router.push('/recipes')
@@ -155,7 +155,7 @@ async function onCopy() {
   copyError.value = ''
   copying.value = true
   try {
-    const { response, data } = await copyRecipe(id)
+    const { response, data } = await copyRecipe(id, recipe.value.revision)
     if (recipe.value?.id !== id) return
     if (response.status === 200 || response.status === 201) {
       recipe.value = data
