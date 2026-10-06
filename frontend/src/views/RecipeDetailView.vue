@@ -5,14 +5,12 @@ import {
   getRecipe,
   deleteRecipe,
   removeExternalRecipe,
-  copyRecipe,
-  getRecipeShare,
-  revokeRecipeShare,
-  regenerateRecipeShare
+  copyRecipe
 } from '../api/recipes'
 import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
 import { useRouteResource } from '../composables/useRouteResource'
+import { useRecipeShare } from '../composables/useRecipeShare'
 import RecipeBody from '../components/RecipeBody.vue'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 
@@ -31,9 +29,15 @@ const copyError = ref('')
 const actionError = ref('')
 
 const family = ref(null)
-const share = ref(null)
-const shareLoading = ref(false)
-const shareError = ref('')
+const {
+  share,
+  loading: shareLoading,
+  error: shareError,
+  load: loadShare,
+  create: createShare,
+  revoke: revokeShare,
+  regenerate: regenerateShare
+} = useRecipeShare()
 const copied = ref(false)
 
 const isOwner = computed(() => Boolean(family.value && family.value.ownerId === state.user?.id))
@@ -64,38 +68,19 @@ async function loadFamily() {
   }
 }
 
-async function runShareAction(action, fallbackMessage) {
+async function runShareAction(action) {
   const id = recipe.value?.id
   if (!id) return
-  shareError.value = ''
-  shareLoading.value = true
-  try {
-    const { response, data } = await action(id)
-    if (recipe.value?.id !== id) return
-    if (response.status === 200) {
-      share.value = data
-    } else {
-      shareError.value = data?.error || fallbackMessage
-    }
-  } catch {
-    if (recipe.value?.id === id) shareError.value = 'Сервер недоступен. Попробуйте ещё раз.'
-  } finally {
-    if (recipe.value?.id === id) shareLoading.value = false
+  await action(id)
+  // Поздний ответ старого рецепта не должен переносить sharing-состояние.
+  if (recipe.value?.id !== id) {
+    share.value = null
+    shareError.value = ''
   }
 }
 
 function onShare() {
-  return runShareAction(getRecipeShare, 'Не удалось получить ссылку.')
-}
-
-function onRevoke() {
-  if (!window.confirm('Отозвать ссылку? Новые семьи не смогут добавить рецепт.')) return
-  return runShareAction(revokeRecipeShare, 'Не удалось отозвать ссылку.')
-}
-
-function onRegenerate() {
-  if (!window.confirm('Перегенерировать ссылку? Старая перестанет работать.')) return
-  return runShareAction(regenerateRecipeShare, 'Не удалось перегенерировать ссылку.')
+  return runShareAction(createShare)
 }
 
 async function onCopyLink() {
@@ -108,6 +93,15 @@ async function onCopyLink() {
   }
 }
 
+function onRevoke() {
+  if (!window.confirm('Отозвать ссылку? Новые семьи не смогут добавить рецепт.')) return
+  return runShareAction(revokeShare)
+}
+
+function onRegenerate() {
+  if (!window.confirm('Перегенерировать ссылку? Старая перестанет работать.')) return
+  return runShareAction(regenerateShare)
+}
 async function onDelete() {
   const id = recipe.value?.id
   if (!id) return
@@ -177,16 +171,18 @@ async function onCopy() {
 
 watch(
   () => route.params.id,
-  (id) => {
+  async (id) => {
     if (!id || id === recipe.value?.id) return
     resetResourceState()
-    load(id)
+    await load(id)
+    if (recipe.value && !recipe.value.isExternal) await loadShare(recipe.value.id)
   }
 )
 
-onMounted(() => {
-  load(route.params.id)
-  loadFamily()
+onMounted(async () => {
+  await load(route.params.id)
+  await loadFamily()
+  if (recipe.value && !recipe.value.isExternal) await loadShare(recipe.value.id)
 })
 </script>
 
@@ -292,7 +288,7 @@ onMounted(() => {
       </div>
 
       <p v-if="!isEmailVerified && !isExternal" class="notice">
-        Подтвердите почту, чтобы редактировать рецепт.
+        Подтвердите почту, чтобы редактировать рецепт и делиться им.
         <router-link to="/verify">Ввести код</router-link>
       </p>
 
@@ -308,7 +304,15 @@ onMounted(() => {
 
         <div v-else-if="!share" class="share-empty">
           <p class="share-hint">Создайте ссылку, чтобы поделиться рецептом с другой семьёй.</p>
-          <button type="button" class="btn btn--primary" :disabled="shareLoading" @click="onShare">
+          <p v-if="!isEmailVerified" class="share-hint">
+            Ссылку можно создать только после подтверждения почты.
+          </p>
+          <button
+            type="button"
+            class="btn btn--primary"
+            :disabled="shareLoading || !isEmailVerified"
+            @click="onShare"
+          >
             {{ shareLoading ? 'Создание…' : 'Поделиться' }}
           </button>
         </div>

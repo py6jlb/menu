@@ -1,7 +1,5 @@
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Recipes;
@@ -12,151 +10,45 @@ public static class RecipeShareEndpoints
     {
         var group = app.MapGroup("/api/recipes/{id:guid}/share").RequireAuthorization();
 
-        group.MapGet("/", GetOrCreateAsync);
-        group.MapDelete("/", RevokeAsync);
-        group.MapPost("/regenerate", RegenerateAsync);
+        group.MapGet("/", GetAsync);
+        group.MapPost("/", CreateAsync).RequireVerifiedEmail();
+        group.MapDelete("/", RevokeAsync).RequireVerifiedEmail();
+        group.MapPost("/regenerate", RegenerateAsync).RequireVerifiedEmail();
 
         return app;
     }
 
-    private static async Task<IResult> GetOrCreateAsync(
-        Guid id,
-        ClaimsPrincipal principal,
-        AppDbContext db,
-        CurrentUserContext currentUser,
-        ShareOptions options)
-    {
-        var error = await FindRecipeAsync(id, principal, db, currentUser);
-        if (error is not null)
-            return error;
+    private static async Task<IResult> GetAsync(
+        Guid id, ClaimsPrincipal principal, RecipeSharingService sharing, ShareOptions options) =>
+        ToResult(await sharing.GetAsync(id, principal), options);
 
-        var share = await db.RecipeShares
-            .FirstOrDefaultAsync(s => s.RecipeId == id);
-        if (share is null)
-        {
-            share = new RecipeShare
-            {
-                RecipeId = id,
-                Token = NewToken(),
-                CreatedAt = DateTime.UtcNow
-            };
-            db.RecipeShares.Add(share);
-            await db.SaveChangesAsync();
-        }
-
-        return Results.Json(ToDto(share, options));
-    }
+    private static async Task<IResult> CreateAsync(
+        Guid id, ClaimsPrincipal principal, RecipeSharingService sharing, ShareOptions options) =>
+        ToResult(await sharing.CreateAsync(id, principal), options);
 
     private static async Task<IResult> RevokeAsync(
-        Guid id,
-        ClaimsPrincipal principal,
-        AppDbContext db,
-        CurrentUserContext currentUser,
-        ShareOptions options)
-    {
-        var error = await AuthorizeOwnerAsync(id, principal, db, currentUser);
-        if (error is not null)
-            return error;
-
-        var share = await db.RecipeShares
-            .FirstOrDefaultAsync(s => s.RecipeId == id);
-        if (share is null)
-            return Results.NotFound(new RecipeErrorDto("Ссылка ещё не создана."));
-
-        if (share.RevokedAt is null)
-        {
-            share.RevokedAt = DateTime.UtcNow;
-            await db.SaveChangesAsync();
-        }
-
-        return Results.Json(ToDto(share, options));
-    }
+        Guid id, ClaimsPrincipal principal, RecipeSharingService sharing, ShareOptions options) =>
+        ToResult(await sharing.RevokeAsync(id, principal), options);
 
     private static async Task<IResult> RegenerateAsync(
-        Guid id,
-        ClaimsPrincipal principal,
-        AppDbContext db,
-        CurrentUserContext currentUser,
-        ShareOptions options)
-    {
-        var error = await AuthorizeOwnerAsync(id, principal, db, currentUser);
-        if (error is not null)
-            return error;
+        Guid id, ClaimsPrincipal principal, RecipeSharingService sharing, ShareOptions options) =>
+        ToResult(await sharing.RegenerateAsync(id, principal), options);
 
-        var share = await db.RecipeShares
-            .FirstOrDefaultAsync(s => s.RecipeId == id);
-        if (share is null)
+    private static IResult ToResult(RecipeShareAccess access, ShareOptions options) =>
+        access.Outcome switch
         {
-            share = new RecipeShare
-            {
-                RecipeId = id,
-                Token = NewToken(),
-                CreatedAt = DateTime.UtcNow
-            };
-            db.RecipeShares.Add(share);
-        }
-        else
-        {
-            share.Token = NewToken();
-            share.RevokedAt = null;
-        }
-
-        await db.SaveChangesAsync();
-
-        return Results.Json(ToDto(share, options));
-    }
-
-    private static async Task<IResult?> AuthorizeOwnerAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
-    {
-        var access = await ResolveAccessAsync(id, principal, db, currentUser);
-        if (access.Error is not null)
-            return access.Error;
-
-        var family = await db.Families
-            .AsNoTracking()
-            .SingleAsync(f => f.Id == access.FamilyId);
-        if (family.OwnerId != access.UserId)
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
-
-        return null;
-    }
-
-    private static async Task<IResult?> FindRecipeAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser) =>
-        (await ResolveAccessAsync(id, principal, db, currentUser)).Error;
-
-    /// <summary>
-    /// Общая часть проверок владельца/участника: авторизация, семья, рецепт своей семьи
-    /// и запрет операций над внешним рецептом. Возвращает id семьи и пользователя для
-    /// дальнейшей проверки владельца.
-    /// </summary>
-    private static async Task<RecipeAccess> ResolveAccessAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
-    {
-        var userId = CurrentUser.UserId(principal);
-        if (userId is null)
-            return new RecipeAccess(Results.Unauthorized(), Guid.Empty, Guid.Empty);
-
-        var familyId = await currentUser.FamilyIdAsync(principal);
-        if (familyId is null)
-            return new RecipeAccess(NotFoundRecipe(), Guid.Empty, Guid.Empty);
-
-        var recipe = await db.Recipes
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (recipe is null)
-            return new RecipeAccess(NotFoundRecipe(), Guid.Empty, Guid.Empty);
-        if (recipe.SourceRecipeId is not null)
-            return new RecipeAccess(RecipeErrors.ExternalReadOnly(), Guid.Empty, Guid.Empty);
-
-        return new RecipeAccess(null, familyId.Value, userId.Value);
-    }
-
-    private static IResult NotFoundRecipe() =>
-        Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-
-    private sealed record RecipeAccess(IResult? Error, Guid FamilyId, Guid UserId);
+            RecipeShareOutcome.Ok => Results.Json(
+                ToDto(access.Share!, options),
+                statusCode: access.Created
+                    ? StatusCodes.Status201Created
+                    : StatusCodes.Status200OK),
+            RecipeShareOutcome.Unauthorized => Results.Unauthorized(),
+            RecipeShareOutcome.RecipeNotFound => Results.NotFound(new RecipeErrorDto("Рецепт не найден.")),
+            RecipeShareOutcome.ExternalReadOnly => RecipeErrors.ExternalReadOnly(),
+            RecipeShareOutcome.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+            RecipeShareOutcome.NotCreated => Results.NotFound(new RecipeErrorDto("Ссылка ещё не создана.")),
+            _ => throw new InvalidOperationException($"Неизвестный исход: {access.Outcome}.")
+        };
 
     private static RecipeShareDto ToDto(RecipeShare share, ShareOptions options)
     {
@@ -170,7 +62,4 @@ public static class RecipeShareEndpoints
             share.RevokedAt is not null,
             share.RevokedAt);
     }
-
-    private static string NewToken() => Guid.NewGuid().ToString("N");
-
 }

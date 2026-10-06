@@ -77,6 +77,12 @@ export async function getRecipeShare(id) {
   return apiJson(`/api/recipes/${id}/share`)
 }
 
+export async function createRecipeShare(id) {
+  return apiJson(`/api/recipes/${id}/share`, {
+    method: 'POST'
+  })
+}
+
 export async function revokeRecipeShare(id) {
   return apiJson(`/api/recipes/${id}/share`, {
     method: 'DELETE'

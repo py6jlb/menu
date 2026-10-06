@@ -471,9 +471,9 @@ public sealed class ExternalRecipeImportTests
 
     private static async Task<RecipeShareDto> ShareAsync(HttpClient client, string token, Guid recipeId)
     {
-        var (response, share) = await GetAuthorizedAsync<RecipeShareDto>(
-            client, token, $"/api/recipes/{recipeId}/share");
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var (response, share) = await PostAuthorizedAsync<RecipeShareDto>(
+            client, token, $"/api/recipes/{recipeId}/share", body: null);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(share);
         return share!;
     }
