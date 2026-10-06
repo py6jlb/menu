@@ -15,9 +15,12 @@ public sealed record MatchPreferences(
     bool PreferLowCalories = false,
     bool PreferLowComplexity = false);
 
+// Search (поиск по имени) выполняется на сервере до ограничения выдачи, поэтому
+// рецепт за пределами первых MaxResults всё равно находится. Жёсткий фильтр.
 public sealed record RecipeMatchRequest(
     MatchFilters? Filters = null,
-    MatchPreferences? Preferences = null);
+    MatchPreferences? Preferences = null,
+    string? Search = null);
 
 public sealed record RecipeMatch(Recipe Recipe, int MatchScore);
 
@@ -28,13 +31,14 @@ public static class RecipeMatcher
     public static IReadOnlyList<RecipeMatch> Apply(
         IEnumerable<Recipe> source,
         MatchFilters? filters,
-        MatchPreferences? preferences)
+        MatchPreferences? preferences,
+        string? search = null)
     {
         filters ??= new MatchFilters();
         preferences ??= new MatchPreferences();
 
         var ranked = source
-            .Where(r => Passes(r, filters))
+            .Where(r => Passes(r, filters) && MatchesSearch(r, search))
             .Select(r => new RecipeMatch(r, Score(r, preferences)))
             .OrderByDescending(m => m.MatchScore);
 
@@ -78,6 +82,16 @@ public static class RecipeMatcher
             return false;
 
         return true;
+    }
+
+    /// <summary>Нестрогий по регистру поиск подстроки в имени; пустой запрос пропускает всё.</summary>
+    private static bool MatchesSearch(Recipe recipe, string? search)
+    {
+        var query = search?.Trim();
+        if (string.IsNullOrEmpty(query))
+            return true;
+
+        return recipe.Name.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int Score(Recipe recipe, MatchPreferences preferences)

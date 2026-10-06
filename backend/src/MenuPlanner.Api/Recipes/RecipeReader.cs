@@ -47,6 +47,17 @@ public sealed record RecipeDetail(
     ExternalRecipeState? State);
 
 /// <summary>
+/// Кандидат подбора: актуальный контент (внешний рецепт спроецирован на живой источник),
+/// локальная identity и разрешённые состояние/происхождение. Сломанный источник сюда
+/// не попадает.
+/// </summary>
+public sealed record RecipeMatchCandidate(
+    Recipe Recipe,
+    bool IsExternal,
+    string? SourceFamilyName,
+    ExternalRecipeState? State);
+
+/// <summary>
 /// Единое предметное чтение рецепта для списка и деталей. Прячет от потребителей связь
 /// локального рецепта с источником, доступность источника и происхождение: вызывающий
 /// получает уже разрешённые состояние, подпись семьи-источника и правильный контент.
@@ -148,14 +159,73 @@ public sealed class RecipeReader
             .ToList();
     }
 
-    /// <summary>Рецепты семьи как кандидаты подбора (с ингредиентами).</summary>
-    public Task<List<Recipe>> ReadMatchCandidatesAsync(
-        Guid familyId, CancellationToken cancellationToken = default) =>
-        _db.Recipes
+    /// <summary>
+    /// Рецепты семьи как кандидаты подбора: локальный id и принадлежность сохранены,
+    /// контент внешнего рецепта проецируется на живой источник, состояние/происхождение
+    /// разрешены. Сломанный источник исключён — его нельзя подтвердить как доступное блюдо.
+    /// </summary>
+    public async Task<IReadOnlyList<RecipeMatchCandidate>> ReadMatchCandidatesAsync(
+        Guid familyId, CancellationToken cancellationToken = default)
+    {
+        var recipes = await _db.Recipes
             .AsNoTracking()
             .Include(r => r.Ingredients)
             .Where(r => r.FamilyId == familyId)
             .ToListAsync(cancellationToken);
+
+        if (recipes.Count == 0)
+            return Array.Empty<RecipeMatchCandidate>();
+
+        var external = recipes.Where(r => r.SourceRecipeId is not null).ToList();
+
+        var liveSources = await _sources.LoadSourcesAsync(
+            external.Select(r => r.SourceRecipeId!.Value), cancellationToken);
+
+        var staleIds = external
+            .Where(r => liveSources.TryGetValue(r.SourceRecipeId!.Value, out var live)
+                && !string.Equals(r.Name, live.Name, StringComparison.Ordinal))
+            .Select(r => r.Id)
+            .ToList();
+        await _nameCache.RefreshAsync(
+            staleIds,
+            liveSources.ToDictionary(x => x.Key, x => x.Value.Name),
+            cancellationToken);
+
+        var states = await _states.ResolveManyAsync(
+            external
+                .Select(r => new ExternalSourceLink(r.Id, r.SourceRecipeId!.Value, r.SourceToken))
+                .ToList());
+
+        var familyNames = await _sourceNames.ResolveManyAsync(
+            recipes
+                .Where(r => r.SourceFamilyId is not null)
+                .Select(r => r.SourceFamilyId!.Value));
+
+        var candidates = new List<RecipeMatchCandidate>();
+        foreach (var recipe in recipes)
+        {
+            var isExternal = recipe.SourceRecipeId is not null;
+            ExternalRecipeState? state = null;
+            string? sourceFamilyName = null;
+
+            if (isExternal)
+            {
+                state = states.GetValueOrDefault(recipe.Id, ExternalRecipeState.Broken);
+                sourceFamilyName = recipe.SourceFamilyId is Guid familyId2
+                    ? familyNames.GetValueOrDefault(familyId2)
+                    : null;
+
+                if (state == ExternalRecipeState.Broken)
+                    continue;
+            }
+
+            var effective = ExternalRecipeContentResolver.Resolve(recipe, liveSources);
+            effective.Revision = recipe.Revision;
+            candidates.Add(new RecipeMatchCandidate(effective, isExternal, sourceFamilyName, state));
+        }
+
+        return candidates;
+    }
 
     /// <summary>
     /// Подробный рецепт семьи или null, если его нет в этой семье. Живой источник читается

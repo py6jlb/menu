@@ -79,7 +79,10 @@ public sealed record RecipeMatchItemDto(
     IReadOnlyList<string> Seasonality,
     IReadOnlyList<string> Diet,
     string? PhotoUrl,
-    int MatchScore);
+    int MatchScore,
+    bool IsExternal = false,
+    string? SourceFamilyName = null,
+    string? State = null);
 
 public sealed record RecipeMatchResponse(IReadOnlyList<RecipeMatchItemDto> Items);
 

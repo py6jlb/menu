@@ -151,6 +151,10 @@ public sealed class ExternalRecipeIntegrationFlowTests
         Assert.Equal("Борщ", item.Name);
         Assert.Equal(3, item.Difficulty);
         Assert.Equal(350, item.Calories);
+        // Внешний рецепт не маскируется под обычный: видно происхождение и состояние.
+        Assert.True(item.IsExternal);
+        Assert.Equal("ok", item.State);
+        Assert.Equal("Семья источника", item.SourceFamilyName);
 
         var (_, byIngredient) = await PostMatchAsync<RecipeMatchResponse>(client, recipient.Token,
             new RecipeMatchRequest(new MatchFilters(IncludeIngredients: new List<string> { "свёкла" })));
@@ -159,6 +163,40 @@ public sealed class ExternalRecipeIntegrationFlowTests
         var (_, hard) = await PostMatchAsync<RecipeMatchResponse>(client, recipient.Token,
             new RecipeMatchRequest(new MatchFilters(MaxDifficulty: 2)));
         Assert.Empty(hard!.Items);
+    }
+
+    [Fact]
+    public async Task Match_WarningExternal_IsIncludedWithStateAndOrigin()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var (owner, recipient, wrapperId, sourceId) = await ImportAsync(client, FullRequest("Борщ"));
+
+        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{sourceId}/share");
+
+        var (_, all) = await PostMatchAsync<RecipeMatchResponse>(client, recipient.Token, new RecipeMatchRequest());
+
+        var item = Assert.Single(all!.Items);
+        Assert.Equal(wrapperId, item.RecipeId);
+        Assert.True(item.IsExternal);
+        Assert.Equal("warning", item.State);
+        Assert.Equal("Семья источника", item.SourceFamilyName);
+    }
+
+    [Fact]
+    public async Task Match_BrokenExternal_IsExcludedFromAvailableDishes()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var (owner, recipient, _, sourceId) = await ImportAsync(client, FullRequest("Борщ"));
+        var (_, sourceDetail) = await GetAuthorizedAsync<RecipeDto>(
+            client, owner.Token, $"/api/recipes/{sourceId}");
+
+        var delete = await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{sourceId}?revision={sourceDetail!.Revision}");
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        var (_, all) = await PostMatchAsync<RecipeMatchResponse>(client, recipient.Token, new RecipeMatchRequest());
+
+        Assert.Empty(all!.Items);
     }
 
     [Fact]
