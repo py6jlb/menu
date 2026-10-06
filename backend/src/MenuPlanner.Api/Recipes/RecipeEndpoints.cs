@@ -39,6 +39,7 @@ public static class RecipeEndpoints
         SourceFamilyNameResolver sourceNames,
         ExternalRecipeSourceLoader sourceLoader,
         ExternalRecipeStateResolver stateResolver,
+        ExternalRecipeNameCache nameCache,
         RepetitionCounter repetitionCounter)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
@@ -91,30 +92,7 @@ public static class RecipeEndpoints
                 && !string.Equals(r.Name, live.Name, StringComparison.Ordinal))
             .Select(r => r.Id)
             .ToList();
-        if (staleIds.Count > 0)
-        {
-            var stale = await db.Recipes
-                .Where(r => staleIds.Contains(r.Id))
-                .ToListAsync();
-            foreach (var recipe in stale)
-            {
-                if (recipe.SourceRecipeId is Guid sourceId
-                    && liveSources.TryGetValue(sourceId, out var live))
-                {
-                    recipe.Name = live.Name;
-                }
-            }
-
-            try
-            {
-                await db.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                // Кэш имени — не пользовательская правка: при гонке он обновится
-                // при следующем чтении, а сам список рецептов отдаётся как есть.
-            }
-        }
+        await nameCache.RefreshAsync(staleIds, liveSources);
 
         var states = await stateResolver.ResolveManyAsync(
             recipes
@@ -175,6 +153,7 @@ public static class RecipeEndpoints
         CurrentUserContext currentUser,
         SourceFamilyNameResolver sourceNames,
         ExternalRecipeStateResolver stateResolver,
+        ExternalRecipeNameCache nameCache,
         RepetitionCounter repetitionCounter)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
@@ -219,18 +198,9 @@ public static class RecipeEndpoints
         }
 
         // Имя кэшируется во внешнем рецепте и обновляется при каждом чтении.
-        if (!string.Equals(recipe.Name, source.Name, StringComparison.Ordinal))
-        {
-            recipe.Name = source.Name;
-            try
-            {
-                await db.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                // Кэш имени — не пользовательская правка: при гонке обновится позже.
-            }
-        }
+        await nameCache.RefreshAsync(
+            new[] { recipe.Id },
+            new Dictionary<Guid, Recipe> { [sourceId] = source });
 
         var live = ToDto(
             source,
@@ -288,7 +258,7 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var result = await mutations.UpdateAsync(id, familyId.Value, request);
+        var result = await mutations.UpdateAsync(new RecipeTarget(id, familyId.Value), request);
         return MutationResult(result, result.Recipe is null ? null : ToDto(result.Recipe));
     }
 
@@ -300,7 +270,7 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var result = await mutations.DeleteAsync(id, familyId.Value, revision);
+        var result = await mutations.DeleteAsync(new RecipeTarget(id, familyId.Value), revision);
         return MutationResult(result);
     }
 
@@ -316,7 +286,7 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var result = await mutations.RemoveExternalAsync(id, familyId.Value, revision);
+        var result = await mutations.RemoveExternalAsync(new RecipeTarget(id, familyId.Value), revision);
         return MutationResult(result);
     }
 
@@ -351,7 +321,7 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var result = await promotion.PromoteAsync(id, familyId.Value, revision);
+        var result = await promotion.PromoteAsync(new RecipeTarget(id, familyId.Value), revision);
         return result.Outcome switch
         {
             RecipePromotionOutcome.Promoted => Results.Json(ToDto(result.Recipe!)),
@@ -412,60 +382,17 @@ public static class RecipeEndpoints
         return Results.Json(new RecipeMatchResponse(items));
     }
 
-    private static string? ValidateMatch(RecipeMatchRequest request)
-    {
-        var filters = request.Filters;
-        if (filters is null)
-            return null;
-
-        if (filters.MaxDifficulty is { } maxDifficulty &&
-            maxDifficulty is < RecipeCatalog.DifficultyMin or > RecipeCatalog.DifficultyMax)
-            return $"Максимальная сложность должна быть от {RecipeCatalog.DifficultyMin} до {RecipeCatalog.DifficultyMax}.";
-
-        if (filters.MaxCalories is { } maxCalories && maxCalories < 0)
-            return "Максимальная калорийность не может быть отрицательной.";
-
-        if (filters.MaxCookTimeMinutes is { } maxCookTime && maxCookTime < 0)
-            return "Максимальное время приготовления не может быть отрицательным.";
-
-        if (filters.Seasons is { Count: > 0 })
-        {
-            foreach (var season in filters.Seasons)
-            {
-                var normalized = season.Trim().ToLowerInvariant();
-                if (!RecipeCatalog.Seasons.Contains(normalized))
-                    return $"Недопустимое значение сезона: «{season}».";
-            }
-        }
-
-        return null;
-    }
-
     private static async Task<IResult> UploadPhotoAsync(
         Guid id,
         IFormFile? file,
         int? revision,
         ClaimsPrincipal principal,
-        AppDbContext db,
         CurrentUserContext currentUser,
-        PhotoStorage storage)
+        RecipeMutationService mutations)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-
-        var recipe = await db.Recipes
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (recipe is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-        if (recipe.SourceRecipeId is not null)
-            return RecipeErrors.ExternalReadOnly();
-
-        var stale = RevisionProblem(revision, recipe.Revision);
-        if (stale is not null)
-            return stale;
 
         if (file is null || file.Length == 0)
             return Results.BadRequest(new RecipeErrorDto("Выберите файл изображения."));
@@ -477,87 +404,22 @@ public static class RecipeEndpoints
             return Results.BadRequest(new RecipeErrorDto(
                 $"Размер фото не должен превышать {RecipeCatalog.PhotoMaxBytes / (1024 * 1024)} МБ."));
 
-        var previous = recipe.PhotoPath;
-        var saved = await storage.SaveAsync(recipe.Id, extension, file.OpenReadStream());
-        recipe.PhotoPath = saved;
-        recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
-        recipe.UpdatedAt = DateTime.UtcNow;
-
-        try
-        {
-            await db.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // Правка проиграла гонку: не оставляем осиротевший файл и не трогаем чужой.
-            storage.Delete(saved);
-            return await ConflictAsync(id, db);
-        }
-
-        storage.Delete(previous);
-
-        return Results.Json(ToDto(recipe));
+        await using var content = file.OpenReadStream();
+        var result = await mutations.UploadPhotoAsync(
+            new RecipeTarget(id, familyId.Value), revision, extension, content);
+        return MutationResult(result, result.Recipe is null ? null : ToDto(result.Recipe));
     }
 
     private static async Task<IResult> DeletePhotoAsync(
-        Guid id, int? revision, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser,
-        PhotoStorage storage)
+        Guid id, int? revision, ClaimsPrincipal principal, CurrentUserContext currentUser,
+        RecipeMutationService mutations)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var recipe = await db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (recipe is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-        if (recipe.SourceRecipeId is not null)
-            return RecipeErrors.ExternalReadOnly();
-
-        var stale = RevisionProblem(revision, recipe.Revision);
-        if (stale is not null)
-            return stale;
-
-        var previous = recipe.PhotoPath;
-        recipe.PhotoPath = null;
-        recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
-        recipe.UpdatedAt = DateTime.UtcNow;
-
-        try
-        {
-            await db.SaveChangesAsync();
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return await ConflictAsync(id, db);
-        }
-
-        storage.Delete(previous);
-
-        return Results.NoContent();
-    }
-
-    /// <summary>
-    /// Проверка ожидаемой ревизии перед правкой фото. Возвращает ответ-ошибку
-    /// (400/409), если ревизия не передана или устарела, иначе null.
-    /// </summary>
-    private static IResult? RevisionProblem(int? revision, int current)
-    {
-        if (revision is null)
-            return RecipeErrors.MissingRevision();
-        if (!RecipeRevisionRules.IsCurrent(revision, current))
-            return RecipeErrors.RevisionConflict(current);
-        return null;
-    }
-
-    private static async Task<IResult> ConflictAsync(Guid id, AppDbContext db)
-    {
-        var current = await db.Recipes
-            .AsNoTracking()
-            .Where(r => r.Id == id)
-            .Select(r => (int?)r.Revision)
-            .FirstOrDefaultAsync() ?? 0;
-        return RecipeErrors.RevisionConflict(current);
+        var result = await mutations.DeletePhotoAsync(new RecipeTarget(id, familyId.Value), revision);
+        return MutationResult(result);
     }
 
     private static IResult GetPhotoFileAsync(string fileName, PhotoStorage storage)

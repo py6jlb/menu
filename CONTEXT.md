@@ -204,10 +204,17 @@ _Avoid_: Строка, Продукт (продукт — это имя внут
 _Код_: `ShoppingListBuilder.Scale`.
 _Avoid_: Умножение, Ресайз
 
+### Общее
+
+**Ревизия**:
+Целое число, привязанное к ресурсу (рецепт или недельный план) и растущее на каждую успешную мутацию. Чтение возвращает её вместе с ресурсом; изменение принимает ожидаемую ревизию и атомарно проверяет её, поэтому устаревшее изменение не перезаписывает чужую работу, а получает конфликт `409` с актуальной версией.
+_Код_: `Recipe.Revision`, `WeekPlan.Revision`, `RecipeRevisionRules`, `WeekPlanRevisions`.
+_Avoid_: Версия, Номер, ETag
+
 ## Разделение кода
 
-**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `RecipeMatcher`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
+**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
 
-**БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `SourceFamilyNameResolver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`). Обработчики Minimal API получают его параметром. Фоновая отправка очереди — hosted-сервис `EmailDeliveryWorker`.
+**БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`). Обработчики Minimal API получают его параметром. Фоновая отправка очереди — hosted-сервис `EmailDeliveryWorker`.
 
 _Avoid_: `static`-метод, принимающий `AppDbContext`; service locator; имя `*Service` у чистого правила. Исключение для locator — граница фреймворкового события без точки инъекции (событие `OnTokenValidated` у JwtBearer), где scoped-сервис достаётся из `RequestServices` явно одним вызовом.

@@ -261,6 +261,49 @@ describe('useWeekDraft — ревизия и конфликты', () => {
     expect(state.saveError.value).toBe('План изменил другой участник.')
   })
 
+  it('конфликт показывает построчные различия между черновиком и сервером', async () => {
+    const state = make({
+      loadWeekPlan: vi.fn().mockResolvedValue(
+        ok([entry(0, 'lunch', 1, 2), entry(1, 'dinner', 2, 2)], 1)
+      ),
+      saveWeekPlan: vi.fn().mockResolvedValue({
+        response: { status: 409 },
+        data: {
+          revision: 2,
+          entries: [entry(0, 'lunch', 9, 3), entry(1, 'dinner', 2, 2), entry(2, 'breakfast', 4, 1)]
+        }
+      })
+    })
+    await state.loadWeek()
+    // Локально добавляем завтрак; обед сервер изменил, ужин совпадает.
+    state.setSlot(2, 'breakfast', { recipeId: 5, recipeName: '#5', portions: 2 })
+
+    await state.save()
+
+    expect(state.conflictDiff.value).toHaveLength(2)
+    expect(state.conflictDiff.value[0]).toMatchObject({
+      day: 0,
+      mealType: 'lunch',
+      serverName: '#9',
+      localName: '#1'
+    })
+    expect(state.conflictDiff.value[1]).toMatchObject({
+      day: 2,
+      mealType: 'breakfast',
+      serverName: '#4',
+      localName: '#5'
+    })
+  })
+
+  it('без конфликта построчных различий нет', async () => {
+    const state = make({
+      loadWeekPlan: vi.fn().mockResolvedValue(ok([entry(0, 'lunch', 1)], 1))
+    })
+    await state.loadWeek()
+
+    expect(state.conflictDiff.value).toEqual([])
+  })
+
   it('конфликт без тела ответа не снимает защиту и даёт понятное сообщение', async () => {
     const state = make({
       loadWeekPlan: vi.fn().mockResolvedValue(ok([], 2)),

@@ -1,5 +1,11 @@
 import { ref, computed } from 'vue'
-import { createRecipe, getRecipe, updateRecipe } from '../api/recipes'
+import {
+  createRecipe,
+  getRecipe,
+  updateRecipe,
+  uploadRecipePhoto,
+  deleteRecipePhoto
+} from '../api/recipes'
 import { parseList, joinList } from '../constants/recipe'
 
 export const LEAVE_MESSAGE = 'Есть несохранённые изменения. Уйти без сохранения?'
@@ -11,6 +17,8 @@ export const NOT_FOUND_MESSAGE = 'Рецепт не найден.'
 export const EMPTY_NAME_MESSAGE = 'Укажите название рецепта.'
 export const CONFLICT_MESSAGE =
   'Рецепт изменён другим участником. Ваш черновик сохранён — загрузите актуальную версию, сравните изменения и сохраните снова.'
+export const PHOTO_ERROR_MESSAGE =
+  'Рецепт сохранён, но фото не удалось сохранить. Повторите действие с фото.'
 
 export function newIngredientDraft() {
   return { name: '', amount: '', unit: 'g', note: '' }
@@ -156,6 +164,8 @@ export function useRecipeDraft(options = {}) {
   const loadRecipe = options.loadRecipe || getRecipe
   const createRecipeRequest = options.createRecipe || createRecipe
   const updateRecipeRequest = options.updateRecipe || updateRecipe
+  const uploadPhotoRequest = options.uploadPhoto || uploadRecipePhoto
+  const deletePhotoRequest = options.deletePhoto || deleteRecipePhoto
   const confirmLeave = options.confirm || ((message) => window.confirm(message))
 
   const editingId = ref(options.initialId ?? null)
@@ -166,6 +176,14 @@ export function useRecipeDraft(options = {}) {
   // Конфликт ревизии: сообщение и актуальная серверная версия для сравнения.
   const conflictMessage = ref('')
   const conflictRevision = ref(null)
+  // Отложенное действие с фото после успешного сохранения текста.
+  const photoSaving = ref(false)
+  const photoPartial = ref(false)
+  const photoError = ref('')
+
+  // Файл/удаление, зафиксированные в момент submit: поздний выбор фото не
+  // подменяет уже отправленное действие. Живёт вне ref — это не состояние UI.
+  let pendingPhoto = null
 
   const loading = ref(false)
   const saving = ref(false)
@@ -185,6 +203,14 @@ export function useRecipeDraft(options = {}) {
     revision.value = null
     conflictMessage.value = ''
     conflictRevision.value = null
+    clearPhotoState()
+  }
+
+  function clearPhotoState() {
+    pendingPhoto = null
+    photoSaving.value = false
+    photoPartial.value = false
+    photoError.value = ''
   }
 
   function clearMessages() {
@@ -193,6 +219,7 @@ export function useRecipeDraft(options = {}) {
     savedMessage.value = ''
     conflictMessage.value = ''
     conflictRevision.value = null
+    clearPhotoState()
   }
 
   /**
@@ -224,6 +251,7 @@ export function useRecipeDraft(options = {}) {
     saveError.value = ''
     conflictMessage.value = ''
     conflictRevision.value = null
+    clearPhotoState()
 
     if (requestedId == null) {
       resetDraft()
@@ -303,6 +331,9 @@ export function useRecipeDraft(options = {}) {
           confirmedSnapshot.value = sentSnapshot
         }
         revision.value = Number.isInteger(data.revision) ? data.revision : revision.value
+        // Новый рецепт теперь существует: привязываем черновик к его id, чтобы
+        // повтор (например, действие с фото) обновлял его, а не создавал второй.
+        if (targetId == null && savedId) editingId.value = savedId
         savedMessage.value = 'Рецепт сохранён.'
         return { ok: true, id: savedId, data }
       }
@@ -326,6 +357,55 @@ export function useRecipeDraft(options = {}) {
     }
   }
 
+  /** Зафиксировать действие с фото, которое нужно применить после сохранения текста. */
+  function setPendingPhoto(intent) {
+    pendingPhoto = intent
+    photoPartial.value = false
+    photoError.value = ''
+  }
+
+  /**
+   * Действие с фото для уже сохранённого рецепта. Текст при этом остаётся
+   * сохранённым: при сбое возвращается { ok: false }, а состояние помечается
+   * частичным, чтобы пользователь повторил только фото и получил понятное
+   * сообщение. Конфликт ревизии выносится в общий блок сравнения.
+   */
+  async function savePhoto(id, revision) {
+    if (!pendingPhoto || !id) return { ok: true }
+    const intent = pendingPhoto
+    photoSaving.value = true
+    photoError.value = ''
+    try {
+      const result = intent.removed
+        ? await deletePhotoRequest(id, revision)
+        : await uploadPhotoRequest(id, intent.selected, revision)
+      const status = result.response.status
+      if (status === 204 || status === 200) {
+        pendingPhoto = null
+        photoPartial.value = false
+        return { ok: true }
+      }
+      if (status === 409) {
+        conflictRevision.value = Number.isInteger(result.data?.revision)
+          ? result.data.revision
+          : null
+        conflictMessage.value = result.data?.error || CONFLICT_MESSAGE
+        photoPartial.value = true
+        return { ok: false, conflict: true }
+      }
+      const serverError = result.data?.error
+      photoError.value = serverError ? `${PHOTO_ERROR_MESSAGE} ${serverError}` : PHOTO_ERROR_MESSAGE
+      photoPartial.value = true
+      return { ok: false }
+    } catch {
+      photoError.value = PHOTO_ERROR_MESSAGE
+      photoPartial.value = true
+      return { ok: false }
+    } finally {
+      photoSaving.value = false
+    }
+  }
+
   return {
     editingId,
     isEdit,
@@ -336,12 +416,17 @@ export function useRecipeDraft(options = {}) {
     revision,
     conflictMessage,
     conflictRevision,
+    photoSaving,
+    photoPartial,
+    photoError,
     loadError,
     saveError,
     savedMessage,
     setIdentity,
     load,
     save,
+    setPendingPhoto,
+    savePhoto,
     validate,
     confirmNavigation,
     resetDraft

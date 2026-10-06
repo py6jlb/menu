@@ -33,8 +33,8 @@ public sealed class PostgresRecipeRevisionTests : PostgresTestBase
                 .AddInterceptors(new BarrierNonQueryInterceptor(barrier, "UPDATE \"Recipes\""))
                 .Options;
             await using var db = new AppDbContext(options);
-            var service = new RecipeMutationService(db, NewStorage(), TimeProvider.System);
-            return await service.UpdateAsync(recipe.Id, family.Id, Request(name, recipe.Revision));
+            var service = new RecipeMutationService(db, NewStorage(), TimeProvider.System, new RecipeRevisionReader(db));
+            return await service.UpdateAsync(new RecipeTarget(recipe.Id, family.Id), Request(name, recipe.Revision));
         }
 
         var results = await Task.WhenAll(UpdateAsync("Первый"), UpdateAsync("Второй"));
@@ -59,16 +59,16 @@ public sealed class PostgresRecipeRevisionTests : PostgresTestBase
 
         await using (var db = Database.CreateContext())
         {
-            var service = new RecipeMutationService(db, NewStorage(), TimeProvider.System);
-            var first = await service.UpdateAsync(recipe.Id, family.Id, Request("Первая", recipe.Revision));
+            var service = new RecipeMutationService(db, NewStorage(), TimeProvider.System, new RecipeRevisionReader(db));
+            var first = await service.UpdateAsync(new RecipeTarget(recipe.Id, family.Id), Request("Первая", recipe.Revision));
             Assert.Equal(RecipeMutationOutcome.Ok, first.Outcome);
         }
 
         await using (var db = Database.CreateContext())
         {
-            var service = new RecipeMutationService(db, NewStorage(), TimeProvider.System);
+            var service = new RecipeMutationService(db, NewStorage(), TimeProvider.System, new RecipeRevisionReader(db));
             // Ожидаемая ревизия уже устарела — правка отклоняется.
-            var stale = await service.UpdateAsync(recipe.Id, family.Id, Request("Устаревшая", recipe.Revision));
+            var stale = await service.UpdateAsync(new RecipeTarget(recipe.Id, family.Id), Request("Устаревшая", recipe.Revision));
             Assert.Equal(RecipeMutationOutcome.Conflict, stale.Outcome);
             Assert.Equal(2, stale.Revision);
         }
@@ -101,8 +101,8 @@ public sealed class PostgresRecipeRevisionTests : PostgresTestBase
                 .Options;
             await using var db = new AppDbContext(options);
             var service = new ExternalRecipePromotionService(
-                db, new SourceFamilyNameResolver(db), storage, TimeProvider.System);
-            return await service.PromoteAsync(wrapper.Id, recipientFamily.Id, wrapper.Revision);
+                db, new SourceFamilyNameResolver(db), storage, TimeProvider.System, new RecipeRevisionReader(db));
+            return await service.PromoteAsync(new RecipeTarget(wrapper.Id, recipientFamily.Id), wrapper.Revision);
         }
 
         var results = await Task.WhenAll(PromoteAsync(), PromoteAsync());
@@ -135,16 +135,16 @@ public sealed class PostgresRecipeRevisionTests : PostgresTestBase
 
         await using (var db = Database.CreateContext())
         {
-            var mutations = new RecipeMutationService(db, storage, TimeProvider.System);
-            var stale = await mutations.RemoveExternalAsync(wrapper.Id, recipientFamily.Id, wrapper.Revision + 1);
+            var mutations = new RecipeMutationService(db, storage, TimeProvider.System, new RecipeRevisionReader(db));
+            var stale = await mutations.RemoveExternalAsync(new RecipeTarget(wrapper.Id, recipientFamily.Id), wrapper.Revision + 1);
             Assert.Equal(RecipeMutationOutcome.Conflict, stale.Outcome);
             Assert.Equal(wrapper.Revision, stale.Revision);
         }
 
         await using (var db = Database.CreateContext())
         {
-            var mutations = new RecipeMutationService(db, storage, TimeProvider.System);
-            var current = await mutations.RemoveExternalAsync(wrapper.Id, recipientFamily.Id, wrapper.Revision);
+            var mutations = new RecipeMutationService(db, storage, TimeProvider.System, new RecipeRevisionReader(db));
+            var current = await mutations.RemoveExternalAsync(new RecipeTarget(wrapper.Id, recipientFamily.Id), wrapper.Revision);
             Assert.Equal(RecipeMutationOutcome.Ok, current.Outcome);
         }
 
@@ -164,14 +164,14 @@ public sealed class PostgresRecipeRevisionTests : PostgresTestBase
         await using (var db = Database.CreateContext())
         {
             var promotion = new ExternalRecipePromotionService(
-                db, new SourceFamilyNameResolver(db), storage, TimeProvider.System);
-            var promoted = await promotion.PromoteAsync(wrapper.Id, recipientFamily.Id, wrapper.Revision);
+                db, new SourceFamilyNameResolver(db), storage, TimeProvider.System, new RecipeRevisionReader(db));
+            var promoted = await promotion.PromoteAsync(new RecipeTarget(wrapper.Id, recipientFamily.Id), wrapper.Revision);
             Assert.Equal(RecipePromotionOutcome.Promoted, promoted.Outcome);
 
             // Промоушен сделал обёртку собственной: локальное удаление внешнего больше не применимо.
-            var mutations = new RecipeMutationService(db, storage, TimeProvider.System);
+            var mutations = new RecipeMutationService(db, storage, TimeProvider.System, new RecipeRevisionReader(db));
             var remove = await mutations.RemoveExternalAsync(
-                wrapper.Id, recipientFamily.Id, promoted.Revision);
+                new RecipeTarget(wrapper.Id, recipientFamily.Id), promoted.Revision);
             Assert.Equal(RecipeMutationOutcome.ValidationError, remove.Outcome);
         }
 
@@ -200,11 +200,11 @@ public sealed class PostgresRecipeRevisionTests : PostgresTestBase
         await using (var db = new AppDbContext(options))
         {
             var service = new ExternalRecipePromotionService(
-                db, new SourceFamilyNameResolver(db), storage, TimeProvider.System);
+                db, new SourceFamilyNameResolver(db), storage, TimeProvider.System, new RecipeRevisionReader(db));
             // EF оборачивает сбой команды в DbUpdateException; важно, что операция падает,
             // а откат возвращает строку внешнему состоянию.
             await Assert.ThrowsAsync<DbUpdateException>(
-                () => service.PromoteAsync(wrapper.Id, recipientFamily.Id, wrapper.Revision));
+                () => service.PromoteAsync(new RecipeTarget(wrapper.Id, recipientFamily.Id), wrapper.Revision));
         }
 
         await using var verify = Database.CreateContext();

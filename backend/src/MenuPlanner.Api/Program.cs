@@ -81,11 +81,14 @@ builder.Services.AddScoped<FamilyService>();
 builder.Services.AddScoped<SourceFamilyNameResolver>();
 builder.Services.AddScoped<ExternalRecipeSourceLoader>();
 builder.Services.AddScoped<ExternalRecipeStateResolver>();
+builder.Services.AddScoped<ExternalRecipeNameCache>();
+builder.Services.AddScoped<RecipeRevisionReader>();
 builder.Services.AddScoped<ExternalRecipePromotionService>();
 builder.Services.AddScoped<RecipeMutationService>();
 builder.Services.AddScoped<RecipeSharingService>();
 builder.Services.AddScoped<RepetitionCounter>();
 builder.Services.AddScoped<WeekPlanSaver>();
+builder.Services.AddScoped<WeekPlanReader>();
 builder.Services.AddScoped<AdminBootstrap>();
 
 builder.Services.AddSingleton(services => new ShareOptions

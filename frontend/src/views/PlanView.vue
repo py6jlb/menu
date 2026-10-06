@@ -14,6 +14,7 @@ const {
   weekStart: monday,
   draft,
   conflict,
+  conflictDiff,
   dirty,
   loading,
   saving,
@@ -207,6 +208,11 @@ function mealLabel(code) {
   return MEALS.find((m) => m.code === code)?.label || code
 }
 
+function slotLabel(name, portions) {
+  if (!name) return 'пусто'
+  return portions ? `${name} (${portions} порц.)` : name
+}
+
 onBeforeRouteLeave(() => confirmNavigation())
 
 onMounted(() => {
@@ -253,9 +259,16 @@ onBeforeUnmount(() => {
     <div v-else-if="conflict" class="conflict">
       <p class="error">{{ saveError }}</p>
       <p v-if="conflict.revision !== null" class="conflict-server">
-        Актуальная версия на сервере: ревизия {{ conflict.revision }},
-        записей — {{ conflict.entries.length }}.
+        Актуальная версия на сервере: ревизия {{ conflict.revision }}.
       </p>
+      <ul v-if="conflictDiff.length" class="conflict-diff">
+        <li v-for="item in conflictDiff" :key="`${item.day}:${item.mealType}`">
+          <strong>{{ DAYS[item.day].label }} · {{ mealLabel(item.mealType) }}</strong>:
+          на сервере — {{ slotLabel(item.serverName, item.serverPortions) }},
+          у вас — {{ slotLabel(item.localName, item.localPortions) }}
+        </li>
+      </ul>
+      <p v-else class="conflict-server">Различий по записям нет.</p>
       <button type="button" class="btn btn--ghost btn--small" @click="reloadServerVersion">
         Загрузить актуальную версию
       </button>
@@ -537,6 +550,16 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--text-soft);
   font-size: 0.9rem;
+}
+
+.conflict-diff {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .nav {

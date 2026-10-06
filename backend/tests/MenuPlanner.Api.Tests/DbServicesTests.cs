@@ -3,6 +3,7 @@ using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Repetition;
 using Microsoft.EntityFrameworkCore;
@@ -167,6 +168,45 @@ public sealed class DbServicesTests
             family.Id, new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 18));
 
         Assert.Equal(2, counts[recipe.Id]);
+    }
+
+    [Fact]
+    public async Task RecipeRevisionReader_ReturnsCurrentRevision_OrZeroWhenMissing()
+    {
+        await using var db = NewDb();
+        var family = NewFamily(Guid.NewGuid());
+        db.Families.Add(family);
+        var recipe = NewRecipe(family.Id, "Борщ");
+        recipe.Revision = 3;
+        db.Recipes.Add(recipe);
+        await db.SaveChangesAsync();
+
+        var reader = new RecipeRevisionReader(db);
+        Assert.Equal(3, await reader.CurrentAsync(recipe.Id));
+        // Отсутствующий рецепт — 0, маркер «записи нет», вне диапазона реальных ревизий.
+        Assert.Equal(0, await reader.CurrentAsync(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task ExternalRecipeNameCache_UpdatesCachedNameFromLiveSource()
+    {
+        await using var db = NewDb();
+        var family = NewFamily(Guid.NewGuid());
+        db.Families.Add(family);
+        var source = NewRecipe(family.Id, "Свежее имя");
+        db.Recipes.Add(source);
+        var wrapper = NewRecipe(family.Id, "Устаревшее имя");
+        wrapper.SourceRecipeId = source.Id;
+        db.Recipes.Add(wrapper);
+        await db.SaveChangesAsync();
+
+        var cache = new ExternalRecipeNameCache(db);
+        await cache.RefreshAsync(
+            new[] { wrapper.Id },
+            new Dictionary<Guid, Recipe> { [source.Id] = source });
+
+        var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id);
+        Assert.Equal("Свежее имя", stored.Name);
     }
 
     private static AppDbContext NewDb() =>

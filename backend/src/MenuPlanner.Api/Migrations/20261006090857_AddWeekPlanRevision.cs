@@ -15,7 +15,10 @@ namespace MenuPlanner.Api.Migrations
                 table: "WeekPlans",
                 type: "integer",
                 nullable: false,
-                defaultValue: 0);
+                // Существующие планы получают ревизию 1: 0 зарезервирован за
+                // «плана ещё нет» (условие создания), и миграция не должна
+                // делать вид, что план отсутствует.
+                defaultValue: 1);
         }
 
         /// <inheritdoc />

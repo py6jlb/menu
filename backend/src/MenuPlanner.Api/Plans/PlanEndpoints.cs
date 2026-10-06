@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
-using MenuPlanner.Api.Recipes.External;
 
 namespace MenuPlanner.Api.Plans;
 
@@ -29,10 +28,8 @@ public static class PlanEndpoints
     private static async Task<IResult> GetWeekAsync(
         string weekStart,
         ClaimsPrincipal principal,
-        AppDbContext db,
         CurrentUserContext currentUser,
-        ExternalRecipeStateResolver stateResolver,
-        ExternalRecipeSourceLoader sourceLoader)
+        WeekPlanReader reader)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
@@ -42,14 +39,8 @@ public static class PlanEndpoints
             return Results.BadRequest(new PlanErrorDto(
                 $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStartFormat}."));
 
-        var plan = await LoadPlanAsync(db, familyId.Value, monday);
-        if (plan is null)
-            return Results.Json(new WeekPlanDto(
-                Format(monday), WeekPlanRevisions.Initial, Array.Empty<PlanEntryDto>()));
-
-        var states = await ResolveStatesAsync(stateResolver, plan);
-        var liveSources = await LoadLiveSourcesAsync(sourceLoader, plan);
-        return Results.Json(ToDto(plan, states, liveSources));
+        var dto = await reader.ReadAsync(familyId.Value, monday) ?? WeekPlanReader.Empty(monday);
+        return Results.Json(dto);
     }
 
     private static async Task<IResult> SaveWeekAsync(
@@ -59,8 +50,7 @@ public static class PlanEndpoints
         AppDbContext db,
         CurrentUserContext currentUser,
         WeekPlanSaver saver,
-        ExternalRecipeStateResolver stateResolver,
-        ExternalRecipeSourceLoader sourceLoader)
+        WeekPlanReader reader)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
@@ -86,25 +76,20 @@ public static class PlanEndpoints
         var outcome = await saver.SaveAsync(
             familyId.Value, monday, entries, request.ExpectedRevision, DateTime.UtcNow);
         if (outcome == WeekPlanMutationOutcome.Conflict)
-            return await ConflictAsync(db, familyId.Value, monday, stateResolver, sourceLoader);
+            return await ConflictAsync(reader, familyId.Value, monday);
 
-        var saved = await LoadPlanAsync(db, familyId.Value, monday)
+        var saved = await reader.ReadAsync(familyId.Value, monday)
             ?? throw new InvalidOperationException("Сохранённый план недели не найден.");
-
-        var states = await ResolveStatesAsync(stateResolver, saved);
-        var liveSources = await LoadLiveSourcesAsync(sourceLoader, saved);
-        return Results.Json(ToDto(saved, states, liveSources));
+        return Results.Json(saved);
     }
 
     private static async Task<IResult> DeleteWeekAsync(
         string weekStart,
         int? expectedRevision,
         ClaimsPrincipal principal,
-        AppDbContext db,
         CurrentUserContext currentUser,
         WeekPlanSaver saver,
-        ExternalRecipeStateResolver stateResolver,
-        ExternalRecipeSourceLoader sourceLoader)
+        WeekPlanReader reader)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
@@ -119,39 +104,22 @@ public static class PlanEndpoints
         // план так снять нельзя — сообщаем конфликт с текущей версией.
         if (expectedRevision is null)
         {
-            var exists = await db.WeekPlans
-                .AnyAsync(p => p.FamilyId == familyId.Value && p.WeekStart == monday);
-            return exists
-                ? await ConflictAsync(db, familyId.Value, monday, stateResolver, sourceLoader)
+            return await reader.ExistsAsync(familyId.Value, monday)
+                ? await ConflictAsync(reader, familyId.Value, monday)
                 : Results.NoContent();
         }
 
         var outcome = await saver.DeleteAsync(familyId.Value, monday, expectedRevision.Value);
         if (outcome == WeekPlanMutationOutcome.Conflict)
-            return await ConflictAsync(db, familyId.Value, monday, stateResolver, sourceLoader);
+            return await ConflictAsync(reader, familyId.Value, monday);
 
         return Results.NoContent();
     }
 
-    private static async Task<IResult> ConflictAsync(
-        AppDbContext db,
-        Guid familyId,
-        DateOnly monday,
-        ExternalRecipeStateResolver stateResolver,
-        ExternalRecipeSourceLoader sourceLoader)
+    /// <summary>Конфликт ревизии недели с актуальной серверной карточкой плана.</summary>
+    private static async Task<IResult> ConflictAsync(WeekPlanReader reader, Guid familyId, DateOnly monday)
     {
-        var plan = await LoadPlanAsync(db, familyId, monday);
-        if (plan is null)
-        {
-            return Results.Json(
-                new PlanConflictDto(
-                    ConflictMessage, Format(monday), WeekPlanRevisions.Initial, Array.Empty<PlanEntryDto>()),
-                statusCode: StatusCodes.Status409Conflict);
-        }
-
-        var states = await ResolveStatesAsync(stateResolver, plan);
-        var liveSources = await LoadLiveSourcesAsync(sourceLoader, plan);
-        var dto = ToDto(plan, states, liveSources);
+        var dto = await reader.ReadAsync(familyId, monday) ?? WeekPlanReader.Empty(monday);
         return Results.Json(
             new PlanConflictDto(ConflictMessage, dto.WeekStart, dto.Revision, dto.Entries),
             statusCode: StatusCodes.Status409Conflict);
@@ -176,50 +144,6 @@ public static class PlanEndpoints
         return null;
     }
 
-    private static async Task<WeekPlan?> LoadPlanAsync(AppDbContext db, Guid familyId, DateOnly weekStart)
-    {
-        return await db.WeekPlans
-            .AsNoTracking()
-            .Include(p => p.Entries)
-            .ThenInclude(e => e.Recipe)
-            .FirstOrDefaultAsync(p => p.FamilyId == familyId && p.WeekStart == weekStart);
-    }
-
-    private static async Task<Dictionary<Guid, ExternalRecipeState>> ResolveStatesAsync(
-        ExternalRecipeStateResolver stateResolver, WeekPlan plan)
-    {
-        var links = ExternalPlanContent.SourceLinks(plan.Entries);
-        return await stateResolver.ResolveManyAsync(links);
-    }
-
-    private static Task<Dictionary<Guid, Recipe>> LoadLiveSourcesAsync(
-        ExternalRecipeSourceLoader sourceLoader, WeekPlan plan) =>
-        sourceLoader.LoadSourcesAsync(ExternalPlanContent.SourceRecipeIds(plan.Entries));
-
-    private static WeekPlanDto ToDto(
-        WeekPlan plan,
-        IReadOnlyDictionary<Guid, ExternalRecipeState> states,
-        IReadOnlyDictionary<Guid, Recipe> liveSources)
-    {
-        var entries = plan.Entries
-            .OrderBy(e => e.Day)
-            .ThenBy(e => PlanningCatalog.OrderOf(e.MealType))
-            .Select(e => new PlanEntryDto(
-                e.Day,
-                PlanningCatalog.CodeOf(e.MealType),
-                e.RecipeId,
-                e.Recipe is null
-                    ? ""
-                    : ExternalRecipeContentResolver.Resolve(e.Recipe, liveSources).Name,
-                e.Portions,
-                states.TryGetValue(e.RecipeId, out var state)
-                    ? ExternalRecipeStateRules.Code(state)
-                    : null))
-            .ToList();
-
-        return new WeekPlanDto(Format(plan.WeekStart), plan.Revision, entries);
-    }
-
     private static bool TryParseWeekStart(string value, out DateOnly monday)
     {
         monday = default;
@@ -229,8 +153,4 @@ public static class PlanEndpoints
         monday = date;
         return date.DayOfWeek == DayOfWeek.Monday;
     }
-
-    private static string Format(DateOnly date) =>
-        date.ToString(WeekStartFormat, CultureInfo.InvariantCulture);
-
 }
