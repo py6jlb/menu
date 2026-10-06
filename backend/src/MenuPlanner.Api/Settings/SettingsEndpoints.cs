@@ -1,8 +1,5 @@
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Settings;
 
@@ -18,33 +15,19 @@ public static class SettingsEndpoints
         return app;
     }
 
-    private static async Task<IResult> GetAsync(ClaimsPrincipal principal, AppDbContext db)
+    private static async Task<IResult> GetAsync(ClaimsPrincipal principal, SettingsService settings)
     {
         var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return Results.Unauthorized();
 
-        var settings = await db.UserSettings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.UserId == userId.Value);
-        if (settings is null)
-        {
-            settings = new UserSettings
-            {
-                UserId = userId.Value,
-                RepetitionWindowWeeks = SettingsCatalog.DefaultRepetitionWindowWeeks
-            };
-            db.UserSettings.Add(settings);
-            await db.SaveChangesAsync();
-        }
-
-        return Results.Json(ToDto(settings));
+        return Results.Json(await settings.ReadAsync(userId.Value));
     }
 
     private static async Task<IResult> UpdateAsync(
         UserSettingsRequest request,
         ClaimsPrincipal principal,
-        AppDbContext db)
+        SettingsService settings)
     {
         var userId = CurrentUser.UserId(principal);
         if (userId is null)
@@ -54,21 +37,7 @@ public static class SettingsEndpoints
         if (error is not null)
             return Results.BadRequest(new SettingsErrorDto(error));
 
-        var settings = await db.UserSettings.FirstOrDefaultAsync(s => s.UserId == userId.Value);
-        if (settings is null)
-        {
-            settings = new UserSettings
-            {
-                UserId = userId.Value,
-                RepetitionWindowWeeks = SettingsCatalog.DefaultRepetitionWindowWeeks
-            };
-            db.UserSettings.Add(settings);
-        }
-
-        settings.RepetitionWindowWeeks = request.RepetitionWindowWeeks!.Value;
-        await db.SaveChangesAsync();
-
-        return Results.Json(ToDto(settings));
+        return Results.Json(await settings.SaveAsync(userId.Value, request.RepetitionWindowWeeks!.Value));
     }
 
     private static string? Validate(UserSettingsRequest request)
@@ -79,7 +48,4 @@ public static class SettingsEndpoints
 
         return null;
     }
-
-    private static UserSettingsDto ToDto(UserSettings settings) =>
-        new(settings.RepetitionWindowWeeks);
 }
