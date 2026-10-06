@@ -13,4 +13,12 @@ public static class RecipeErrors
         Results.Json(
             new RecipeErrorDto("Внешний рецепт доступен только для чтения."),
             statusCode: StatusCodes.Status403Forbidden);
+
+    /// <summary>Сохранение основано на устаревшей ревизии: черновик сохраняется у клиента.</summary>
+    public static IResult RevisionConflict(int currentRevision) =>
+        Results.Conflict(new RecipeConflictDto(RecipeRevisionRules.ConflictMessage, currentRevision));
+
+    /// <summary>Клиент не передал ожидаемую ревизию.</summary>
+    public static IResult MissingRevision() =>
+        Results.BadRequest(new RecipeErrorDto(RecipeRevisionRules.MissingMessage));
 }

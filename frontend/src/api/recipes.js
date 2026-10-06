@@ -30,35 +30,39 @@ export async function updateRecipe(id, recipe) {
   })
 }
 
-export async function deleteRecipe(id) {
-  return apiJson(`/api/recipes/${id}`, {
+function revisionQuery(revision) {
+  return revision === null || revision === undefined ? '' : `?revision=${encodeURIComponent(revision)}`
+}
+
+export async function deleteRecipe(id, revision) {
+  return apiJson(`/api/recipes/${id}${revisionQuery(revision)}`, {
     method: 'DELETE'
   })
 }
 
-export async function removeExternalRecipe(id) {
-  return apiJson(`/api/recipes/${id}/external`, {
+export async function removeExternalRecipe(id, revision) {
+  return apiJson(`/api/recipes/${id}/external${revisionQuery(revision)}`, {
     method: 'DELETE'
   })
 }
 
-export async function copyRecipe(id) {
-  return apiJson(`/api/recipes/${id}/copy`, {
+export async function copyRecipe(id, revision) {
+  return apiJson(`/api/recipes/${id}/copy${revisionQuery(revision)}`, {
     method: 'POST'
   })
 }
 
-export async function uploadRecipePhoto(id, file) {
+export async function uploadRecipePhoto(id, file, revision) {
   const form = new FormData()
   form.append('file', file)
-  return apiJson(`/api/recipes/${id}/photo`, {
+  return apiJson(`/api/recipes/${id}/photo${revisionQuery(revision)}`, {
     method: 'PUT',
     body: form
   })
 }
 
-export async function deleteRecipePhoto(id) {
-  return apiJson(`/api/recipes/${id}/photo`, {
+export async function deleteRecipePhoto(id, revision) {
+  return apiJson(`/api/recipes/${id}/photo${revisionQuery(revision)}`, {
     method: 'DELETE'
   })
 }

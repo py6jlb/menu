@@ -268,10 +268,10 @@ public sealed class ExternalRecipeIntegrationFlowTests
     }
 
     private static async Task<RecipeDto> PutRecipeAsync(
-        HttpClient client, string token, Guid recipeId, RecipeRequest request)
+        HttpClient client, string token, Guid recipeId, RecipeRequest request, int revision = 1)
     {
         var (response, recipe) = await PutAuthorizedAsync<RecipeDto>(
-            client, token, $"/api/recipes/{recipeId}", request);
+            client, token, $"/api/recipes/{recipeId}", request with { Revision = revision });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(recipe);
         return recipe!;

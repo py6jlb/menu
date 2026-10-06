@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   useRecipeDraft,
   serializeDraft,
+  draftToPayload,
   LOAD_ERROR_MESSAGE,
   SAVE_ERROR_MESSAGE,
   EMPTY_NAME_MESSAGE
@@ -43,6 +44,7 @@ function recipeData(id, overrides = {}) {
       { name: 'соль', amount: 1, unit: 'g', note: 'по вкусу' }
     ],
     photoUrl: `/photos/${id}.jpg`,
+    revision: 1,
     ...overrides
   }
 }
@@ -378,6 +380,76 @@ describe('useRecipeDraft — сохранение', () => {
 
     expect(message).toBe(EMPTY_NAME_MESSAGE)
     expect(updateRecipe).not.toHaveBeenCalled()
+  })
+})
+
+describe('useRecipeDraft — конкурентное редактирование', () => {
+  it('сохранение передаёт ожидаемую ревизию и принимает новую из ответа', async () => {
+    const updateRecipe = vi.fn().mockResolvedValue(ok(recipeData('A', { name: 'Новое', revision: 2 })))
+    const state = make({
+      initialId: 'A',
+      loadRecipe: vi.fn().mockResolvedValue(ok(recipeData('A', { revision: 1 }))),
+      updateRecipe
+    })
+    await state.load()
+    state.draft.value.name = 'Новое'
+
+    const result = await state.save()
+
+    expect(updateRecipe).toHaveBeenCalledWith('A', expect.objectContaining({ name: 'Новое', revision: 1 }))
+    expect(result).toMatchObject({ ok: true })
+    expect(state.revision.value).toBe(2)
+    expect(state.dirty.value).toBe(false)
+  })
+
+  it('конфликт ревизии сохраняет локальный черновик и не перезаписывает его', async () => {
+    const state = make({
+      initialId: 'A',
+      loadRecipe: vi.fn().mockResolvedValue(ok(recipeData('A', { revision: 1 }))),
+      updateRecipe: vi.fn().mockResolvedValue({
+        response: { status: 409 },
+        data: { error: 'Рецепт изменён другим участником.', revision: 4 }
+      })
+    })
+    await state.load()
+    state.draft.value.name = 'моя правка'
+
+    const result = await state.save()
+
+    expect(result).toMatchObject({ ok: false, conflict: true })
+    expect(state.draft.value.name).toBe('моя правка')
+    expect(state.dirty.value).toBe(true)
+    expect(state.conflictRevision.value).toBe(4)
+    expect(state.conflictMessage.value).toContain('другим участником')
+    expect(state.saveError.value).toBe('')
+    expect(state.saving.value).toBe(false)
+  })
+
+  it('смена ресурса сбрасывает ревизию и состояние конфликта', async () => {
+    const state = make({
+      initialId: 'A',
+      loadRecipe: vi.fn().mockResolvedValue(ok(recipeData('A', { revision: 3 }))),
+      updateRecipe: vi.fn().mockResolvedValue({
+        response: { status: 409 },
+        data: { revision: 5 }
+      })
+    })
+    await state.load()
+    state.draft.value.name = 'правка'
+    await state.save()
+    expect(state.conflictRevision.value).toBe(5)
+
+    state.setIdentity('B')
+
+    expect(state.revision.value).toBeNull()
+    expect(state.conflictMessage.value).toBe('')
+    expect(state.conflictRevision.value).toBeNull()
+  })
+
+  it('draftToPayload добавляет ревизию только когда она известна', () => {
+    const draft = { name: 'a', steps: [], ingredients: [] }
+    expect(draftToPayload(draft).revision).toBeUndefined()
+    expect(draftToPayload(draft, 7).revision).toBe(7)
   })
 })
 

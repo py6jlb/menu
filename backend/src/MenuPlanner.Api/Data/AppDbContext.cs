@@ -67,6 +67,9 @@ public class AppDbContext : DbContext
         recipe.Property(r => r.Calories);
         recipe.Property(r => r.CreatedAt).HasColumnType("timestamp with time zone");
         recipe.Property(r => r.UpdatedAt).HasColumnType("timestamp with time zone");
+        // Токен конкурентности: UPDATE/DELETE применяются только если в БД та же
+        // ревизия, что прочитана. Так устаревшее сохранение не затирает чужое.
+        recipe.Property(r => r.Revision).IsConcurrencyToken().HasDefaultValue(1);
         recipe.Property(r => r.SourceToken).HasMaxLength(64);
         recipe.Property(r => r.CopiedFromFamilyName).HasMaxLength(200);
         recipe.HasIndex(r => r.FamilyId);

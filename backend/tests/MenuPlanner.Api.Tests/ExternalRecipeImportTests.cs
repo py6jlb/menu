@@ -77,7 +77,7 @@ public sealed class ExternalRecipeImportTests
 
         var (updateResponse, _) = await PutAuthorizedAsync<RecipeDto>(
             client, owner.Token, $"/api/recipes/{source.Id}",
-            FullRequest() with { Name = "Борщ по-домашнему", CookTimeMinutes = 120, Servings = 8 });
+            FullRequest() with { Name = "Борщ по-домашнему", CookTimeMinutes = 120, Servings = 8, Revision = source.Revision });
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
         var (_, detail) = await GetAuthorizedAsync<RecipeDto>(
@@ -99,7 +99,7 @@ public sealed class ExternalRecipeImportTests
         await CreateFamilyAsync(client, owner.Token, "Семья источника");
         var source = await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
         var (photoResponse, uploaded) = await PutPhotoAuthorizedAsync<RecipeDto>(
-            client, owner.Token, source.Id, new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "image/png", "photo.png");
+            client, owner.Token, source.Id, source.Revision, new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.OK, photoResponse.StatusCode);
         Assert.NotNull(uploaded!.PhotoUrl);
         var share = await ShareAsync(client, owner.Token, source.Id);
@@ -130,13 +130,13 @@ public sealed class ExternalRecipeImportTests
             client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
 
         // Чтение списка после переименования источника обновляет кэш имени.
-        await PutAuthorizedAsync<RecipeDto>(
+        var (_, renamed) = await PutAuthorizedAsync<RecipeDto>(
             client, owner.Token, $"/api/recipes/{source.Id}",
-            FullRequest() with { Name = "Борщ по-домашнему" });
+            FullRequest() with { Name = "Борщ по-домашнему", Revision = source.Revision });
         await GetAuthorizedAsync<List<RecipeSummaryDto>>(client, recipient.Token, "/api/recipes");
 
         // Источник удалён: живого контента нет, остаётся кэш — он должен быть актуальным.
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{source.Id}");
+        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{source.Id}?revision={renamed!.Revision}");
 
         var (_, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
             client, recipient.Token, "/api/recipes?scope=external");
@@ -312,7 +312,8 @@ public sealed class ExternalRecipeImportTests
         await CreateFamilyAsync(client, owner.Token, "Семья источника");
         var source = await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
         var share = await ShareAsync(client, owner.Token, source.Id);
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{source.Id}");
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{source.Id}?revision={source.Revision}");
 
         var recipient = await RegisterAsync(client, "recipient");
         await CreateFamilyAsync(client, recipient.Token, "Семья получателя");
@@ -383,7 +384,7 @@ public sealed class ExternalRecipeImportTests
         Assert.Equal(HttpStatusCode.Forbidden, deleteResponse.StatusCode);
 
         var (photoResponse, _) = await PutPhotoAuthorizedAsync<RecipeErrorDto>(
-            client, externalId.RecipientToken, externalId.RecipeId,
+            client, externalId.RecipientToken, externalId.RecipeId, null,
             new byte[] { 1, 2, 3 }, "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.Forbidden, photoResponse.StatusCode);
 
@@ -418,7 +419,8 @@ public sealed class ExternalRecipeImportTests
         var (_, imported) = await PostAuthorizedAsync<RecipeImportResultDto>(
             client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
 
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{source.Id}");
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{source.Id}?revision={source.Revision}");
 
         var (response, detail) = await GetAuthorizedAsync<RecipeDto>(
             client, recipient.Token, $"/api/recipes/{imported!.RecipeId}");
@@ -542,14 +544,15 @@ public sealed class ExternalRecipeImportTests
     }
 
     private static async Task<(HttpResponseMessage Response, T? Data)> PutPhotoAuthorizedAsync<T>(
-        HttpClient client, string token, Guid recipeId, byte[] bytes, string contentType, string fileName)
+        HttpClient client, string token, Guid recipeId, int? revision, byte[] bytes, string contentType, string fileName)
     {
         using var content = new MultipartFormDataContent();
         var fileContent = new ByteArrayContent(bytes);
         fileContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         content.Add(fileContent, "file", fileName);
 
-        using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/recipes/{recipeId}/photo");
+        var path = $"/api/recipes/{recipeId}/photo" + (revision is null ? "" : $"?revision={revision}");
+        using var request = new HttpRequestMessage(HttpMethod.Put, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Content = content;
         var response = await client.SendAsync(request);

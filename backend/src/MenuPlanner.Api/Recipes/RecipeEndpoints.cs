@@ -105,7 +105,15 @@ public static class RecipeEndpoints
                 }
             }
 
-            await db.SaveChangesAsync();
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Кэш имени — не пользовательская правка: при гонке он обновится
+                // при следующем чтении, а сам список рецептов отдаётся как есть.
+            }
         }
 
         var states = await stateResolver.ResolveManyAsync(
@@ -214,7 +222,14 @@ public static class RecipeEndpoints
         if (!string.Equals(recipe.Name, source.Name, StringComparison.Ordinal))
         {
             recipe.Name = source.Name;
-            await db.SaveChangesAsync();
+            try
+            {
+                await db.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Кэш имени — не пользовательская правка: при гонке обновится позже.
+            }
         }
 
         var live = ToDto(
@@ -225,7 +240,14 @@ public static class RecipeEndpoints
             sourceFamilyId: recipe.SourceFamilyId,
             state: stateCode);
 
-        return Results.Json(live with { Id = recipe.Id, CopiedFromFamilyName = recipe.CopiedFromFamilyName });
+        return Results.Json(live with
+        {
+            Id = recipe.Id,
+            CopiedFromFamilyName = recipe.CopiedFromFamilyName,
+            // Ревизия — свойство обёртки-получателя, а не живого источника:
+            // именно её передают при удалении/промоушене.
+            Revision = recipe.Revision
+        });
     }
 
     private static async Task<IResult> CreateAsync(
@@ -239,7 +261,7 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Вы не состоите в семье."));
 
-        var error = Validate(request);
+        var error = RecipeValidation.Validate(request);
         if (error is not null)
             return Results.BadRequest(new RecipeErrorDto(error));
 
@@ -250,7 +272,7 @@ public static class RecipeEndpoints
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
-        Apply(recipe, request);
+        RecipeValidation.Apply(recipe, request);
 
         db.Recipes.Add(recipe);
         await db.SaveChangesAsync();
@@ -259,55 +281,27 @@ public static class RecipeEndpoints
     }
 
     private static async Task<IResult> UpdateAsync(
-        Guid id, RecipeRequest request, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
+        Guid id, RecipeRequest request, ClaimsPrincipal principal, CurrentUserContext currentUser,
+        RecipeMutationService mutations)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var recipe = await db.Recipes
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (recipe is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-        if (recipe.SourceRecipeId is not null)
-            return RecipeErrors.ExternalReadOnly();
-
-        var error = Validate(request);
-        if (error is not null)
-            return Results.BadRequest(new RecipeErrorDto(error));
-
-        recipe.UpdatedAt = DateTime.UtcNow;
-        Apply(recipe, request);
-        // Правка рецепта стирает метку происхождения «скопировано из семьи X».
-        recipe.CopiedFromFamilyName = null;
-
-        await db.SaveChangesAsync();
-
-        return Results.Json(ToDto(recipe));
+        var result = await mutations.UpdateAsync(id, familyId.Value, request);
+        return MutationResult(result, result.Recipe is null ? null : ToDto(result.Recipe));
     }
 
     private static async Task<IResult> DeleteAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser, PhotoStorage storage)
+        Guid id, int? revision, ClaimsPrincipal principal, CurrentUserContext currentUser,
+        RecipeMutationService mutations)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var recipe = await db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (recipe is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-        if (recipe.SourceRecipeId is not null)
-            return RecipeErrors.ExternalReadOnly();
-
-        var photoPath = recipe.PhotoPath;
-        db.Recipes.Remove(recipe);
-        await db.SaveChangesAsync();
-        storage.Delete(photoPath);
-
-        return Results.NoContent();
+        var result = await mutations.DeleteAsync(id, familyId.Value, revision);
+        return MutationResult(result);
     }
 
     /// <summary>
@@ -315,109 +309,59 @@ public static class RecipeEndpoints
     /// обычный DELETE внешнего рецепта запрещён (403), а этот путь убирает только внешний рецепт.
     /// </summary>
     private static async Task<IResult> RemoveExternalAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
+        Guid id, int? revision, ClaimsPrincipal principal, CurrentUserContext currentUser,
+        RecipeMutationService mutations)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var recipe = await db.Recipes
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (recipe is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-        if (recipe.SourceRecipeId is null)
-            return Results.BadRequest(new RecipeErrorDto("Это не внешний рецепт."));
-
-        db.Recipes.Remove(recipe);
-        await db.SaveChangesAsync();
-
-        return Results.NoContent();
+        var result = await mutations.RemoveExternalAsync(id, familyId.Value, revision);
+        return MutationResult(result);
     }
+
+    /// <summary>Отображение исхода правки/удаления в HTTP-ответ.</summary>
+    private static IResult MutationResult(RecipeMutationResult result, RecipeDto? dto = null) =>
+        result.Outcome switch
+        {
+            RecipeMutationOutcome.Ok => dto is null ? Results.NoContent() : Results.Json(dto),
+            RecipeMutationOutcome.NotFound => Results.NotFound(new RecipeErrorDto("Рецепт не найден.")),
+            RecipeMutationOutcome.ExternalReadOnly => RecipeErrors.ExternalReadOnly(),
+            RecipeMutationOutcome.MissingRevision => result.Error is null
+                ? RecipeErrors.MissingRevision()
+                : Results.BadRequest(new RecipeErrorDto(result.Error)),
+            RecipeMutationOutcome.Conflict => RecipeErrors.RevisionConflict(result.Revision),
+            _ => Results.BadRequest(new RecipeErrorDto(result.Error ?? "Некорректные данные рецепта."))
+        };
 
     /// <summary>
     /// Промоушен внешнего рецепта в копию на месте: внешний рецепт остаётся той же строкой Recipe
     /// (id сохраняется — записи плана не рвутся), контент источника и файл фото копируются,
     /// ссылка на источник снимается, а метка «скопировано из семьи X» сохраняется.
+    /// Защита однократности и ревизии — в <see cref="ExternalRecipePromotionService"/>.
     /// </summary>
     private static async Task<IResult> CopyAsync(
         Guid id,
+        int? revision,
         ClaimsPrincipal principal,
-        AppDbContext db,
         CurrentUserContext currentUser,
-        SourceFamilyNameResolver sourceNames,
-        PhotoStorage storage)
+        ExternalRecipePromotionService promotion)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var wrapper = await db.Recipes
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (wrapper is null)
-            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
-        if (wrapper.SourceRecipeId is not Guid sourceId)
-            return Results.BadRequest(new RecipeErrorDto("Это не внешний рецепт."));
-
-        var source = await db.Recipes
-            .AsNoTracking()
-            .Include(r => r.Family)
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == sourceId);
-        if (source is null)
+        var result = await promotion.PromoteAsync(id, familyId.Value, revision);
+        return result.Outcome switch
         {
-            // Сломанная ссылка: контента нет, спасать нечего.
-            return Results.BadRequest(new RecipeErrorDto(
-                "Источник удалил рецепт — копию сделать нельзя."));
-        }
-
-        // Метка «скопировано из семьи X» всегда проставляется на достижимом пути:
-        // имя берём из навигации загруженного источника, с фолбэком на запись семьи.
-        var copiedFromFamilyName = source.Family?.Name
-            ?? await sourceNames.ResolveAsync(wrapper.SourceFamilyId)
-            ?? await sourceNames.ResolveAsync(source.FamilyId);
-
-        var copiedPhoto = source.PhotoPath is null
-            ? null
-            : await storage.CopyAsync(wrapper.Id, source.PhotoPath);
-
-        wrapper.Name = source.Name;
-        wrapper.Description = source.Description;
-        wrapper.CookTimeMinutes = source.CookTimeMinutes;
-        wrapper.Servings = source.Servings;
-        wrapper.Difficulty = source.Difficulty;
-        wrapper.Calories = source.Calories;
-        wrapper.Tags = new List<string>(source.Tags);
-        wrapper.Seasonality = new List<string>(source.Seasonality);
-        wrapper.Diet = new List<string>(source.Diet);
-        wrapper.PhotoPath = copiedPhoto;
-        wrapper.Steps = source.Steps
-            .OrderBy(s => s.Order)
-            .Select(s => new RecipeStep { Order = s.Order, Text = s.Text })
-            .ToList();
-        wrapper.Ingredients = source.Ingredients
-            .OrderBy(i => i.Order)
-            .Select(i => new RecipeIngredient
-            {
-                Order = i.Order,
-                Name = i.Name,
-                Amount = i.Amount,
-                Unit = i.Unit,
-                Note = i.Note
-            })
-            .ToList();
-
-        wrapper.SourceRecipeId = null;
-        wrapper.SourceFamilyId = null;
-        wrapper.SourceToken = null;
-        wrapper.CopiedFromFamilyName = copiedFromFamilyName;
-        wrapper.UpdatedAt = DateTime.UtcNow;
-
-        await db.SaveChangesAsync();
-
-        return Results.Json(ToDto(wrapper));
+            RecipePromotionOutcome.Promoted => Results.Json(ToDto(result.Recipe!)),
+            RecipePromotionOutcome.NotFound => Results.NotFound(new RecipeErrorDto("Рецепт не найден.")),
+            RecipePromotionOutcome.NotExternal => Results.BadRequest(new RecipeErrorDto("Это не внешний рецепт.")),
+            RecipePromotionOutcome.MissingRevision => RecipeErrors.MissingRevision(),
+            RecipePromotionOutcome.Conflict => RecipeErrors.RevisionConflict(result.Revision),
+            _ => Results.BadRequest(new RecipeErrorDto(
+                result.Error ?? "Источник удалил рецепт — копию сделать нельзя."))
+        };
     }
 
     private static async Task<IResult> MatchAsync(
@@ -431,7 +375,7 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Вы не состоите в семье."));
 
-        var error = ValidateMatch(request);
+        var error = RecipeValidation.ValidateMatch(request);
         if (error is not null)
             return Results.BadRequest(new RecipeErrorDto(error));
 
@@ -500,6 +444,7 @@ public static class RecipeEndpoints
     private static async Task<IResult> UploadPhotoAsync(
         Guid id,
         IFormFile? file,
+        int? revision,
         ClaimsPrincipal principal,
         AppDbContext db,
         CurrentUserContext currentUser,
@@ -518,6 +463,10 @@ public static class RecipeEndpoints
         if (recipe.SourceRecipeId is not null)
             return RecipeErrors.ExternalReadOnly();
 
+        var stale = RevisionProblem(revision, recipe.Revision);
+        if (stale is not null)
+            return stale;
+
         if (file is null || file.Length == 0)
             return Results.BadRequest(new RecipeErrorDto("Выберите файл изображения."));
 
@@ -529,16 +478,30 @@ public static class RecipeEndpoints
                 $"Размер фото не должен превышать {RecipeCatalog.PhotoMaxBytes / (1024 * 1024)} МБ."));
 
         var previous = recipe.PhotoPath;
-        recipe.PhotoPath = await storage.SaveAsync(recipe.Id, extension, file.OpenReadStream());
+        var saved = await storage.SaveAsync(recipe.Id, extension, file.OpenReadStream());
+        recipe.PhotoPath = saved;
+        recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
         recipe.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Правка проиграла гонку: не оставляем осиротевший файл и не трогаем чужой.
+            storage.Delete(saved);
+            return await ConflictAsync(id, db);
+        }
+
         storage.Delete(previous);
 
         return Results.Json(ToDto(recipe));
     }
 
     private static async Task<IResult> DeletePhotoAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser, PhotoStorage storage)
+        Guid id, int? revision, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser,
+        PhotoStorage storage)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
@@ -551,13 +514,50 @@ public static class RecipeEndpoints
         if (recipe.SourceRecipeId is not null)
             return RecipeErrors.ExternalReadOnly();
 
+        var stale = RevisionProblem(revision, recipe.Revision);
+        if (stale is not null)
+            return stale;
+
         var previous = recipe.PhotoPath;
         recipe.PhotoPath = null;
+        recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
         recipe.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await ConflictAsync(id, db);
+        }
+
         storage.Delete(previous);
 
         return Results.NoContent();
+    }
+
+    /// <summary>
+    /// Проверка ожидаемой ревизии перед правкой фото. Возвращает ответ-ошибку
+    /// (400/409), если ревизия не передана или устарела, иначе null.
+    /// </summary>
+    private static IResult? RevisionProblem(int? revision, int current)
+    {
+        if (revision is null)
+            return RecipeErrors.MissingRevision();
+        if (!RecipeRevisionRules.IsCurrent(revision, current))
+            return RecipeErrors.RevisionConflict(current);
+        return null;
+    }
+
+    private static async Task<IResult> ConflictAsync(Guid id, AppDbContext db)
+    {
+        var current = await db.Recipes
+            .AsNoTracking()
+            .Where(r => r.Id == id)
+            .Select(r => (int?)r.Revision)
+            .FirstOrDefaultAsync() ?? 0;
+        return RecipeErrors.RevisionConflict(current);
     }
 
     private static IResult GetPhotoFileAsync(string fileName, PhotoStorage storage)
@@ -571,148 +571,6 @@ public static class RecipeEndpoints
             return Results.NotFound();
 
         return Results.File(path, contentType);
-    }
-
-    private static void Apply(Recipe recipe, RecipeRequest request)
-    {
-        recipe.Name = request.Name!.Trim();
-        recipe.Description = string.IsNullOrWhiteSpace(request.Description)
-            ? null
-            : request.Description.Trim();
-        recipe.CookTimeMinutes = request.CookTimeMinutes!.Value;
-        recipe.Servings = request.Servings!.Value;
-        recipe.Difficulty = request.Difficulty!.Value;
-        recipe.Calories = request.Calories;
-        recipe.Tags = NormalizeStrings(request.Tags);
-        recipe.Seasonality = NormalizeStrings(request.Seasonality)
-            .Select(s => s.ToLowerInvariant())
-            .ToList();
-        recipe.Diet = NormalizeStrings(request.Diet);
-        recipe.Steps = MapSteps(request);
-        recipe.Ingredients = MapIngredients(request);
-    }
-
-    private static List<RecipeStep> MapSteps(RecipeRequest request)
-    {
-        var texts = (request.Steps ?? new List<RecipeStepRequest>())
-            .Select(s => s?.Text?.Trim())
-            .Where(t => !string.IsNullOrEmpty(t))
-            .Select(t => t!)
-            .ToList();
-
-        return texts
-            .Select((text, index) => new RecipeStep { Order = index, Text = text })
-            .ToList();
-    }
-
-    private static List<RecipeIngredient> MapIngredients(RecipeRequest request)
-    {
-        var result = new List<RecipeIngredient>();
-        var order = 0;
-
-        foreach (var ing in request.Ingredients ?? new List<RecipeIngredientRequest>())
-        {
-            var name = ing.Name?.Trim();
-            var unit = ing.Unit?.Trim();
-            var note = ing.Note?.Trim();
-
-            if (string.IsNullOrEmpty(name) && ing.Amount is null && string.IsNullOrEmpty(unit) && string.IsNullOrEmpty(note))
-                continue;
-
-            result.Add(new RecipeIngredient
-            {
-                Order = order++,
-                Name = name!,
-                Amount = ing.Amount!.Value,
-                Unit = unit!,
-                Note = string.IsNullOrEmpty(note) ? null : note
-            });
-        }
-
-        return result;
-    }
-
-    private static List<string> NormalizeStrings(List<string>? source) =>
-        (source ?? new List<string>())
-            .Select(s => s.Trim())
-            .Where(s => s.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-    private static string? Validate(RecipeRequest request)
-    {
-        var name = request.Name?.Trim();
-        if (string.IsNullOrEmpty(name))
-            return "Укажите название рецепта.";
-        if (name.Length > RecipeCatalog.NameMaxLength)
-            return $"Название рецепта не должно превышать {RecipeCatalog.NameMaxLength} символов.";
-
-        if (request.Description?.Trim().Length > RecipeCatalog.TextMaxLength)
-            return $"Описание не должно превышать {RecipeCatalog.TextMaxLength} символов.";
-
-        if (request.CookTimeMinutes is not (>= RecipeCatalog.CookTimeMin and <= RecipeCatalog.CookTimeMax))
-            return $"Укажите время приготовления (мин) от {RecipeCatalog.CookTimeMin} до {RecipeCatalog.CookTimeMax}.";
-
-        if (request.Servings is not (>= RecipeCatalog.ServingsMin and <= RecipeCatalog.ServingsMax))
-            return $"Укажите количество порций от {RecipeCatalog.ServingsMin} до {RecipeCatalog.ServingsMax}.";
-
-        if (request.Difficulty is not (>= RecipeCatalog.DifficultyMin and <= RecipeCatalog.DifficultyMax))
-            return $"Укажите сложность от {RecipeCatalog.DifficultyMin} до {RecipeCatalog.DifficultyMax}.";
-
-        if (request.Calories is < 0 or > RecipeCatalog.CaloriesMax)
-            return $"Калорийность должна быть в диапазоне от 0 до {RecipeCatalog.CaloriesMax}.";
-
-        var steps = (request.Steps ?? new List<RecipeStepRequest>())
-            .Select(s => s?.Text?.Trim())
-            .Where(t => !string.IsNullOrEmpty(t))
-            .ToList();
-        if (steps.Count == 0)
-            return "Добавьте хотя бы один шаг приготовления.";
-        if (steps.Any(s => s!.Length > RecipeCatalog.TextMaxLength))
-            return $"Текст шага не должен превышать {RecipeCatalog.TextMaxLength} символов.";
-
-        var tags = NormalizeStrings(request.Tags);
-        if (tags.Any(t => t.Length > RecipeCatalog.TagMaxLength))
-            return $"Теги не должны превышать {RecipeCatalog.TagMaxLength} символов.";
-        if (tags.Count > 100)
-            return "Слишком много тегов (максимум 100).";
-
-        var seasons = NormalizeStrings(request.Seasonality)
-            .Select(s => s.ToLowerInvariant())
-            .ToList();
-        var invalidSeason = seasons.FirstOrDefault(s => !RecipeCatalog.Seasons.Contains(s));
-        if (invalidSeason is not null)
-            return $"Недопустимое значение сезона: «{invalidSeason}».";
-
-        var diet = NormalizeStrings(request.Diet);
-        if (diet.Any(d => d.Length > RecipeCatalog.DietMaxLength))
-            return $"Метки диеты не должны превышать {RecipeCatalog.DietMaxLength} символов.";
-
-        foreach (var ing in request.Ingredients ?? new List<RecipeIngredientRequest>())
-        {
-            var ingredientName = ing.Name?.Trim();
-            var unit = ing.Unit?.Trim();
-            var note = ing.Note?.Trim();
-
-            if (string.IsNullOrEmpty(ingredientName) && ing.Amount is null
-                && string.IsNullOrEmpty(unit) && string.IsNullOrEmpty(note))
-                continue;
-
-            if (string.IsNullOrEmpty(ingredientName))
-                return "Укажите название ингредиента.";
-            if (ingredientName.Length > RecipeCatalog.IngredientNameMaxLength)
-                return $"Название ингредиента не должно превышать {RecipeCatalog.IngredientNameMaxLength} символов.";
-            if (ing.Amount is not (> 0))
-                return $"Укажите количество ингредиента «{ingredientName}».";
-            if (string.IsNullOrEmpty(unit))
-                return $"Укажите единицу измерения ингредиента «{ingredientName}».";
-            if (!RecipeCatalog.Units.Contains(unit))
-                return $"Недопустимая единица измерения «{unit}».";
-            if (note?.Length > RecipeCatalog.NoteMaxLength)
-                return $"Примечание к ингредиенту не должно превышать {RecipeCatalog.NoteMaxLength} символов.";
-        }
-
-        return null;
     }
 
     internal static RecipeDto ToDto(
@@ -744,7 +602,8 @@ public static class RecipeEndpoints
         sourceFamilyName,
         sourceFamilyId,
         state,
-        recipe.CopiedFromFamilyName);
+        recipe.CopiedFromFamilyName,
+        recipe.Revision);
 
     private static string? PhotoUrl(string? photoPath) =>
         photoPath is null ? null : $"/api/photos/{Path.GetFileName(photoPath)}";

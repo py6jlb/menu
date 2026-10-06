@@ -55,6 +55,7 @@ public sealed class RecipeFlowTests
         {
             Name = "Борщ по-домашнему",
             Difficulty = 4,
+            Revision = created.Revision,
             Ingredients = new List<RecipeIngredientRequest>
             {
                 new("Свёкла", 3, "pcs", "средняя"),
@@ -70,7 +71,8 @@ public sealed class RecipeFlowTests
         Assert.Equal(3, updated.Ingredients.Count);
         Assert.Equal(3m, updated.Ingredients[0].Amount);
 
-        var deleteResponse = await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{created.Id}");
+        var deleteResponse = await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{created.Id}?revision={updated.Revision}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         var (afterDelete, _) = await GetAuthorizedAsync<RecipeDto>(client, owner.Token, $"/api/recipes/{created.Id}");
@@ -95,11 +97,12 @@ public sealed class RecipeFlowTests
         var (getResponse, _) = await GetAuthorizedAsync<RecipeDto>(client, member.Token, $"/api/recipes/{created!.Id}");
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
 
-        var (updateResponse, _) = await PutAuthorizedAsync<RecipeDto>(client, member.Token,
-            $"/api/recipes/{created.Id}", FullRequest() with { Name = "Борщ от участника" });
+        var (updateResponse, updated) = await PutAuthorizedAsync<RecipeDto>(client, member.Token,
+            $"/api/recipes/{created.Id}", FullRequest() with { Name = "Борщ от участника", Revision = created.Revision });
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
-        var deleteResponse = await DeleteAuthorizedAsync(client, member.Token, $"/api/recipes/{created.Id}");
+        var deleteResponse = await DeleteAuthorizedAsync(
+            client, member.Token, $"/api/recipes/{created.Id}?revision={updated!.Revision}");
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
     }
 

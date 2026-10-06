@@ -58,7 +58,7 @@ public sealed class ExternalRecipeStateFlowTests
     public async Task DeletedSource_MarksWrapperBroken_PlanAndShoppingList()
     {
         using var client = new ApiFactory().CreateClient();
-        var (owner, recipient, imported, _) = await ImportAsync(client);
+        var (owner, recipient, imported, source) = await ImportAsync(client);
 
         var put = await PutAuthorizedAsync<WeekPlanDto>(client, recipient.Token,
             $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
@@ -67,7 +67,8 @@ public sealed class ExternalRecipeStateFlowTests
             }));
         Assert.Equal(HttpStatusCode.OK, put.Response.StatusCode);
 
-        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{imported.SourceId}");
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{imported.SourceId}?revision={source.Revision}");
 
         var (detailResponse, detail) = await GetAuthorizedAsync<RecipeDto>(
             client, recipient.Token, $"/api/recipes/{imported.WrapperId}");
@@ -114,7 +115,8 @@ public sealed class ExternalRecipeStateFlowTests
         var (owner, recipient, imported, source) = await ImportAsync(client);
 
         var response = await DeleteAuthorizedAsync(
-            client, recipient.Token, $"/api/recipes/{imported.WrapperId}/external");
+            client, recipient.Token,
+            $"/api/recipes/{imported.WrapperId}/external?revision={imported.WrapperRevision}");
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
         var (_, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(
@@ -137,7 +139,7 @@ public sealed class ExternalRecipeStateFlowTests
         var own = await CreateRecipeAsync(client, owner.Token, "Свой суп");
 
         var response = await DeleteAuthorizedAsync(
-            client, owner.Token, $"/api/recipes/{own.Id}/external");
+            client, owner.Token, $"/api/recipes/{own.Id}/external?revision={own.Revision}");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -154,8 +156,10 @@ public sealed class ExternalRecipeStateFlowTests
         await CreateFamilyAsync(client, recipient.Token, "Семья получателя");
         var (_, imported) = await PostAuthorizedAsync<RecipeImportResultDto>(
             client, recipient.Token, $"/api/shared/{share.Token}/import", body: null);
+        var (_, wrapper) = await GetAuthorizedAsync<RecipeDto>(
+            client, recipient.Token, $"/api/recipes/{imported!.RecipeId}");
 
-        return (owner, recipient, new Imported(imported!.RecipeId, source.Id), source);
+        return (owner, recipient, new Imported(imported.RecipeId, source.Id, wrapper!.Revision), source);
     }
 
     private static RecipeRequest FullRequest() => new(
@@ -262,5 +266,5 @@ public sealed class ExternalRecipeStateFlowTests
         }
     }
 
-    private sealed record Imported(Guid WrapperId, Guid SourceId);
+    private sealed record Imported(Guid WrapperId, Guid SourceId, int WrapperRevision);
 }
