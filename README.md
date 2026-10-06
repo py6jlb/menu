@@ -84,6 +84,19 @@ npm install
 npm run dev
 ```
 
+Frontend-тесты (Vitest + jsdom, поведение недельного черновика):
+
+```bash
+cd frontend
+npm test
+```
+
+Без установленного на хосте Node тесты и сборку прогоняют в контейнере (пишущий `docker run` — под текущим UID, чтобы не оставлять root-owned файлы):
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/app -w /app/frontend node:24-alpine npm test
+```
+
 ## Конфигурация backend
 
 - Подключение БД: при заданном `DB_HOST` используется structured-набор `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` через `NpgsqlConnectionStringBuilder` (так работает prod-Compose, сохраняя literal-пароли). Без `DB_HOST` прежний приоритет: `ConnectionStrings:Default` (env `ConnectionStrings__Default` или JSON-default с `Host=db`) → `DB_CONNECTION_STRING` → fallback с `Host=localhost`. Dev-Compose и EF factory сохраняют прежние overrides без `DB_HOST`. Подробности и defaults — в [`deploy/README.md`](deploy/README.md#literal-параметры-подключения-backend).

@@ -8,5 +8,9 @@ export default defineConfig({
       '/api': 'http://localhost:8080',
       '/health': 'http://localhost:8080'
     }
+  },
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.test.js']
   }
 })
