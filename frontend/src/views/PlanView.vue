@@ -1,29 +1,42 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { matchRecipes } from '../api/recipes'
-import { getWeekPlan, saveWeekPlan } from '../api/plans'
-import { DAYS, MEALS, mondayOf, addDays, weekDays, toIso, weekRangeLabel } from '../constants/plan'
+import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel } from '../constants/plan'
+import { useWeekDraft } from '../composables/useWeekDraft'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 import { SEASONS, DIETS } from '../constants/recipe'
 import { useAuth } from '../stores/auth'
 
 const { isEmailVerified } = useAuth()
 
-const monday = ref(mondayOf(new Date()))
+const {
+  weekStart: monday,
+  draft,
+  dirty,
+  loading,
+  saving,
+  loadError: loadingError,
+  saveError,
+  savedMessage,
+  slotEntry,
+  setSlot,
+  removeSlot: removeDraftSlot,
+  loadWeek: load,
+  save,
+  goToWeek,
+  confirmNavigation,
+  hasUnsavedChanges
+} = useWeekDraft({ initialWeek: mondayOf(new Date()) })
+
 const recipes = ref([])
-const draft = ref({})
-const savedSnapshot = ref('')
-const loading = ref(true)
-const loadingError = ref('')
-const saving = ref(false)
-const savedMessage = ref('')
-const saveError = ref('')
 
 const editing = ref(null)
 const search = ref('')
 const pickerRecipeId = ref(null)
 const pickerPortions = ref(1)
 const pickerLoading = ref(false)
+const pickerError = ref('')
 
 const filter = ref({
   maxDifficulty: null,
@@ -67,70 +80,20 @@ const filteredRecipes = computed(() => {
   return recipes.value.filter((r) => r.name.toLowerCase().includes(q))
 })
 
-const dirty = computed(() => savedSnapshot.value !== snapshot())
-
-function slotKey(day, mealType) {
-  return `${day}:${mealType}`
-}
-
-function snapshot() {
-  return JSON.stringify(
-    Object.keys(draft.value)
-      .sort()
-      .map((key) => {
-        const [day, mealType] = key.split(':')
-        const entry = draft.value[key]
-        return { day: Number(day), mealType, recipeId: entry.recipeId, portions: entry.portions }
-      })
-  )
-}
-
-function slotEntry(day, mealType) {
-  return draft.value[slotKey(day, mealType)]
-}
-
-function entriesPayload() {
-  return Object.keys(draft.value)
-    .sort()
-    .map((key) => {
-      const [day, mealType] = key.split(':')
-      const entry = draft.value[key]
-      return { day: Number(day), mealType, recipeId: entry.recipeId, portions: entry.portions }
-    })
-}
-
-async function load() {
-  loading.value = true
-  loadingError.value = ''
-  savedMessage.value = ''
-  saveError.value = ''
-  const { response, data } = await getWeekPlan(toIso(monday.value))
-  if (response.status === 200) {
-    const map = {}
-    for (const entry of data.entries || []) {
-      map[slotKey(entry.day, entry.mealType)] = {
-        recipeId: entry.recipeId,
-        recipeName: entry.recipeName,
-        portions: entry.portions,
-        state: entry.state
-      }
+async function loadRecipes(body = {}) {
+  pickerLoading.value = true
+  pickerError.value = ''
+  try {
+    const { response, data } = await matchRecipes(body)
+    if (response.status === 200) {
+      recipes.value = (data?.items || []).map(toPickerItem)
+    } else {
+      pickerError.value = data?.error || 'Не удалось загрузить рецепты.'
     }
-    draft.value = map
-    savedSnapshot.value = snapshot()
-  } else if (response.status === 404) {
-    draft.value = {}
-    savedSnapshot.value = ''
-    loadingError.value = data?.error || 'Вы пока не состоите в семье.'
-  } else {
-    loadingError.value = data?.error || 'Не удалось загрузить план.'
-  }
-  loading.value = false
-}
-
-async function loadRecipes() {
-  const { response, data } = await matchRecipes({})
-  if (response.status === 200) {
-    recipes.value = (data?.items || []).map(toPickerItem)
+  } catch {
+    pickerError.value = 'Не удалось загрузить рецепты. Проверьте соединение.'
+  } finally {
+    pickerLoading.value = false
   }
 }
 
@@ -190,18 +153,7 @@ async function applyFilters() {
       preferLowComplexity: f.preferLowComplexity
     }
   }
-  pickerLoading.value = true
-  const { response, data } = await matchRecipes(body)
-  if (response.status === 200) {
-    recipes.value = (data?.items || []).map(toPickerItem)
-  }
-  pickerLoading.value = false
-}
-
-async function changeWeek(offset) {
-  if (dirty.value && !window.confirm('Есть несохранённые изменения. Продолжить без сохранения?')) return
-  monday.value = addDays(monday.value, offset * 7)
-  await load()
+  await loadRecipes(body)
 }
 
 function openPicker(day, mealType) {
@@ -225,49 +177,25 @@ function selectRecipe(recipe) {
 function confirmSlot() {
   if (!pickerRecipeId.value || pickerPortions.value < 1) return
   const recipe = recipes.value.find((r) => r.id === pickerRecipeId.value)
-  draft.value = {
-    ...draft.value,
-    [slotKey(editing.value.day, editing.value.mealType)]: {
-      recipeId: pickerRecipeId.value,
-      recipeName: recipe?.name || '',
-      portions: pickerPortions.value
-    }
-  }
+  setSlot(editing.value.day, editing.value.mealType, {
+    recipeId: pickerRecipeId.value,
+    recipeName: recipe?.name || '',
+    portions: pickerPortions.value
+  })
   closePicker()
 }
 
 function removeSlot(day, mealType) {
-  const key = slotKey(day, mealType)
-  const next = { ...draft.value }
-  delete next[key]
-  draft.value = next
-  if (editing.value && slotKey(editing.value.day, editing.value.mealType) === key) {
+  removeDraftSlot(day, mealType)
+  if (editing.value && editing.value.day === day && editing.value.mealType === mealType) {
     closePicker()
   }
 }
 
-async function save() {
-  saving.value = true
-  savedMessage.value = ''
-  saveError.value = ''
-  const { response, data } = await saveWeekPlan(toIso(monday.value), entriesPayload())
-  if (response.status === 200) {
-    const map = {}
-    for (const entry of data.entries || []) {
-      map[slotKey(entry.day, entry.mealType)] = {
-        recipeId: entry.recipeId,
-        recipeName: entry.recipeName,
-        portions: entry.portions,
-        state: entry.state
-      }
-    }
-    draft.value = map
-    savedSnapshot.value = snapshot()
-    savedMessage.value = 'План сохранён.'
-  } else {
-    saveError.value = data?.error || 'Не удалось сохранить план.'
-  }
-  saving.value = false
+function handleBeforeUnload(event) {
+  if (!hasUnsavedChanges()) return
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 function dayHeader(index) {
@@ -278,9 +206,16 @@ function mealLabel(code) {
   return MEALS.find((m) => m.code === code)?.label || code
 }
 
-onMounted(async () => {
-  await loadRecipes()
-  await load()
+onBeforeRouteLeave(() => confirmNavigation())
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  load()
+  loadRecipes()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -308,9 +243,9 @@ onMounted(async () => {
     </p>
 
     <div class="nav">
-      <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(-1)">←</button>
+      <button type="button" class="btn btn--ghost btn--small" @click="goToWeek(-1)">←</button>
       <span class="week-label">{{ weekLabel }}</span>
-      <button type="button" class="btn btn--ghost btn--small" @click="changeWeek(1)">→</button>
+      <button type="button" class="btn btn--ghost btn--small" @click="goToWeek(1)">→</button>
     </div>
 
     <p v-if="savedMessage" class="success">{{ savedMessage }}</p>
@@ -500,6 +435,7 @@ onMounted(async () => {
         </details>
 
         <p v-if="pickerLoading" class="picker-loading">Загрузка…</p>
+        <p v-else-if="pickerError" class="error">{{ pickerError }}</p>
 
         <ul class="recipe-options">
           <li
