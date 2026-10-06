@@ -83,6 +83,7 @@ builder.Services.AddScoped<ExternalRecipeSourceLoader>();
 builder.Services.AddScoped<ExternalRecipeStateResolver>();
 builder.Services.AddScoped<RecipeSharingService>();
 builder.Services.AddScoped<RepetitionCounter>();
+builder.Services.AddScoped<WeekPlanSaver>();
 builder.Services.AddScoped<AdminBootstrap>();
 
 builder.Services.AddSingleton(services => new ShareOptions

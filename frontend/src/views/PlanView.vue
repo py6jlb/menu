@@ -13,6 +13,7 @@ const { isEmailVerified } = useAuth()
 const {
   weekStart: monday,
   draft,
+  conflict,
   dirty,
   loading,
   saving,
@@ -24,6 +25,7 @@ const {
   removeSlot: removeDraftSlot,
   loadWeek: load,
   save,
+  reloadServerVersion,
   goToWeek,
   confirmNavigation
 } = useWeekDraft({ initialWeek: mondayOf(new Date()) })
@@ -248,6 +250,16 @@ onBeforeUnmount(() => {
     </div>
 
     <p v-if="savedMessage" class="success">{{ savedMessage }}</p>
+    <div v-else-if="conflict" class="conflict">
+      <p class="error">{{ saveError }}</p>
+      <p v-if="conflict.revision !== null" class="conflict-server">
+        Актуальная версия на сервере: ревизия {{ conflict.revision }},
+        записей — {{ conflict.entries.length }}.
+      </p>
+      <button type="button" class="btn btn--ghost btn--small" @click="reloadServerVersion">
+        Загрузить актуальную версию
+      </button>
+    </div>
     <p v-else-if="saveError" class="error">{{ saveError }}</p>
 
     <p v-if="loading" class="loading">Загрузка…</p>
@@ -507,6 +519,24 @@ onBeforeUnmount(() => {
   font-weight: 700;
   display: inline-flex;
   align-items: center;
+}
+
+.conflict {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.conflict .error {
+  margin: 0;
+}
+
+.conflict-server {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
 }
 
 .nav {

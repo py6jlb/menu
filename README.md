@@ -314,9 +314,11 @@ unset ADMIN_PW
 
 | Метод | Путь | Описание |
 |-------|------|----------|
-| GET  | `/api/plans/week/{weekStart}` | План недели: `{ weekStart, entries: [{ day, mealType, recipeId, recipeName, portions, state }] }`; `state` — состояние внешнего рецепта (`ok`/`warning`/`broken`), `null` для своих; если плана нет — `200` с пустым `entries` (не создаётся) |
-| PUT  | `/api/plans/week/{weekStart}` | Upsert всей недели: создаёт план при отсутствии и заменяет все записи недели (delete-and-insert). Тело: `{ entries: [{ day, mealType, recipeId, portions }] }` |
-| DELETE | `/api/plans/week/{weekStart}` | Удаляет план недели вместе с записями → `204` (идемпотентно) |
+| GET  | `/api/plans/week/{weekStart}` | План недели: `{ weekStart, revision, entries: [{ day, mealType, recipeId, recipeName, portions, state }] }`; `state` — состояние внешнего рецепта (`ok`/`warning`/`broken`), `null` для своих; если плана нет — `200` с `revision: 0` и пустым `entries` (не создаётся) |
+| PUT  | `/api/plans/week/{weekStart}` | Upsert всей недели с контролем ревизии: `expectedRevision: 0` создаёт план, `expectedRevision = revision` заменяет все записи недели (delete-and-insert) и увеличивает ревизию. Тело: `{ expectedRevision, entries: [{ day, mealType, recipeId, portions }] }`. Устаревшая ревизия → `409 { error, weekStart, revision, entries }` с текущей серверной версией, без частичной перезаписи |
+| DELETE | `/api/plans/week/{weekStart}?expectedRevision=N` | Удаляет план недели вместе с записями → `204`. Без ревизии на существующем плане или при устаревшей ревизии → `409` с текущей версией; повторное удаление (плана уже нет) идемпотентно → `204` |
+
+Ревизия (`revision`) — целое число, растёт с каждым сохранением и относится ко всей неделе. Чтение возвращает её, сохранение и удаление атомарно проверяют ожидаемую ревизию вместе с полной заменой/удалением записей: два PUT от одной ревизии дают один успех и один согласованный конфликт, а не смешение двух наборов записей. У отсутствующего плана исходная ревизия `0` — условие создания. Сетевой сбой не сдвигает ожидаемую ревизию, поэтому повтор проверяет ту же версию и не перезаписывает чужую работу.
 
 `weekStart` — дата понедельника в формате `yyyy-MM-dd` (не понедельник → `400`). Названия рецептов подставляются сервером.
 

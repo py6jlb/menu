@@ -12,6 +12,9 @@ public static class PlanEndpoints
 {
     private const string WeekStartFormat = "yyyy-MM-dd";
 
+    private const string ConflictMessage =
+        "План изменил другой участник. Загрузите актуальную версию и повторите.";
+
     public static IEndpointRouteBuilder MapPlanEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/plans").RequireAuthorization();
@@ -41,7 +44,8 @@ public static class PlanEndpoints
 
         var plan = await LoadPlanAsync(db, familyId.Value, monday);
         if (plan is null)
-            return Results.Json(new WeekPlanDto(Format(monday), Array.Empty<PlanEntryDto>()));
+            return Results.Json(new WeekPlanDto(
+                Format(monday), WeekPlanRevisions.Initial, Array.Empty<PlanEntryDto>()));
 
         var states = await ResolveStatesAsync(stateResolver, plan);
         var liveSources = await LoadLiveSourcesAsync(sourceLoader, plan);
@@ -54,6 +58,7 @@ public static class PlanEndpoints
         ClaimsPrincipal principal,
         AppDbContext db,
         CurrentUserContext currentUser,
+        WeekPlanSaver saver,
         ExternalRecipeStateResolver stateResolver,
         ExternalRecipeSourceLoader sourceLoader)
     {
@@ -78,42 +83,10 @@ public static class PlanEndpoints
                 return Results.BadRequest(new PlanErrorDto("Один или несколько рецептов не принадлежат вашей семье."));
         }
 
-        var plan = await db.WeekPlans
-            .Include(p => p.Entries)
-            .FirstOrDefaultAsync(p => p.FamilyId == familyId.Value && p.WeekStart == monday);
-
-        var now = DateTime.UtcNow;
-        if (plan is null)
-        {
-            plan = new WeekPlan
-            {
-                Id = Guid.NewGuid(),
-                FamilyId = familyId.Value,
-                WeekStart = monday,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-            db.WeekPlans.Add(plan);
-        }
-        else
-        {
-            db.PlanEntries.RemoveRange(plan.Entries);
-            plan.UpdatedAt = now;
-        }
-
-        foreach (var entry in entries)
-        {
-            db.PlanEntries.Add(new PlanEntry
-            {
-                WeekPlanId = plan.Id,
-                Day = entry.Day,
-                MealType = PlanningCatalog.MealTypeFromCode(entry.MealType),
-                RecipeId = entry.RecipeId,
-                Portions = entry.Portions
-            });
-        }
-
-        await db.SaveChangesAsync();
+        var outcome = await saver.SaveAsync(
+            familyId.Value, monday, entries, request.ExpectedRevision, DateTime.UtcNow);
+        if (outcome == WeekPlanMutation.Conflict)
+            return await ConflictAsync(db, familyId.Value, monday, stateResolver, sourceLoader);
 
         var saved = await LoadPlanAsync(db, familyId.Value, monday)
             ?? throw new InvalidOperationException("Сохранённый план недели не найден.");
@@ -125,9 +98,13 @@ public static class PlanEndpoints
 
     private static async Task<IResult> DeleteWeekAsync(
         string weekStart,
+        int? expectedRevision,
         ClaimsPrincipal principal,
         AppDbContext db,
-        CurrentUserContext currentUser)
+        CurrentUserContext currentUser,
+        WeekPlanSaver saver,
+        ExternalRecipeStateResolver stateResolver,
+        ExternalRecipeSourceLoader sourceLoader)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
@@ -137,15 +114,47 @@ public static class PlanEndpoints
             return Results.BadRequest(new PlanErrorDto(
                 $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStartFormat}."));
 
-        var plan = await db.WeekPlans
-            .FirstOrDefaultAsync(p => p.FamilyId == familyId.Value && p.WeekStart == monday);
-        if (plan is not null)
+        // Без ожидаемой ревизии удаление защищено только для уже пустой недели:
+        // повторное удаление без новых данных идемпотентно, а существующий
+        // план так снять нельзя — сообщаем конфликт с текущей версией.
+        if (expectedRevision is null)
         {
-            db.WeekPlans.Remove(plan);
-            await db.SaveChangesAsync();
+            var exists = await db.WeekPlans
+                .AnyAsync(p => p.FamilyId == familyId.Value && p.WeekStart == monday);
+            return exists
+                ? await ConflictAsync(db, familyId.Value, monday, stateResolver, sourceLoader)
+                : Results.NoContent();
         }
 
+        var outcome = await saver.DeleteAsync(familyId.Value, monday, expectedRevision.Value);
+        if (outcome == WeekPlanMutation.Conflict)
+            return await ConflictAsync(db, familyId.Value, monday, stateResolver, sourceLoader);
+
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> ConflictAsync(
+        AppDbContext db,
+        Guid familyId,
+        DateOnly monday,
+        ExternalRecipeStateResolver stateResolver,
+        ExternalRecipeSourceLoader sourceLoader)
+    {
+        var plan = await LoadPlanAsync(db, familyId, monday);
+        if (plan is null)
+        {
+            return Results.Json(
+                new PlanConflictDto(
+                    ConflictMessage, Format(monday), WeekPlanRevisions.Initial, Array.Empty<PlanEntryDto>()),
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        var states = await ResolveStatesAsync(stateResolver, plan);
+        var liveSources = await LoadLiveSourcesAsync(sourceLoader, plan);
+        var dto = ToDto(plan, states, liveSources);
+        return Results.Json(
+            new PlanConflictDto(ConflictMessage, dto.WeekStart, dto.Revision, dto.Entries),
+            statusCode: StatusCodes.Status409Conflict);
     }
 
     private static string? Validate(IReadOnlyList<PlanEntryRequest> entries)
@@ -208,7 +217,7 @@ public static class PlanEndpoints
                     : null))
             .ToList();
 
-        return new WeekPlanDto(Format(plan.WeekStart), entries);
+        return new WeekPlanDto(Format(plan.WeekStart), plan.Revision, entries);
     }
 
     private static bool TryParseWeekStart(string value, out DateOnly monday)

@@ -2,7 +2,13 @@ namespace MenuPlanner.Api.Plans;
 
 public sealed record PlanEntryRequest(int Day, string MealType, Guid RecipeId, int Portions);
 
-public sealed record SaveWeekPlanRequest(IReadOnlyList<PlanEntryRequest>? Entries);
+/// <summary>
+/// Полная замена недели. <see cref="ExpectedRevision"/> — ревизия, которую
+/// клиент прочитал; <see cref="WeekPlanRevisions.Initial"/> означает создание.
+/// </summary>
+public sealed record SaveWeekPlanRequest(
+    IReadOnlyList<PlanEntryRequest>? Entries,
+    int ExpectedRevision = WeekPlanRevisions.Initial);
 
 public sealed record PlanEntryDto(
     int Day,
@@ -12,6 +18,16 @@ public sealed record PlanEntryDto(
     int Portions,
     string? State = null);
 
-public sealed record WeekPlanDto(string WeekStart, IReadOnlyList<PlanEntryDto> Entries);
+public sealed record WeekPlanDto(
+    string WeekStart,
+    int Revision,
+    IReadOnlyList<PlanEntryDto> Entries);
+
+/// <summary>Конфликт ревизий: текущая серверная версия недели для сравнения.</summary>
+public sealed record PlanConflictDto(
+    string Error,
+    string WeekStart,
+    int Revision,
+    IReadOnlyList<PlanEntryDto> Entries);
 
 public sealed record PlanErrorDto(string Error);
