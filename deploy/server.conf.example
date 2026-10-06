@@ -4,7 +4,11 @@
 
 # Docker Hub (тот же namespace, что в локальном файле)
 DOCKERHUB_USER=your-dockerhub-login
-IMAGE_TAG=latest
+# IMAGE_TAG намеренно не задан: закреплённый тег берётся из /opt/menu/current-release,
+# который пишет remote-deploy, поэтому обычный перезапуск Compose остаётся на
+# выбранной версии, а не уходит на latest. Задай явно, только чтобы вручную
+# закрепить другой тег (он получит приоритет над current-release).
+# IMAGE_TAG=abc123
 
 # Режим запуска. production (по умолчанию) требует HTTPS-адрес, настроенную почту
 # и случайные секреты. Лабораторный HTTP без писем включается явно: lab.

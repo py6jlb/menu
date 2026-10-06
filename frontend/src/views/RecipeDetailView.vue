@@ -38,7 +38,8 @@ const {
   load: loadShare,
   create: createShare,
   revoke: revokeShare,
-  regenerate: regenerateShare
+  regenerate: regenerateShare,
+  reset: resetShare
 } = useRecipeShare()
 const copied = ref(false)
 
@@ -59,9 +60,7 @@ function resetResourceState() {
   actionError.value = ''
   actionConflict.value = false
   actionRevision.value = null
-  share.value = null
-  shareLoading.value = false
-  shareError.value = ''
+  resetShare()
   copied.value = false
 }
 
@@ -88,15 +87,12 @@ async function loadFamily() {
   }
 }
 
-async function runShareAction(action) {
+function runShareAction(action) {
   const id = recipe.value?.id
+  // Composable сам привязывает ответ к id рецепта: поздний ответ старого
+  // ресурса не переносит sharing-состояние на новый.
   if (!id) return
-  await action(id)
-  // Поздний ответ старого рецепта не должен переносить sharing-состояние.
-  if (recipe.value?.id !== id) {
-    share.value = null
-    shareError.value = ''
-  }
+  return action(id)
 }
 
 function onShare() {

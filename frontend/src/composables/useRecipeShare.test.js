@@ -129,3 +129,39 @@ describe('useRecipeShare — отзыв и перегенерация', () => {
     expect(state.share.value.token).toBe('fresh')
   })
 })
+
+describe('useRecipeShare — identity ресурса', () => {
+  it('поздний ответ старого рецепта не заполняет состояние нового', async () => {
+    let resolveOld
+    getRecipeShare.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveOld = resolve))
+    )
+    const state = useRecipeShare()
+
+    const oldLoad = state.load('recipe-old')
+    getRecipeShare.mockResolvedValueOnce({ response: { status: 404 }, data: {} })
+    await state.load('recipe-new')
+
+    resolveOld({ response: { status: 200 }, data: shareDto('old') })
+    await oldLoad
+
+    expect(state.share.value).toBeNull()
+    expect(state.error.value).toBe('')
+  })
+
+  it('reset обесценивает незавершённую загрузку и очищает состояние', async () => {
+    let resolveLoad
+    getRecipeShare.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveLoad = resolve))
+    )
+    const state = useRecipeShare()
+
+    const pending = state.load(RECIPE)
+    state.reset()
+    resolveLoad({ response: { status: 200 }, data: shareDto('late') })
+    await pending
+
+    expect(state.share.value).toBeNull()
+    expect(state.error.value).toBe('')
+  })
+})
