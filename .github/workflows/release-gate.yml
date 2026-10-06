@@ -1,0 +1,53 @@
+name: release-gate
+
+# CI согласован с хостингом репозитория (GitHub) и локальным контейнерным
+# запуском: те же этапы выполняет scripts/release-gate.sh. Публикация образов
+# идёт только после зелёного гейта и только по тегу.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gate:
+    name: Гейт (быстрые этапы)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Release gate
+        run: scripts/release-gate.sh
+      - name: Диагностика гейта
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-artifacts
+          path: deploy/gate-artifacts/
+          if-no-files-found: ignore
+
+  publish:
+    name: Сборка и публикация релиза
+    needs: gate
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Вход в Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Сборка, browser smoke и публикация после гейта
+        env:
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          IMAGE_TAG: ${{ github.ref_name }}
+        run: ./deploy/build-push.sh --publish
+      - name: Диагностика релиза
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-artifacts
+          path: deploy/gate-artifacts/
+          if-no-files-found: ignore

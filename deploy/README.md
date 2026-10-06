@@ -56,7 +56,7 @@
    ./deploy/build-push.sh --publish  # то же и push в Docker Hub
    ```
 
-   Гейт: чистый checkout (без незакоммиченных изменений), `npm ci` в Node LTS по lockfile, backend-тесты, drift-guard миграций. Образы собираются с тегом `:<git-sha>`. Публикация образов выполняется только с явным `--publish`; `latest` — вспомогательный указатель, деплой на него не опирается. Manifest `deploy/release/<tag>.json` (и `current.json`) связывает commit, дайджесты backend/frontend, версии конфигурации и время сборки.
+   Гейт: чистый checkout (без незакоммиченных изменений) и `scripts/release-gate.sh` — синтаксис/shellcheck shell-скриптов, deploy-suite конфигурации, Compose/Caddy/Collector, быстрые backend-тесты, критические PostgreSQL-гарантии, drift-guard миграций, frontend state-тесты и чистая сборка по lockfile, анализ зависимостей. При `--publish` дополнительно прогоняется browser smoke, и только после зелёного гейта образы уходят в registry. Образы собираются с тегом `:<git-sha>`. Публикация выполняется только с явным `--publish`; `latest` — вспомогательный указатель, деплой на него не опирается. Manifest `deploy/release/<tag>.json` (и `current.json`) связывает commit, дайджесты backend/frontend, версии конфигурации и время сборки.
 
 4. **Деплой:**
 
@@ -108,6 +108,46 @@
 1. **compatible code-only.** Стенд на релизе A; обычным деплоем поставить B (`./deploy/deploy.sh <B>`). `/opt/menu/deploy/rollback.sh` → откат к A; засечь время (секунды), убедиться, что данные после деплоя B на месте (схема не откатывалась), `current-release=A`, `previous-release=B`.
 2. **несовместимая миграция + полный recovery.** Выпустить C с реальной breaking-миграцией и задеплоить `./deploy/deploy.sh <C> --schema-change`; создать данные после точки. `/opt/menu/deploy/rollback.sh --yes` → откат к B: данные C пропали, схема вернулась к B, `/ready` отвечает, `/api/recipes` даёт `401`. Засечь время (`last_rollback_seconds` в `/opt/menu/backup-state`); ожидание зависит от размера данных/сети, конкретное число заранее не обещается.
 3. Проверить, что запуск второго `deploy.sh`/`rollback.sh` во время операции ждёт lock, а прерванная операция оставляет `deploy-intent`/`rollback-state`.
+
+## Гейт релиза
+
+Единая автоматическая проверка готовности релиза — `scripts/release-gate.sh`. Одна успешная сборка гейтом не считается: публикация образов допускается только после зелёного гейта.
+
+```bash
+scripts/release-gate.sh                  # быстрые этапы (без браузера)
+scripts/release-gate.sh --with-browser   # плюс сквозной browser smoke
+scripts/release-gate.sh --list           # список этапов
+scripts/release-gate.sh --only backend,postgres --skip deps
+```
+
+| Этап | Что проверяет |
+|---|---|
+| `shell` | `bash -n` всех `deploy/*.sh` и `scripts/*.sh` и **shellcheck** (на хосте или в контейнере) |
+| `deploy` | deploy-suite: семантика конфигурации, доставка, состояния релиза |
+| `infra` | `docker compose config` (dev и prod), `caddy validate`, `otel-collector validate` |
+| `backend` | быстрые backend-тесты в SDK-контейнере |
+| `postgres` | критические гарантии PostgreSQL (`scripts/test-postgres.sh`) |
+| `migrations` | `dotnet ef migrations has-pending-model-changes` |
+| `frontend` | Vitest state-тесты, `npm ci` + сборка по lockfile (lockfile не меняется) |
+| `deps` | findings по уязвимым пакетам backend/frontend и образов |
+| `browser` | сквозной smoke в браузере (полный стек, opt-in) |
+
+Каждый этап пишет диагностику в `deploy/gate-artifacts/<этап>.log` (каталог в `.gitignore`), а при провале гейт печатает этап, причину (хвост журнала) и путь к полному журналу; сводка — `deploy/gate-artifacts/summary.txt`. Намеренная SQL-ошибка проваливает `postgres`, гонка во frontend-тесте — `frontend`, неверная Compose/Caddy/Collector-конфигурация — `infra`, каждый со своей диагностикой. Гейт не требует production-секретов, не деплоит сервер и не публикует образы.
+
+Локально на хосте нужен только Docker (SDK/Python-зависимостей сверх stdlib нет): те же критические проверки воспроизводятся `scripts/release-gate.sh` без установки .NET SDK и Node. В CI (GitHub Actions, `.github/workflows/release-gate.yml`) гейт выполняется на push/PR; job публикации зависит от него (`needs`) и запускается только по тегу, уже после browser smoke.
+
+### Browser smoke
+
+`scripts/browser-smoke.sh` поднимает dev-стек в lab-режиме (письма пишутся в журнал), проходит регистрацию и подтверждение почты в браузере, создаёт семью/рецепт/план/покупки, проверяет анонимный просмотр ссылки и состояние сломанной ссылки. Код подтверждения берётся из журнала backend управляемо (`class="code">NNNNNN`), ожидания ограничены и привязаны к событиям; `trap` очищает контейнеры, volumes и временные файлы. Этап требует Docker и закреплённый образ Playwright (`PLAYWRIGHT_IMAGE`) и потому opt-in (`--with-browser`).
+
+### Политика обработки findings
+
+`scripts/check-dependencies.sh` сообщает конкретные findings (пакет, серьёзность, ссылка) и сохраняет их в `deploy/gate-artifacts/deps-*.json`; секреты и содержимое окружения не печатаются. Политика:
+
+- **По умолчанию** этап `deps` report-only: findings видимы в диагностике и не блокируют гейт, чтобы новый advisory не ломал сборку без решения.
+- Findings уровня **high/critical** требуют явного решения: обновить зависимость (в рамках очередного тикета) или зафиксировать обоснованное принятие (advisory без достижимого пути, транзитивная dev-зависимость и т.п.).
+- **Блокирующий режим** включается `GATE_AUDIT_ENFORCE=1` (порог — `GATE_AUDIT_LEVEL`, по умолчанию `high`); в этом режиме high/critical проваливают гейт. Оператор релиза включает его, когда все high/critical разобраны.
+- Findings не «заминаются»: принятые риски перечисляются в описании релиза.
 
 ## Первый администратор
 

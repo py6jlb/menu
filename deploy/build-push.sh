@@ -39,39 +39,17 @@ FRONTEND_IMAGE="$DOCKERHUB_USER/menu-frontend"
 RELEASE_DIR="$ROOT/deploy/release"
 MANIFEST="$RELEASE_DIR/$TAG.json"
 
-log "Проверка Node LTS и lockfile (контейнер $RELEASE_NODE_IMAGE)"
-docker run --rm \
-  -u "$(id -u):$(id -g)" \
-  -e HOME=/tmp \
-  -v "$ROOT":/app -w /app/frontend \
-  "$RELEASE_NODE_IMAGE" sh -c "npm ci && npm run build"
-
-if ! git diff --quiet -- frontend/package-lock.json; then
-  printf 'Сборка: npm ci изменил frontend/package-lock.json — lockfile невоспроизводим\n' >&2
-  exit 1
-fi
-
-log "Тесты backend (контейнер SDK, без root-артефактов)"
-docker run --rm \
-  -u "$(id -u):$(id -g)" \
-  -e DOTNET_CLI_HOME=/tmp/dotnet-home \
-  -e NUGET_PACKAGES=/tmp/nuget \
-  -v "$ROOT":/app -w /app \
-  mcr.microsoft.com/dotnet/sdk:10.0 dotnet test
-
-log "Проверка миграций EF Core (нет рассинхрона модели)"
-docker run --rm \
-  -u "$(id -u):$(id -g)" \
-  -e DOTNET_CLI_HOME=/tmp/dotnet-home \
-  -e NUGET_PACKAGES=/tmp/nuget \
-  -v "$ROOT":/app -w /app \
-  mcr.microsoft.com/dotnet/sdk:10.0 sh -c "dotnet tool restore && dotnet ef migrations has-pending-model-changes --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api"
+log "Гейт релиза: быстрые этапы (без browser)"
+"$ROOT/scripts/release-gate.sh" --artifacts "$ROOT/deploy/gate-artifacts"
 
 log "Сборка образов ($TAG)"
 docker build -t "$BACKEND_IMAGE:$TAG" backend
 docker build -t "$FRONTEND_IMAGE:$TAG" frontend
 
 if [ "$PUBLISH" -eq 1 ]; then
+  log "Гейт релиза: browser smoke (перед публикацией)"
+  "$ROOT/scripts/release-gate.sh" --only browser --artifacts "$ROOT/deploy/gate-artifacts"
+
   log "Публикация в Docker Hub"
   docker tag "$BACKEND_IMAGE:$TAG" "$BACKEND_IMAGE:latest"
   docker tag "$FRONTEND_IMAGE:$TAG" "$FRONTEND_IMAGE:latest"

@@ -68,6 +68,18 @@ manifest в `/opt/menu/release.json`. Подробности — в [`deploy/REA
 
 Dev-стек остаётся прежним: `docker compose up --build`.
 
+### Гейт релиза
+
+Перед публикацией образы проходят единый автоматический гейт — одна успешная сборка публикацией не считается. Гейт запускается локально и в CI (GitHub Actions, `.github/workflows/release-gate.yml`) и не требует production-секретов:
+
+```bash
+scripts/release-gate.sh                  # быстрые этапы (shellcheck, deploy-suite, Compose/Caddy/Collector, backend, PostgreSQL, миграции, frontend, зависимости)
+scripts/release-gate.sh --with-browser   # плюс сквозной browser smoke на полном стеке
+scripts/release-gate.sh --list           # список этапов
+```
+
+На хосте нужен только Docker: .NET SDK, Node и Postgres не устанавливаются — этапы идут в контейнерах. Каждый этап пишет диагностику в `deploy/gate-artifacts/<этап>.log`; при провале гейт печатает этап, причину и путь к журналу. Намеренная SQL-ошибка проваливает `postgres`, гонка во frontend-тесте — `frontend`, неверная инфраструктурная конфигурация — `infra`. `build-push.sh` вызывает гейт перед сборкой и дополнительно browser smoke перед публикацией: `--publish` без зелёного гейта образы не публикует. Подробности и политика обработки findings — в [`deploy/README.md`](deploy/README.md#гейт-релиза).
+
 ## Разработка
 
 Backend запускается в контейнере (`mcr.microsoft.com/dotnet/sdk:10.0`) — на хосте .NET SDK не требуется. Для команд `dotnet` используйте, например:

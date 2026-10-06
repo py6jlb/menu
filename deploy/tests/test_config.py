@@ -108,10 +108,13 @@ class EntrypointTests(unittest.TestCase):
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / "deploy" / filename, destination)
         shutil.copy(ROOT / "docker-compose.prod.yml", self.root)
+        (self.root / "scripts").mkdir()
+        shutil.copy(ROOT / "scripts/release-gate.sh", self.root / "scripts/release-gate.sh")
+        (self.root / "scripts/release-gate.sh").chmod(0o755)
         # Релиз привязан к чистому checkout: тестовый «repo» фиксирует файлы,
         # а тег abc123 указывает на тот же коммит.
         (self.root / ".gitignore").write_text(
-            "deploy/local.conf\nserver.conf\n.env\ndeploy/release/\nbin/\ncalls.jsonl\n")
+            "deploy/local.conf\nserver.conf\n.env\ndeploy/release/\ndeploy/gate-artifacts/\nbin/\ncalls.jsonl\n")
         subprocess.run(["git", "init", "-q", "-b", "main"], cwd=self.root, check=True)
         subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=self.root, check=True)
         subprocess.run(["git", "config", "user.name", "test"], cwd=self.root, check=True)
@@ -183,7 +186,8 @@ class EntrypointTests(unittest.TestCase):
             with self.subTest(script=script):
                 self.calls.unlink(missing_ok=True)
                 result = self.run_script(script, env, args)
-                self.assertEqual(result.returncode, 1 if script == "restore-drill.sh" else 91,
+                self.assertEqual(result.returncode,
+                                 1 if script in ("build-push.sh", "restore-drill.sh") else 91,
                                  result.stdout + result.stderr)
                 self.assertTrue(self.calls.exists())
 
@@ -204,7 +208,8 @@ class EntrypointTests(unittest.TestCase):
             with self.subTest(script=script):
                 self.calls.unlink(missing_ok=True)
                 result = self.run_script(script, args=args)
-                self.assertEqual(result.returncode, 1 if script == "restore-drill.sh" else 91,
+                self.assertEqual(result.returncode,
+                                 1 if script in ("build-push.sh", "restore-drill.sh") else 91,
                                  result.stdout + result.stderr)
                 call = json.loads(self.calls.read_text().splitlines()[0])
                 if script not in ("build-push.sh", "deploy.sh"):
@@ -251,7 +256,9 @@ class EntrypointTests(unittest.TestCase):
                     args = (tag,) if script in ("deploy.sh", "remote-deploy.sh") else ()
                     result = self.run_script(script, {**values, "IMAGE_TAG": tag}, args)
                     if len(tag) == 128:
-                        self.assertEqual(result.returncode, 91, result.stdout + result.stderr)
+                        self.assertEqual(result.returncode,
+                                         1 if script == "build-push.sh" else 91,
+                                         result.stdout + result.stderr)
                         self.assertTrue(self.calls.exists())
                     else:
                         self.assertNotEqual(result.returncode, 0)

@@ -125,7 +125,8 @@ class ReleaseStructureTests(unittest.TestCase):
 
         self.assertEqual((ROOT / "frontend/.nvmrc").read_text().strip(), "24")
         self.assertIn('"node": ">=24 <25"', (ROOT / "frontend/package.json").read_text())
-        self.assertIn("RELEASE_NODE_IMAGE", (ROOT / "deploy/build-push.sh").read_text())
+        self.assertIn("RELEASE_NODE_IMAGE", (ROOT / "deploy/release.sh").read_text())
+        self.assertIn("NODE_IMAGE", (ROOT / "scripts/release-gate.sh").read_text())
 
     def test_spa_missing_asset_returns_404(self):
         nginx = (ROOT / "frontend/nginx.prod.conf").read_text()
@@ -170,11 +171,25 @@ class ReleaseBuildTests(unittest.TestCase):
         (self.root / "deploy").mkdir()
         for filename in ("config.sh", "release.sh", "build-push.sh"):
             shutil.copy(ROOT / "deploy" / filename, self.root / "deploy" / filename)
+        (self.root / "scripts").mkdir()
+        shutil.copy(ROOT / "scripts/release-gate.sh", self.root / "scripts/release-gate.sh")
+        (self.root / "scripts/release-gate.sh").chmod(0o755)
+        for filename in ("test-postgres.sh", "check-infra.sh", "check-dependencies.sh",
+                         "browser-smoke.sh"):
+            stub = self.root / "scripts" / filename
+            stub.write_text("#!/usr/bin/env bash\nexit 0\n")
+            stub.chmod(0o755)
+        (self.root / "deploy/tests").mkdir()
+        (self.root / "deploy/tests/test_placeholder.py").write_text(
+            "import unittest\n\n"
+            "class Placeholder(unittest.TestCase):\n"
+            "    def test_ok(self):\n"
+            "        self.assertTrue(True)\n")
         (self.root / "docker-compose.prod.yml").write_text("services: {}\n")
         (self.root / "deploy/Caddyfile").write_text(":80 {}\n")
         (self.root / "frontend").mkdir()
         (self.root / "frontend/package-lock.json").write_text("{}\n")
-        (self.root / ".gitignore").write_text("deploy/release/\nbin/\ncalls.jsonl\n")
+        (self.root / ".gitignore").write_text("deploy/release/\ndeploy/gate-artifacts/\nbin/\ncalls.jsonl\n")
         subprocess.run(["git", "init", "-q", "-b", "main"], cwd=self.root, check=True)
         subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=self.root, check=True)
         subprocess.run(["git", "config", "user.name", "test"], cwd=self.root, check=True)
