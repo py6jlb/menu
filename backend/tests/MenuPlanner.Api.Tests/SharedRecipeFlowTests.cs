@@ -24,8 +24,7 @@ public sealed class SharedRecipeFlowTests
         var (_, uploaded) = await PutPhotoAuthorizedAsync<RecipeDto>(
             client, owner.Token, recipe!.Id,
             Encoding.ASCII.GetBytes("png-bytes"), "image/png", "photo.png");
-        var (_, share) = await GetAuthorizedAsync<RecipeShareDto>(
-            client, owner.Token, $"/api/recipes/{recipe.Id}/share");
+        var (_, share) = await CreateShareAsync(client, owner.Token, recipe.Id);
 
         var (response, shared) = await GetAsync<RecipeDto>(client, $"/api/shared/{share!.Token}");
 
@@ -60,8 +59,7 @@ public sealed class SharedRecipeFlowTests
         await CreateFamilyAsync(client, owner.Token, "Семья");
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(
             client, owner.Token, "/api/recipes", FullRequest());
-        var (_, share) = await GetAuthorizedAsync<RecipeShareDto>(
-            client, owner.Token, $"/api/recipes/{recipe!.Id}/share");
+        var (_, share) = await CreateShareAsync(client, owner.Token, recipe!.Id);
 
         var updateRequest = FullRequest() with
         {
@@ -102,8 +100,7 @@ public sealed class SharedRecipeFlowTests
         await CreateFamilyAsync(client, owner.Token, "Семья");
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(
             client, owner.Token, "/api/recipes", FullRequest());
-        var (_, share) = await GetAuthorizedAsync<RecipeShareDto>(
-            client, owner.Token, $"/api/recipes/{recipe!.Id}/share");
+        var (_, share) = await CreateShareAsync(client, owner.Token, recipe!.Id);
         await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{recipe.Id}/share");
 
         var (response, error) = await GetAsync<RecipeErrorDto>(client, $"/api/shared/{share!.Token}");
@@ -133,8 +130,7 @@ public sealed class SharedRecipeFlowTests
         await CreateFamilyAsync(client, owner.Token, "Семья");
         var (_, recipe) = await PostAuthorizedAsync<RecipeDto>(
             client, owner.Token, "/api/recipes", FullRequest());
-        var (_, share) = await GetAuthorizedAsync<RecipeShareDto>(
-            client, owner.Token, $"/api/recipes/{recipe!.Id}/share");
+        var (_, share) = await CreateShareAsync(client, owner.Token, recipe!.Id);
         await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{recipe.Id}");
 
         var (response, error) = await GetAsync<RecipeErrorDto>(client, $"/api/shared/{share!.Token}");
@@ -182,6 +178,10 @@ public sealed class SharedRecipeFlowTests
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
+    private static Task<(HttpResponseMessage Response, RecipeShareDto? Data)> CreateShareAsync(
+        HttpClient client, string token, Guid recipeId) =>
+        PostAuthorizedAsync<RecipeShareDto>(client, token, $"/api/recipes/{recipeId}/share", new { });
+
     private static async Task<(HttpResponseMessage Response, T? Data)> PostAuthorizedAsync<T>(
         HttpClient client, string token, string path, object? body)
     {
@@ -217,16 +217,6 @@ public sealed class SharedRecipeFlowTests
         using var request = new HttpRequestMessage(HttpMethod.Put, $"/api/recipes/{recipeId}/photo");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Content = content;
-        var response = await client.SendAsync(request);
-        var data = await ReadJsonAsync<T>(response);
-        return (response, data);
-    }
-
-    private static async Task<(HttpResponseMessage Response, T? Data)> GetAuthorizedAsync<T>(
-        HttpClient client, string token, string path)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Get, path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         var response = await client.SendAsync(request);
         var data = await ReadJsonAsync<T>(response);
         return (response, data);

@@ -5,13 +5,11 @@ import {
   getRecipe,
   deleteRecipe,
   removeExternalRecipe,
-  copyRecipe,
-  getRecipeShare,
-  revokeRecipeShare,
-  regenerateRecipeShare
+  copyRecipe
 } from '../api/recipes'
 import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
+import { useRecipeShare } from '../composables/useRecipeShare'
 import RecipeBody from '../components/RecipeBody.vue'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 
@@ -29,9 +27,15 @@ const copying = ref(false)
 const copyError = ref('')
 
 const family = ref(null)
-const share = ref(null)
-const shareLoading = ref(false)
-const shareError = ref('')
+const {
+  share,
+  loading: shareLoading,
+  error: shareError,
+  load: loadShare,
+  create: createShare,
+  revoke: revokeShare,
+  regenerate: regenerateShare
+} = useRecipeShare()
 const copied = ref(false)
 
 const isOwner = computed(() => Boolean(family.value && family.value.ownerId === state.user?.id))
@@ -62,16 +66,8 @@ async function loadFamily() {
   }
 }
 
-async function onShare() {
-  shareError.value = ''
-  shareLoading.value = true
-  const { response, data } = await getRecipeShare(recipe.value.id)
-  if (response.status === 200) {
-    share.value = data
-  } else {
-    shareError.value = data?.error || 'Не удалось получить ссылку.'
-  }
-  shareLoading.value = false
+function onShare() {
+  return createShare(recipe.value.id)
 }
 
 async function onCopyLink() {
@@ -84,30 +80,14 @@ async function onCopyLink() {
   }
 }
 
-async function onRevoke() {
+function onRevoke() {
   if (!window.confirm('Отозвать ссылку? Новые семьи не смогут добавить рецепт.')) return
-  shareError.value = ''
-  shareLoading.value = true
-  const { response, data } = await revokeRecipeShare(recipe.value.id)
-  if (response.status === 200) {
-    share.value = data
-  } else {
-    shareError.value = data?.error || 'Не удалось отозвать ссылку.'
-  }
-  shareLoading.value = false
+  return revokeShare(recipe.value.id)
 }
 
-async function onRegenerate() {
+function onRegenerate() {
   if (!window.confirm('Перегенерировать ссылку? Старая перестанет работать.')) return
-  shareError.value = ''
-  shareLoading.value = true
-  const { response, data } = await regenerateRecipeShare(recipe.value.id)
-  if (response.status === 200) {
-    share.value = data
-  } else {
-    shareError.value = data?.error || 'Не удалось перегенерировать ссылку.'
-  }
-  shareLoading.value = false
+  return regenerateShare(recipe.value.id)
 }
 
 async function onDelete() {
@@ -153,9 +133,9 @@ async function onCopy() {
   copying.value = false
 }
 
-onMounted(() => {
-  load()
-  loadFamily()
+onMounted(async () => {
+  await Promise.all([load(), loadFamily()])
+  if (recipe.value && !isExternal.value) await loadShare(recipe.value.id)
 })
 </script>
 
@@ -254,7 +234,7 @@ onMounted(() => {
       </div>
 
       <p v-if="!isEmailVerified && !isExternal" class="notice">
-        Подтвердите почту, чтобы редактировать рецепт.
+        Подтвердите почту, чтобы редактировать рецепт и делиться им.
         <router-link to="/verify">Ввести код</router-link>
       </p>
 
@@ -270,7 +250,15 @@ onMounted(() => {
 
         <div v-else-if="!share" class="share-empty">
           <p class="share-hint">Создайте ссылку, чтобы поделиться рецептом с другой семьёй.</p>
-          <button type="button" class="btn btn--primary" :disabled="shareLoading" @click="onShare">
+          <p v-if="!isEmailVerified" class="share-hint">
+            Ссылку можно создать только после подтверждения почты.
+          </p>
+          <button
+            type="button"
+            class="btn btn--primary"
+            :disabled="shareLoading || !isEmailVerified"
+            @click="onShare"
+          >
             {{ shareLoading ? 'Создание…' : 'Поделиться' }}
           </button>
         </div>
