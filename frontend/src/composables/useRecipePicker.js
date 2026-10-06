@@ -3,7 +3,7 @@ import { matchRecipes } from '../api/recipes'
 
 export const MATCH_ERROR_MESSAGE = 'Не удалось загрузить рецепты. Проверьте соединение и повторите.'
 export const BROKEN_SELECTION_MESSAGE =
-  'Блюдо недоступно: источник удалён. Его можно оставить в плане, изменив порции, или заменить на другое.'
+  'Блюдо недоступно: источник удалён, контент не читается. Уберите его из плана или замените на другое.'
 
 export function emptyFilters() {
   return {
@@ -65,6 +65,17 @@ function cloneFilters(filters) {
   }
 }
 
+/** Внешний вид выбора: принимает и выдачу подбора (id/name), и запись плана (recipeId/recipeName). */
+function selectionFrom(source) {
+  return {
+    recipeId: source.id ?? source.recipeId,
+    name: source.name ?? source.recipeName,
+    state: source.state || null,
+    isExternal: source.isExternal || false,
+    sourceFamilyName: source.sourceFamilyName || null
+  }
+}
+
 function matchBody(filters, search) {
   const query = search.trim()
   return {
@@ -114,6 +125,16 @@ export function useRecipePicker(options = {}) {
     selection.value?.state === 'broken' ? BROKEN_SELECTION_MESSAGE : ''
   )
 
+  /**
+   * Если выбранный рецепт присутствует в свежей выдаче, берём актуальные имя/состояние
+   * оттуда; если исчез — оставляем сохранённый выбор, чтобы подтверждение не потеряло имя.
+   */
+  function syncSelection() {
+    if (!selection.value) return
+    const fresh = recipes.value.find((r) => r.id === selection.value.recipeId)
+    if (fresh) selection.value = selectionFrom(fresh)
+  }
+
   async function reload() {
     const id = ++requestId
     loading.value = true
@@ -123,6 +144,7 @@ export function useRecipePicker(options = {}) {
       if (id !== requestId) return
       if (response.status === 200 && data && Array.isArray(data.items)) {
         recipes.value = data.items.map(toPickerItem)
+        syncSelection()
       } else {
         error.value = data?.error || MATCH_ERROR_MESSAGE
       }
@@ -140,13 +162,7 @@ export function useRecipePicker(options = {}) {
     appliedFilters.value = emptyFilters()
     error.value = ''
     if (entry) {
-      selection.value = {
-        recipeId: entry.recipeId,
-        name: entry.recipeName,
-        state: entry.state || null,
-        isExternal: entry.isExternal || false,
-        sourceFamilyName: entry.sourceFamilyName || null
-      }
+      selection.value = selectionFrom(entry)
       portions.value = entry.portions || 1
     } else {
       selection.value = null
@@ -156,13 +172,7 @@ export function useRecipePicker(options = {}) {
   }
 
   function select(item) {
-    selection.value = {
-      recipeId: item.id,
-      name: item.name,
-      state: item.state || null,
-      isExternal: item.isExternal || false,
-      sourceFamilyName: item.sourceFamilyName || null
-    }
+    selection.value = selectionFrom(item)
   }
 
   function setSearch(value) {
@@ -184,6 +194,9 @@ export function useRecipePicker(options = {}) {
 
   function confirm() {
     if (!selection.value || portions.value < 1) return null
+    // Сломанный источник нельзя назначить как доступное блюдо: контента нет.
+    // Пользователь видит объяснение и убирает или заменяет запись.
+    if (selection.value.state === 'broken') return null
     return {
       recipeId: selection.value.recipeId,
       recipeName: selection.value.name,

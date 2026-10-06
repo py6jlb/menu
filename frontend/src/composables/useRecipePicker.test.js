@@ -79,14 +79,42 @@ describe('useRecipePicker — выбор не теряется', () => {
     })
   })
 
-  it('блокировка без источника объясняет недоступный выбор до подтверждения', async () => {
+  it('сломанный выбор нельзя подтвердить, но пользователь видит объяснение', async () => {
     const picker = make({ matchRecipes: vi.fn().mockResolvedValue(ok([])) })
 
     await picker.open({ recipeId: 'r9', recipeName: 'Старое блюдо', portions: 3, state: 'broken' })
 
     expect(picker.portions.value).toBe(3)
     expect(picker.selectionWarning.value).toBe(BROKEN_SELECTION_MESSAGE)
-    expect(picker.confirm()).toMatchObject({ recipeId: 'r9', recipeName: 'Старое блюдо', state: 'broken' })
+    expect(picker.confirm()).toBeNull()
+  })
+
+  it('присутствующий в выдаче выбор обновляется актуальным именем и состоянием', async () => {
+    const matchRecipes = vi
+      .fn()
+      .mockResolvedValueOnce(ok([item('r1', 'Старое', { state: 'warning' })]))
+      .mockResolvedValueOnce(ok([item('r1', 'Борщ', { state: 'ok' })]))
+    const picker = make({ matchRecipes })
+
+    await picker.open(null)
+    picker.select(picker.recipes.value[0])
+    await picker.reload()
+
+    expect(picker.selection.value).toMatchObject({ recipeId: 'r1', name: 'Борщ', state: 'ok' })
+  })
+
+  it('исчезнувший из выдачи выбор сохраняет прежнее имя и состояние', async () => {
+    const matchRecipes = vi
+      .fn()
+      .mockResolvedValueOnce(ok([item('r1', 'Борщ', { state: 'warning' })]))
+      .mockResolvedValueOnce(ok([item('r2', 'Блины')]))
+    const picker = make({ matchRecipes })
+
+    await picker.open(null)
+    picker.select(picker.recipes.value[0])
+    await picker.reload()
+
+    expect(picker.selection.value).toMatchObject({ recipeId: 'r1', name: 'Борщ', state: 'warning' })
   })
 
   it('у обычного выбора предупреждения нет', async () => {

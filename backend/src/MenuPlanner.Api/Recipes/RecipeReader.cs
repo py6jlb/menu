@@ -133,29 +133,16 @@ public sealed class RecipeReader
         var liveSources = await _sources.LoadSummariesAsync(
             external.Select(r => r.SourceRecipeId!.Value), cancellationToken);
 
-        var staleIds = stored
-            .Where(r => r.SourceRecipeId is Guid sourceId
-                && liveSources.TryGetValue(sourceId, out var live)
-                && !string.Equals(r.Name, live.Name, StringComparison.Ordinal))
-            .Select(r => r.Id)
-            .ToList();
-        await _nameCache.RefreshAsync(
-            staleIds,
+        var context = await ResolveExternalContextAsync(
+            external
+                .Select(r => new ExternalLinkInfo(
+                    r.Id, r.SourceRecipeId!.Value, r.SourceToken, r.SourceFamilyId, r.Name))
+                .ToList(),
             liveSources.ToDictionary(x => x.Key, x => x.Value.Name),
             cancellationToken);
 
-        var states = await _states.ResolveManyAsync(
-            external
-                .Select(r => new ExternalSourceLink(r.Id, r.SourceRecipeId!.Value, r.SourceToken))
-                .ToList());
-
-        var familyNames = await _sourceNames.ResolveManyAsync(
-            stored
-                .Where(r => r.SourceFamilyId is not null)
-                .Select(r => r.SourceFamilyId!.Value));
-
         return stored
-            .Select(r => Summarize(r, liveSources, states, familyNames))
+            .Select(r => Summarize(r, liveSources, context.States, context.FamilyNames))
             .ToList();
     }
 
@@ -181,25 +168,13 @@ public sealed class RecipeReader
         var liveSources = await _sources.LoadSourcesAsync(
             external.Select(r => r.SourceRecipeId!.Value), cancellationToken);
 
-        var staleIds = external
-            .Where(r => liveSources.TryGetValue(r.SourceRecipeId!.Value, out var live)
-                && !string.Equals(r.Name, live.Name, StringComparison.Ordinal))
-            .Select(r => r.Id)
-            .ToList();
-        await _nameCache.RefreshAsync(
-            staleIds,
+        var context = await ResolveExternalContextAsync(
+            external
+                .Select(r => new ExternalLinkInfo(
+                    r.Id, r.SourceRecipeId!.Value, r.SourceToken, r.SourceFamilyId, r.Name))
+                .ToList(),
             liveSources.ToDictionary(x => x.Key, x => x.Value.Name),
             cancellationToken);
-
-        var states = await _states.ResolveManyAsync(
-            external
-                .Select(r => new ExternalSourceLink(r.Id, r.SourceRecipeId!.Value, r.SourceToken))
-                .ToList());
-
-        var familyNames = await _sourceNames.ResolveManyAsync(
-            recipes
-                .Where(r => r.SourceFamilyId is not null)
-                .Select(r => r.SourceFamilyId!.Value));
 
         var candidates = new List<RecipeMatchCandidate>();
         foreach (var recipe in recipes)
@@ -210,9 +185,9 @@ public sealed class RecipeReader
 
             if (isExternal)
             {
-                state = states.GetValueOrDefault(recipe.Id, ExternalRecipeState.Broken);
-                sourceFamilyName = recipe.SourceFamilyId is Guid familyId2
-                    ? familyNames.GetValueOrDefault(familyId2)
+                state = context.States.GetValueOrDefault(recipe.Id, ExternalRecipeState.Broken);
+                sourceFamilyName = recipe.SourceFamilyId is Guid sourceFamilyId
+                    ? context.FamilyNames.GetValueOrDefault(sourceFamilyId)
                     : null;
 
                 if (state == ExternalRecipeState.Broken)
@@ -307,6 +282,55 @@ public sealed class RecipeReader
             sourceFamilyName,
             state,
             stored.CopiedFromFamilyName);
+    }
+
+    /// <summary>
+    /// Связь локального внешнего рецепта с источником в том виде, в каком она нужна
+    /// для разрешения состояния/происхождения и обновления кэша имени.
+    /// </summary>
+    private sealed record ExternalLinkInfo(
+        Guid LocalId,
+        Guid SourceRecipeId,
+        string? SourceToken,
+        Guid? SourceFamilyId,
+        string CachedName);
+
+    private sealed record ExternalContext(
+        Dictionary<Guid, ExternalRecipeState> States,
+        Dictionary<Guid, string> FamilyNames);
+
+    /// <summary>
+    /// Единая оркестрация внешних связей: обновляет кэш имени по живым именам,
+    /// разрешает состояние ссылок и подписи семей-источников. Обе проекции чтения
+    /// используют её, чтобы правила не расходились.
+    /// </summary>
+    private async Task<ExternalContext> ResolveExternalContextAsync(
+        IReadOnlyList<ExternalLinkInfo> links,
+        IReadOnlyDictionary<Guid, string> liveNames,
+        CancellationToken cancellationToken)
+    {
+        if (links.Count == 0)
+            return new ExternalContext(new Dictionary<Guid, ExternalRecipeState>(),
+                new Dictionary<Guid, string>());
+
+        var staleIds = links
+            .Where(l => liveNames.TryGetValue(l.SourceRecipeId, out var liveName)
+                && !string.Equals(l.CachedName, liveName, StringComparison.Ordinal))
+            .Select(l => l.LocalId)
+            .ToList();
+        await _nameCache.RefreshAsync(staleIds, liveNames, cancellationToken);
+
+        var states = await _states.ResolveManyAsync(
+            links
+                .Select(l => new ExternalSourceLink(l.LocalId, l.SourceRecipeId, l.SourceToken))
+                .ToList());
+
+        var familyNames = await _sourceNames.ResolveManyAsync(
+            links
+                .Where(l => l.SourceFamilyId is not null)
+                .Select(l => l.SourceFamilyId!.Value));
+
+        return new ExternalContext(states, familyNames);
     }
 
     private sealed record StoredSummary(

@@ -45,6 +45,7 @@ const {
   error: pickerError,
   search,
   draftFilters: filter,
+  hasFilters,
   selection,
   selectionWarning,
   portions: pickerPortions,
@@ -128,6 +129,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  clearTimeout(searchTimer)
 })
 </script>
 
@@ -359,7 +361,14 @@ onBeforeUnmount(() => {
 
           <div class="filter-actions">
             <button type="button" class="btn btn--primary" @click="applyFilters">Применить</button>
-            <button type="button" class="btn btn--ghost" @click="resetFilters">Сбросить</button>
+            <button
+              type="button"
+              class="btn btn--ghost"
+              :disabled="!hasFilters && !search"
+              @click="resetFilters"
+            >
+              Сбросить
+            </button>
           </div>
         </details>
 
