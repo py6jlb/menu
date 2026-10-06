@@ -1,0 +1,287 @@
+using MenuPlanner.Api.Data;
+using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes;
+using MenuPlanner.Api.Recipes.External;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace MenuPlanner.Api.Tests;
+
+/// <summary>
+/// Предметное чтение рецепта: локальный id и принадлежность семьи не подменяются
+/// данными источника, состояние/происхождение разрешены модулем, а live-контент
+/// не появляется при сломанной ссылке.
+/// </summary>
+public sealed class RecipeReaderTests
+{
+    [Fact]
+    public async Task ReadSummaries_OwnRecipe_IsNotExternal_AndKeepsStoredContent()
+    {
+        await using var db = NewDb();
+        var family = NewFamily();
+        db.Families.Add(family);
+        var own = NewRecipe(family.Id, "Свой суп");
+        own.Difficulty = 2;
+        own.Servings = 4;
+        own.SourceRecipeId = null;
+        db.Recipes.Add(own);
+        await db.SaveChangesAsync();
+
+        var summaries = await Reader(db).ReadSummariesAsync(family.Id, RecipeScope.Own);
+
+        var summary = Assert.Single(summaries);
+        Assert.Equal(own.Id, summary.Id);
+        Assert.Equal("Свой суп", summary.Name);
+        Assert.False(summary.IsExternal);
+        Assert.Null(summary.State);
+        Assert.Null(summary.SourceFamilyName);
+    }
+
+    [Fact]
+    public async Task ReadSummaries_ExternalWithLiveSource_UsesLiveContent_AndRefreshesCachedName()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+        var source = NewRecipe(sourceFamily.Id, "Свежее имя");
+        source.Difficulty = 5;
+        source.Servings = 8;
+        db.Recipes.Add(source);
+        var wrapper = NewRecipe(recipientFamily.Id, "Устаревшее имя");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "tok"));
+        await db.SaveChangesAsync();
+
+        var summaries = await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.External);
+
+        var summary = Assert.Single(summaries);
+        Assert.Equal(wrapper.Id, summary.Id);
+        Assert.Equal("Свежее имя", summary.Name);
+        Assert.Equal(5, summary.Difficulty);
+        Assert.Equal(8, summary.Servings);
+        Assert.True(summary.IsExternal);
+        Assert.Equal(ExternalRecipeState.Ok, summary.State);
+        Assert.Equal(sourceFamily.Name, summary.SourceFamilyName);
+
+        var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id);
+        Assert.Equal("Свежее имя", stored.Name);
+    }
+
+    [Fact]
+    public async Task ReadSummaries_RevokedShare_IsWarning_ButKeepsLiveContent()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+        var source = NewRecipe(sourceFamily.Id, "Борщ");
+        db.Recipes.Add(source);
+        var wrapper = NewRecipe(recipientFamily.Id, "Борщ");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "stale";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "fresh"));
+        await db.SaveChangesAsync();
+
+        var summary = Assert.Single(await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.All));
+
+        Assert.Equal(ExternalRecipeState.Warning, summary.State);
+        Assert.Equal("Борщ", summary.Name);
+    }
+
+    [Fact]
+    public async Task ReadSummaries_DeletedSource_IsBroken_AndKeepsCachedName()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+        var wrapper = NewRecipe(recipientFamily.Id, "Кэш имени");
+        wrapper.SourceRecipeId = Guid.NewGuid();
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        await db.SaveChangesAsync();
+
+        var summary = Assert.Single(await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.External));
+
+        Assert.Equal("Кэш имени", summary.Name);
+        Assert.True(summary.IsExternal);
+        Assert.Equal(ExternalRecipeState.Broken, summary.State);
+    }
+
+    [Fact]
+    public async Task ReadSummaries_DoesNotReturnForeignFamilyRecipes()
+    {
+        await using var db = NewDb();
+        var mine = NewFamily();
+        var other = NewFamily();
+        db.Families.AddRange(mine, other);
+        db.Recipes.Add(NewRecipe(other.Id, "Чужой"));
+        db.Recipes.Add(NewRecipe(mine.Id, "Мой"));
+        await db.SaveChangesAsync();
+
+        var summaries = await Reader(db).ReadSummariesAsync(mine.Id, RecipeScope.All);
+
+        Assert.Equal("Мой", Assert.Single(summaries).Name);
+    }
+
+    [Fact]
+    public async Task ReadDetail_ExternalWithLiveSource_KeepsLocalIdAndRevision_WithSourceContent()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+        var source = NewRecipe(sourceFamily.Id, "Борщ");
+        source.Description = "Классический";
+        source.Steps.Add(new RecipeStep { Order = 0, Text = "Сварить." });
+        source.Ingredients.Add(new RecipeIngredient { Order = 0, Name = "Свёкла", Amount = 2m, Unit = "pcs" });
+        db.Recipes.Add(source);
+        var wrapper = NewRecipe(recipientFamily.Id, "Устаревшее");
+        wrapper.Revision = 7;
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "tok"));
+        await db.SaveChangesAsync();
+
+        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+
+        Assert.NotNull(detail);
+        Assert.Equal(wrapper.Id, detail!.Recipe.Id);
+        Assert.Equal(recipientFamily.Id, detail.Recipe.FamilyId);
+        Assert.Equal(7, detail.Recipe.Revision);
+        Assert.Equal("Борщ", detail.Recipe.Name);
+        Assert.Equal("Классический", detail.Recipe.Description);
+        Assert.Single(detail.Recipe.Steps);
+        Assert.Single(detail.Recipe.Ingredients);
+        Assert.True(detail.IsExternal);
+        Assert.Equal(ExternalRecipeState.Ok, detail.State);
+        Assert.Equal(sourceFamily.Name, detail.SourceFamilyName);
+    }
+
+    [Fact]
+    public async Task ReadDetail_DeletedSource_ReturnsCachedNameWithoutInventedContent()
+    {
+        await using var db = NewDb();
+        var recipientFamily = NewFamily();
+        db.Families.Add(recipientFamily);
+        var wrapper = NewRecipe(recipientFamily.Id, "Кэш имени")
+            .WithSource(Guid.NewGuid());
+        db.Recipes.Add(wrapper);
+        await db.SaveChangesAsync();
+
+        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+
+        Assert.NotNull(detail);
+        Assert.Equal("Кэш имени", detail!.Recipe.Name);
+        Assert.Empty(detail.Recipe.Steps);
+        Assert.Empty(detail.Recipe.Ingredients);
+        Assert.Equal(ExternalRecipeState.Broken, detail.State);
+    }
+
+    [Fact]
+    public async Task ReadDetail_MissingOrForeign_ReturnsNull()
+    {
+        await using var db = NewDb();
+        var mine = NewFamily();
+        var other = NewFamily();
+        db.Families.AddRange(mine, other);
+        var foreign = NewRecipe(other.Id, "Чужой");
+        db.Recipes.Add(foreign);
+        await db.SaveChangesAsync();
+
+        var reader = Reader(db);
+        Assert.Null(await reader.ReadDetailAsync(mine.Id, Guid.NewGuid()));
+        Assert.Null(await reader.ReadDetailAsync(mine.Id, foreign.Id));
+    }
+
+    [Fact]
+    public async Task ReadDetail_SourceDeletedBetweenReads_TurnsBrokenAndDropsContent()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+        var source = NewRecipe(sourceFamily.Id, "Борщ");
+        source.Steps.Add(new RecipeStep { Order = 0, Text = "Сварить." });
+        db.Recipes.Add(source);
+        var wrapper = NewRecipe(recipientFamily.Id, "Борщ");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "tok"));
+        await db.SaveChangesAsync();
+
+        var reader = Reader(db);
+        var before = await reader.ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+        Assert.Equal(ExternalRecipeState.Ok, before!.State);
+        Assert.Single(before.Recipe.Steps);
+
+        db.Recipes.Remove(source);
+        await db.SaveChangesAsync();
+
+        var after = await reader.ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+        Assert.Equal(ExternalRecipeState.Broken, after!.State);
+        Assert.Empty(after.Recipe.Steps);
+        Assert.Equal("Борщ", after.Recipe.Name);
+    }
+
+    private static RecipeReader Reader(AppDbContext db) => new(
+        db,
+        new ExternalRecipeSourceLoader(db),
+        new ExternalRecipeStateResolver(db),
+        new ExternalRecipeNameCache(db),
+        new SourceFamilyNameResolver(db));
+
+    private static AppDbContext NewDb() =>
+        new(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .Options);
+
+    private static Family NewFamily() => new()
+    {
+        Id = Guid.NewGuid(),
+        Name = "Семья " + Guid.NewGuid().ToString("N")[..4],
+        InviteCode = Guid.NewGuid().ToString("N")[..8],
+        OwnerId = Guid.NewGuid(),
+        CreatedAt = DateTime.UtcNow
+    };
+
+    private static Recipe NewRecipe(Guid familyId, string name) => new()
+    {
+        Id = Guid.NewGuid(),
+        FamilyId = familyId,
+        Name = name,
+        CookTimeMinutes = 10,
+        Servings = 2,
+        Difficulty = 1,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow
+    };
+
+    private static RecipeShare NewShare(Guid recipeId, string token) => new()
+    {
+        Id = Guid.NewGuid(),
+        RecipeId = recipeId,
+        Token = token,
+        CreatedAt = DateTime.UtcNow
+    };
+}
+
+internal static class RecipeReaderTestExtensions
+{
+    public static Recipe WithSource(this Recipe recipe, Guid sourceId)
+    {
+        recipe.SourceRecipeId = sourceId;
+        return recipe;
+    }
+}

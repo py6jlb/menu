@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Recipes.External;
 
@@ -21,7 +20,7 @@ public sealed class ExternalRecipeNameCache
 
     public async Task RefreshAsync(
         IReadOnlyList<Guid> wrapperIds,
-        IReadOnlyDictionary<Guid, Recipe> liveSources,
+        IReadOnlyDictionary<Guid, string> liveSourceNames,
         CancellationToken cancellationToken = default)
     {
         if (wrapperIds.Count == 0)
@@ -37,10 +36,10 @@ public sealed class ExternalRecipeNameCache
             foreach (var wrapper in wrappers)
             {
                 if (wrapper.SourceRecipeId is Guid sourceId
-                    && liveSources.TryGetValue(sourceId, out var live)
-                    && !string.Equals(wrapper.Name, live.Name, StringComparison.Ordinal))
+                    && liveSourceNames.TryGetValue(sourceId, out var liveName)
+                    && !string.Equals(wrapper.Name, liveName, StringComparison.Ordinal))
                 {
-                    wrapper.Name = live.Name;
+                    wrapper.Name = liveName;
                     changed = true;
                 }
             }

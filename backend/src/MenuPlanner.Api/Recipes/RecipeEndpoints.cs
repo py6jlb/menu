@@ -36,10 +36,7 @@ public static class RecipeEndpoints
         ClaimsPrincipal principal,
         AppDbContext db,
         CurrentUserContext currentUser,
-        SourceFamilyNameResolver sourceNames,
-        ExternalRecipeSourceLoader sourceLoader,
-        ExternalRecipeStateResolver stateResolver,
-        ExternalRecipeNameCache nameCache,
+        RecipeReader recipes,
         RepetitionCounter repetitionCounter)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
@@ -47,100 +44,18 @@ public static class RecipeEndpoints
             return Results.Json(Array.Empty<RecipeSummaryDto>());
 
         var counts = await RepetitionCountsAsync(principal, db, repetitionCounter, familyId.Value);
+        var summaries = await recipes.ReadSummariesAsync(familyId.Value, ParseScope(scope));
 
-        var query = db.Recipes
-            .AsNoTracking()
-            .Where(r => r.FamilyId == familyId.Value);
-
-        query = scope switch
-        {
-            "own" => query.Where(r => r.SourceRecipeId == null),
-            "external" => query.Where(r => r.SourceRecipeId != null),
-            _ => query
-        };
-
-        var recipes = await query
-            .OrderBy(r => r.Name)
-            .Select(r => new
-            {
-                r.Id,
-                r.Name,
-                r.Difficulty,
-                r.Calories,
-                r.CookTimeMinutes,
-                r.Servings,
-                r.Tags,
-                r.Seasonality,
-                r.Diet,
-                r.PhotoPath,
-                r.SourceRecipeId,
-                r.SourceFamilyId,
-                r.SourceToken,
-                r.CopiedFromFamilyName
-            })
-            .ToListAsync();
-
-        var liveSources = await sourceLoader.LoadSourcesAsync(
-            recipes
-                .Where(r => r.SourceRecipeId is not null)
-                .Select(r => r.SourceRecipeId!.Value));
-
-        // Кэшируется только Name внешнего рецепта и обновляется при каждом чтении.
-        var staleIds = recipes
-            .Where(r => r.SourceRecipeId is Guid sourceId
-                && liveSources.TryGetValue(sourceId, out var live)
-                && !string.Equals(r.Name, live.Name, StringComparison.Ordinal))
-            .Select(r => r.Id)
-            .ToList();
-        await nameCache.RefreshAsync(staleIds, liveSources);
-
-        var states = await stateResolver.ResolveManyAsync(
-            recipes
-                .Where(r => r.SourceRecipeId is not null)
-                .Select(r => new ExternalSourceLink(r.Id, r.SourceRecipeId!.Value, r.SourceToken))
-                .ToList());
-
-        var sourceFamilyIds = recipes
-            .Where(r => r.SourceFamilyId is not null)
-            .Select(r => r.SourceFamilyId!.Value)
-            .ToList();
-        var sourceFamilyNames = await sourceNames.ResolveManyAsync(sourceFamilyIds);
-
-        var result = recipes
-            .Select(r =>
-            {
-                var isExternal = r.SourceRecipeId is not null;
-                var state = isExternal
-                    ? ExternalRecipeStateRules.Code(states[r.Id])
-                    : null;
-                var sourceFamilyName = isExternal && r.SourceFamilyId is Guid sourceFamilyId
-                    ? sourceFamilyNames.GetValueOrDefault(sourceFamilyId)
-                    : null;
-                // Внешний рецепт показывает живой контент источника целиком; у него самого
-                // кэшируется только Name, остальные поля могут быть пустыми/устаревшими.
-                Recipe? liveSource = null;
-                var hasLiveSource = isExternal
-                    && liveSources.TryGetValue(r.SourceRecipeId!.Value, out liveSource);
-                var name = hasLiveSource ? liveSource!.Name : r.Name;
-                var difficulty = hasLiveSource ? liveSource!.Difficulty : r.Difficulty;
-                var calories = hasLiveSource ? liveSource!.Calories : r.Calories;
-                var cookTimeMinutes = hasLiveSource ? liveSource!.CookTimeMinutes : r.CookTimeMinutes;
-                var servings = hasLiveSource ? liveSource!.Servings : r.Servings;
-                var tags = hasLiveSource ? liveSource!.Tags : r.Tags;
-                var seasonality = hasLiveSource ? liveSource!.Seasonality : r.Seasonality;
-                var diet = hasLiveSource ? liveSource!.Diet : r.Diet;
-                var photoPath = hasLiveSource ? liveSource!.PhotoPath : r.PhotoPath;
-
-                return new RecipeSummaryDto(
-                    r.Id, name, difficulty, calories, cookTimeMinutes, servings, tags,
-                    seasonality, diet,
-                    counts.GetValueOrDefault(r.Id),
-                    PhotoUrl(photoPath),
-                    isExternal,
-                    sourceFamilyName,
-                    state,
-                    r.CopiedFromFamilyName);
-            })
+        var result = summaries
+            .Select(s => new RecipeSummaryDto(
+                s.Id, s.Name, s.Difficulty, s.Calories, s.CookTimeMinutes, s.Servings,
+                s.Tags, s.Seasonality, s.Diet,
+                counts.GetValueOrDefault(s.Id),
+                PhotoUrl(s.PhotoPath),
+                s.IsExternal,
+                s.SourceFamilyName,
+                s.State is { } state ? ExternalRecipeStateRules.Code(state) : null,
+                s.CopiedFromFamilyName))
             .ToList();
 
         return Results.Json(result);
@@ -151,74 +66,34 @@ public static class RecipeEndpoints
         ClaimsPrincipal principal,
         AppDbContext db,
         CurrentUserContext currentUser,
-        SourceFamilyNameResolver sourceNames,
-        ExternalRecipeStateResolver stateResolver,
-        ExternalRecipeNameCache nameCache,
+        RecipeReader recipes,
         RepetitionCounter repetitionCounter)
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        var recipe = await db.Recipes
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == id && r.FamilyId == familyId.Value);
-        if (recipe is null)
+        var detail = await recipes.ReadDetailAsync(familyId.Value, id);
+        if (detail is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
         var counts = await RepetitionCountsAsync(principal, db, repetitionCounter, familyId.Value);
-        var repetition = counts.GetValueOrDefault(recipe.Id);
 
-        if (recipe.SourceRecipeId is not Guid sourceId)
-            return Results.Json(ToDto(recipe, repetition));
-
-        var source = await db.Recipes
-            .AsNoTracking()
-            .Include(r => r.Steps)
-            .Include(r => r.Ingredients)
-            .FirstOrDefaultAsync(r => r.Id == sourceId);
-
-        var sourceFamilyName = await sourceNames.ResolveAsync(recipe.SourceFamilyId);
-
-        var state = await stateResolver.ResolveManyAsync(
-            new[] { new ExternalSourceLink(recipe.Id, sourceId, recipe.SourceToken) });
-        var stateCode = ExternalRecipeStateRules.Code(state[recipe.Id]);
-
-        if (source is null)
-        {
-            // Сломанная ссылка: контент недоступен, остаётся только кэш имени.
-            return Results.Json(ToDto(
-                recipe,
-                repetition,
-                isExternal: true,
-                sourceFamilyName: sourceFamilyName,
-                sourceFamilyId: recipe.SourceFamilyId,
-                state: stateCode));
-        }
-
-        // Имя кэшируется во внешнем рецепте и обновляется при каждом чтении.
-        await nameCache.RefreshAsync(
-            new[] { recipe.Id },
-            new Dictionary<Guid, Recipe> { [sourceId] = source });
-
-        var live = ToDto(
-            source,
-            repetition,
-            isExternal: true,
-            sourceFamilyName: sourceFamilyName,
-            sourceFamilyId: recipe.SourceFamilyId,
-            state: stateCode);
-
-        return Results.Json(live with
-        {
-            Id = recipe.Id,
-            CopiedFromFamilyName = recipe.CopiedFromFamilyName,
-            // Ревизия — свойство обёртки-получателя, а не живого источника:
-            // именно её передают при удалении/промоушене.
-            Revision = recipe.Revision
-        });
+        return Results.Json(ToDto(
+            detail.Recipe,
+            counts.GetValueOrDefault(detail.Recipe.Id),
+            isExternal: detail.IsExternal,
+            sourceFamilyName: detail.SourceFamilyName,
+            sourceFamilyId: detail.SourceFamilyId,
+            state: detail.State is { } state ? ExternalRecipeStateRules.Code(state) : null));
     }
+
+    private static RecipeScope ParseScope(string? scope) => scope switch
+    {
+        "own" => RecipeScope.Own,
+        "external" => RecipeScope.External,
+        _ => RecipeScope.All
+    };
 
     private static async Task<IResult> CreateAsync(
         RecipeRequest request, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
