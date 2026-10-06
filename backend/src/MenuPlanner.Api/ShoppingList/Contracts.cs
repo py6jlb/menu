@@ -7,7 +7,7 @@ public sealed record ShoppingListItemDto(
     string Display);
 
 /// <summary>
-/// Запись плана, которую нельзя посчитать в закупке: где стоит и почему исключена.
+/// Запись плана, которую нельзя посчитать в списке покупок: где стоит и почему исключена.
 /// </summary>
 public sealed record ShoppingListExcludedDto(
     int Day,

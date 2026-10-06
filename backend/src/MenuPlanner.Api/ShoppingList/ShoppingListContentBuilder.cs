@@ -4,7 +4,7 @@ using MenuPlanner.Api.Recipes.External;
 namespace MenuPlanner.Api.ShoppingList;
 
 /// <summary>
-/// Запись плана, исключённая из расчёта закупки: где она стоит и почему посчитать нельзя.
+/// Запись плана, исключённая из расчёта списка покупок: где она стоит и почему посчитать нельзя.
 /// </summary>
 public sealed record ExcludedPlanEntry(
     int Day,
@@ -13,13 +13,13 @@ public sealed record ExcludedPlanEntry(
     string RecipeName,
     string Reason);
 
-/// <summary>Результат расчёта закупки: агрегированные позиции и диагностика полноты.</summary>
+/// <summary>Результат расчёта списка покупок: агрегированные позиции и диагностика полноты.</summary>
 public sealed record ShoppingListContent(
     IReadOnlyList<ShoppingListItem> Items,
     IReadOnlyList<ExcludedPlanEntry> Excluded);
 
 /// <summary>
-/// Превращает разрешённый контент недели в закупку: считает живые ингредиенты источников,
+/// Превращает разрешённый контент недели в список покупок: считает живые ингредиенты источников,
 /// масштабирует по порциям и отдельно возвращает записи, которые посчитать нельзя.
 /// Сломанная ссылка исключается из сумм и попадает в диагностику — устаревшие
 /// ингредиенты обёртки в расчёт не подставляются. Чистая функция: без БД и HTTP.

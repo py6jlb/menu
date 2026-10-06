@@ -34,37 +34,32 @@ public sealed class ExternalRecipeSourceLoader
     /// Загружает источники по их id вместе с ингредиентами и шагами, без отслеживания.
     /// Возвращает карту «id источника → рецепт-источник»; отсутствующие в БД просто не попадают.
     /// </summary>
-    public async Task<Dictionary<Guid, Recipe>> LoadSourcesAsync(
-        IEnumerable<Guid> sourceRecipeIds, CancellationToken cancellationToken = default)
-    {
-        var ids = sourceRecipeIds.Distinct().ToList();
-        if (ids.Count == 0)
-            return new Dictionary<Guid, Recipe>();
-
-        var sources = await _db.Recipes
-            .AsNoTracking()
-            .Include(r => r.Ingredients)
-            .Include(r => r.Steps)
-            .Where(r => ids.Contains(r.Id))
-            .ToListAsync(cancellationToken);
-
-        return sources.ToDictionary(s => s.Id);
-    }
+    public Task<Dictionary<Guid, Recipe>> LoadSourcesAsync(
+        IEnumerable<Guid> sourceRecipeIds, CancellationToken cancellationToken = default) =>
+        LoadSourcesCoreAsync(sourceRecipeIds, includeSteps: true, cancellationToken);
 
     /// <summary>
-    /// Источники для расчёта закупки: только ингредиенты и порции, шаги не загружаются.
+    /// Источники для расчёта списка покупок: только ингредиенты и порции, шаги не загружаются.
     /// Отсутствующие в БД в карту не попадают.
     /// </summary>
-    public async Task<Dictionary<Guid, Recipe>> LoadIngredientSourcesAsync(
-        IEnumerable<Guid> sourceRecipeIds, CancellationToken cancellationToken = default)
+    public Task<Dictionary<Guid, Recipe>> LoadIngredientSourcesAsync(
+        IEnumerable<Guid> sourceRecipeIds, CancellationToken cancellationToken = default) =>
+        LoadSourcesCoreAsync(sourceRecipeIds, includeSteps: false, cancellationToken);
+
+    private async Task<Dictionary<Guid, Recipe>> LoadSourcesCoreAsync(
+        IEnumerable<Guid> sourceRecipeIds, bool includeSteps, CancellationToken cancellationToken)
     {
         var ids = sourceRecipeIds.Distinct().ToList();
         if (ids.Count == 0)
             return new Dictionary<Guid, Recipe>();
 
-        var sources = await _db.Recipes
+        IQueryable<Recipe> query = _db.Recipes
             .AsNoTracking()
-            .Include(r => r.Ingredients)
+            .Include(r => r.Ingredients);
+        if (includeSteps)
+            query = query.Include(r => r.Steps);
+
+        var sources = await query
             .Where(r => ids.Contains(r.Id))
             .ToListAsync(cancellationToken);
 

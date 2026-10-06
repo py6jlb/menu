@@ -6,7 +6,7 @@ using MenuPlanner.Api.Recipes.External;
 
 namespace MenuPlanner.Api.Plans;
 
-/// <summary>Проекция контента плана: только имена (карточка плана) или ингредиенты (закупка).</summary>
+/// <summary>Проекция контента плана: только имена (карточка плана) или ингредиенты (список покупок).</summary>
 public enum PlanProjection
 {
     Names,
@@ -16,7 +16,7 @@ public enum PlanProjection
 /// <summary>
 /// Актуальная запись плана: локальная identity записи, разрешённое состояние ссылки
 /// и, если запрошена проекция ингредиентов, контент, материализованный на живой источник.
-/// Для сломанной ссылки контент не выдумывается: остаётся кэш имени без ингредиентов.
+/// Для сломанной ссылки контент отсутствует: устаревшие ингредиенты не подставляются.
 /// </summary>
 public sealed record PlanContentEntry(
     int Day,
@@ -37,7 +37,9 @@ public sealed record WeekPlanContent(
 /// Единое чтение недельного плана: и карточка плана, и список покупок получают
 /// записи, состояние внешних ссылок и живой контент из этого модуля, поэтому
 /// правила не расходятся между сценариями. Проекция отличается: карточке нужны
-/// только имена (без дочерних коллекций источника), закупке — ингредиенты и порции.
+/// только имена (без дочерних коллекций источника), списку покупок — ингредиенты
+/// и порции. Наличие живого источника — единственный факт, определяющий сломанную
+/// ссылку: если контент прочитать не удалось, запись честно помечается broken.
 /// Scoped-сервис, читает БД.
 /// </summary>
 public sealed class WeekPlanReader
@@ -67,8 +69,9 @@ public sealed class WeekPlanReader
     }
 
     /// <summary>
-    /// Контент недели для закупки: живые ингредиенты и порции источников, состояние
-    /// ссылок. Null, если плана на неделю нет. Сломанные записи остаются без контента.
+    /// Контент недели для списка покупок: живые ингредиенты и порции источников,
+    /// состояние ссылок. Null, если плана на неделю нет. Сломанные записи приходят
+    /// без контента и попадают в диагностику полноты у потребителя.
     /// </summary>
     public Task<WeekPlanContent?> ReadContentAsync(
         Guid familyId, DateOnly weekStart, CancellationToken cancellationToken = default) =>
@@ -85,19 +88,15 @@ public sealed class WeekPlanReader
     private async Task<WeekPlanContent?> LoadAsync(
         Guid familyId, DateOnly weekStart, PlanProjection projection, CancellationToken cancellationToken)
     {
-        IQueryable<WeekPlan> query = _db.WeekPlans
-            .AsNoTracking()
-            .Include(p => p.Entries)
-            .ThenInclude(e => e.Recipe);
-
-        if (projection == PlanProjection.Ingredients)
-        {
-            query = _db.WeekPlans
-                .AsNoTracking()
+        IQueryable<WeekPlan> query = _db.WeekPlans.AsNoTracking();
+        query = projection == PlanProjection.Ingredients
+            ? query
                 .Include(p => p.Entries)
                 .ThenInclude(e => e.Recipe)
-                .ThenInclude(r => r!.Ingredients);
-        }
+                .ThenInclude(r => r!.Ingredients)
+            : query
+                .Include(p => p.Entries)
+                .ThenInclude(e => e.Recipe);
 
         var plan = await query.FirstOrDefaultAsync(
             p => p.FamilyId == familyId && p.WeekStart == weekStart, cancellationToken);
@@ -110,120 +109,75 @@ public sealed class WeekPlanReader
             .ToList();
 
         var states = await _stateResolver.ResolveManyAsync(ExternalPlanContent.SourceLinks(entries));
+        var sourceIds = ExternalPlanContent.SourceRecipeIds(entries);
 
-        var content = projection == PlanProjection.Ingredients
-            ? await ReadIngredientsAsync(entries, states, cancellationToken)
-            : ReadNames(entries, states, await LoadLiveNamesAsync(entries, cancellationToken));
+        // Живой источник — единственный источник истины: и имя, и контент, и признак
+        // сломанной ссылки берутся из одной загрузки, поэтому гонка с удалением источника
+        // не даёт молча потерять запись.
+        Dictionary<Guid, Recipe>? liveSources = null;
+        Dictionary<Guid, string> liveNames;
+        if (projection == PlanProjection.Ingredients)
+        {
+            liveSources = await _sourceLoader.LoadIngredientSourcesAsync(sourceIds, cancellationToken);
+            liveNames = liveSources.ToDictionary(x => x.Key, x => x.Value.Name);
+        }
+        else
+        {
+            var summaries = await _sourceLoader.LoadSummariesAsync(sourceIds, cancellationToken);
+            liveNames = summaries.ToDictionary(x => x.Key, x => x.Value.Name);
+        }
+
+        var content = new List<PlanContentEntry>(entries.Count);
+        foreach (var entry in entries)
+            content.Add(Resolve(entry, projection, states, liveNames, liveSources));
 
         return new WeekPlanContent(plan.WeekStart, plan.Revision, content);
     }
 
-    private async Task<List<PlanContentEntry>> ReadIngredientsAsync(
-        IReadOnlyList<PlanEntry> entries,
+    private static PlanContentEntry Resolve(
+        PlanEntry entry,
+        PlanProjection projection,
         IReadOnlyDictionary<Guid, ExternalRecipeState> states,
-        CancellationToken cancellationToken)
+        IReadOnlyDictionary<Guid, string> liveNames,
+        IReadOnlyDictionary<Guid, Recipe>? liveSources)
     {
-        var sources = await _sourceLoader.LoadIngredientSourcesAsync(
-            ExternalPlanContent.SourceRecipeIds(entries), cancellationToken);
+        var recipe = entry.Recipe;
+        if (recipe is null)
+            return NewEntry(entry, "", state: null, content: null);
 
-        var result = new List<PlanContentEntry>(entries.Count);
-        foreach (var entry in entries)
+        if (recipe.SourceRecipeId is not Guid sourceId)
         {
-            var recipe = entry.Recipe;
-            var isExternal = recipe?.SourceRecipeId is not null;
-            var state = StateOf(states, recipe, isExternal);
-
-            string name;
-            Recipe? effective = null;
-
-            if (recipe is null)
-            {
-                name = "";
-            }
-            else if (!isExternal)
-            {
-                name = recipe.Name;
-                effective = recipe;
-            }
-            else if (sources.TryGetValue(recipe.SourceRecipeId!.Value, out var source))
-            {
-                name = source.Name;
-                effective = ExternalRecipeContentResolver.Materialize(recipe, source);
-            }
-            else
-            {
-                // Сломанная ссылка: контент недоступен, устаревшие ингредиенты не подставляются.
-                name = recipe.Name;
-                effective = StripContent(recipe);
-            }
-
-            result.Add(NewEntry(entry, name, state, effective));
+            // Свой рецепт: контент уже загружен на строке записи.
+            var own = projection == PlanProjection.Ingredients ? recipe : null;
+            return NewEntry(entry, recipe.Name, state: null, content: own);
         }
 
-        return result;
-    }
+        var sourceAlive = liveNames.TryGetValue(sourceId, out var liveName);
 
-    private static List<PlanContentEntry> ReadNames(
-        IReadOnlyList<PlanEntry> entries,
-        IReadOnlyDictionary<Guid, ExternalRecipeState> states,
-        IReadOnlyDictionary<Guid, string> liveNames)
-    {
-        var result = new List<PlanContentEntry>(entries.Count);
-        foreach (var entry in entries)
+        // Сломанная ссылка определяется наличием живого источника, а не отдельным
+        // чтением: источник, исчезнувший между разрешением состояния и загрузкой
+        // контента, не оставит запись без диагностики.
+        ExternalRecipeState state;
+        if (!sourceAlive)
         {
-            var recipe = entry.Recipe;
-            var isExternal = recipe?.SourceRecipeId is not null;
-            var state = StateOf(states, recipe, isExternal);
-
-            var name = recipe is null
-                ? ""
-                : isExternal && liveNames.TryGetValue(recipe.SourceRecipeId!.Value, out var live)
-                    ? live
-                    : recipe.Name;
-
-            result.Add(NewEntry(entry, name, state, content: null));
+            state = ExternalRecipeState.Broken;
+        }
+        else
+        {
+            state = states.TryGetValue(recipe.Id, out var resolved)
+                && resolved != ExternalRecipeState.Broken
+                ? resolved
+                : ExternalRecipeState.Warning;
         }
 
-        return result;
-    }
+        var name = sourceAlive ? liveName! : recipe.Name;
 
-    private async Task<Dictionary<Guid, string>> LoadLiveNamesAsync(
-        IReadOnlyList<PlanEntry> entries, CancellationToken cancellationToken)
-    {
-        var summaries = await _sourceLoader.LoadSummariesAsync(
-            ExternalPlanContent.SourceRecipeIds(entries), cancellationToken);
-        return summaries.ToDictionary(x => x.Key, x => x.Value.Name);
-    }
-
-    private static ExternalRecipeState? StateOf(
-        IReadOnlyDictionary<Guid, ExternalRecipeState> states, Recipe? recipe, bool isExternal) =>
-        isExternal && recipe is not null && states.TryGetValue(recipe.Id, out var state)
-            ? state
+        var effective = projection == PlanProjection.Ingredients && sourceAlive
+            ? ExternalRecipeContentResolver.Materialize(recipe, liveSources![sourceId])
             : null;
 
-    /// <summary>Копия обёртки без контента: у сломанной ссылки ингредиенты/шаги недоступны.</summary>
-    private static Recipe StripContent(Recipe recipe) => new()
-    {
-        Id = recipe.Id,
-        FamilyId = recipe.FamilyId,
-        Name = recipe.Name,
-        Description = recipe.Description,
-        PhotoPath = recipe.PhotoPath,
-        CookTimeMinutes = recipe.CookTimeMinutes,
-        Servings = recipe.Servings,
-        Difficulty = recipe.Difficulty,
-        Calories = recipe.Calories,
-        Tags = recipe.Tags,
-        Seasonality = recipe.Seasonality,
-        Diet = recipe.Diet,
-        CreatedAt = recipe.CreatedAt,
-        UpdatedAt = recipe.UpdatedAt,
-        Revision = recipe.Revision,
-        SourceRecipeId = recipe.SourceRecipeId,
-        SourceFamilyId = recipe.SourceFamilyId,
-        SourceToken = recipe.SourceToken,
-        CopiedFromFamilyName = recipe.CopiedFromFamilyName
-    };
+        return NewEntry(entry, name, state, effective);
+    }
 
     private static PlanContentEntry NewEntry(
         PlanEntry entry, string name, ExternalRecipeState? state, Recipe? content) =>
