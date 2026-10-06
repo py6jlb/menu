@@ -41,10 +41,10 @@ export function useDialog(options = {}) {
   }
 
   /** Закрыть диалог и вернуть фокус к вызвавшему действию. */
-  function close({ restoreFocus = true } = {}) {
+  function close() {
     const target = returnFocusTo
     returnFocusTo = null
-    if (restoreFocus && target && typeof target.focus === 'function' && target.isConnected) {
+    if (target && typeof target.focus === 'function' && target.isConnected) {
       target.focus()
     }
     if (typeof options.onClose === 'function') options.onClose()
@@ -69,7 +69,11 @@ export function useDialog(options = {}) {
     const first = items[0]
     const last = items[items.length - 1]
     const active = document.activeElement
-    const inside = Boolean(container.value && container.value.contains(active))
+    // Контейнер с tabindex="-1" считаем «вне» списка: Tab с него уходит на первый
+    // элемент, Shift+Tab — на последний, чтобы фокус не покидал диалог.
+    const inside = Boolean(
+      container.value && container.value.contains(active) && active !== container.value
+    )
 
     if (event.shiftKey) {
       if (!inside || active === first) {

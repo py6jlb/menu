@@ -146,7 +146,7 @@ function slotDayLabel(index) {
   return `${DAYS[index].label} ${String(days.value[index].getDate()).padStart(2, '0')}`
 }
 
-function slotAria(index, mealCode) {
+function slotButtonLabel(index, mealCode) {
   const entry = slotEntry(index, mealCode)
   const prefix = `${slotDayLabel(index)}, ${mealLabel(mealCode)}`
   if (!entry) return `${prefix}: пусто. Добавить блюдо`
@@ -154,7 +154,7 @@ function slotAria(index, mealCode) {
   return `${prefix}: ${entry.recipeName}, ${entry.portions} порц.${state ? `, ${state}` : ''}. Изменить`
 }
 
-function slotRemoveAria(index, mealCode) {
+function slotRemoveButtonLabel(index, mealCode) {
   const entry = slotEntry(index, mealCode)
   return `Убрать ${entry?.recipeName || 'блюдо'} из плана: ${slotDayLabel(index)}, ${mealLabel(mealCode)}`
 }
@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
                 class="slot"
                 :class="{ filled: slotEntry(index, meal.code), readonly: !isEmailVerified }"
                 :disabled="!isEmailVerified"
-                :aria-label="slotAria(index, meal.code)"
+                :aria-label="slotButtonLabel(index, meal.code)"
                 @click="openPicker(index, meal.code, $event)"
               >
                 <template v-if="slotEntry(index, meal.code)">
@@ -287,7 +287,7 @@ onBeforeUnmount(() => {
                 v-if="isEmailVerified && slotEntry(index, meal.code)"
                 type="button"
                 class="slot-remove"
-                :aria-label="slotRemoveAria(index, meal.code)"
+                :aria-label="slotRemoveButtonLabel(index, meal.code)"
                 @click="removeSlot(index, meal.code)"
               >
                 ✕
@@ -323,7 +323,7 @@ onBeforeUnmount(() => {
                 class="mobile-slot"
                 :class="{ filled: slotEntry(mobileDay, meal.code), readonly: !isEmailVerified }"
                 :disabled="!isEmailVerified"
-                :aria-label="slotAria(mobileDay, meal.code)"
+                :aria-label="slotButtonLabel(mobileDay, meal.code)"
                 @click="openPicker(mobileDay, meal.code, $event)"
               >
                 <span class="mobile-meal">{{ meal.label }}</span>
@@ -344,7 +344,7 @@ onBeforeUnmount(() => {
                 v-if="isEmailVerified && slotEntry(mobileDay, meal.code)"
                 type="button"
                 class="mobile-remove"
-                :aria-label="slotRemoveAria(mobileDay, meal.code)"
+                :aria-label="slotRemoveButtonLabel(mobileDay, meal.code)"
                 @click="removeSlot(mobileDay, meal.code)"
               >
                 ✕
@@ -499,7 +499,7 @@ onBeforeUnmount(() => {
             </button>
           </li>
         </ul>
-        <p v-else class="no-results">Ничего не найдено.</p>
+        <p v-else class="no-results" role="status">Ничего не найдено.</p>
 
         <p v-if="isSelectionOutsideResults()" class="selection-kept" role="status">
           Выбрано: <strong>{{ selection.name }}</strong> — вне текущей выдачи.

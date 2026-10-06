@@ -114,6 +114,18 @@ describe('useDialog — удержание фокуса', () => {
     expect(event.defaultPrevented).toBe(true)
     expect(document.activeElement).toBe(overlay.querySelector('#first'))
   })
+
+  it('Shift+Tab с самого контейнера возвращает на последний элемент', () => {
+    const dialog = makeDialog()
+    const container = overlay.querySelector('.picker')
+    container.focus()
+
+    const event = keydown('Tab', true)
+    dialog.onKeydown(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(overlay.querySelector('#last'))
+  })
 })
 
 describe('useDialog — Escape и закрытие', () => {
@@ -130,16 +142,16 @@ describe('useDialog — Escape и закрытие', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
-  it('close() не восстанавливает фокус, когда это явно отключено', async () => {
+  it('close() возвращает фокус к вызвавшему действию', async () => {
     const onClose = vi.fn()
     const dialog = makeDialog({ onClose })
     await dialog.open(trigger)
     overlay.querySelector('#middle').focus()
 
-    dialog.close({ restoreFocus: false })
+    dialog.close()
 
     expect(onClose).toHaveBeenCalledTimes(1)
-    expect(document.activeElement).toBe(overlay.querySelector('#middle'))
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('повторное закрытие не падает и не восстанавливает фокус дважды', async () => {
