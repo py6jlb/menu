@@ -77,6 +77,7 @@ builder.Services.AddScoped<EmailVerificationService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<AuthSessionValidator>();
 builder.Services.AddScoped<CurrentUserContext>();
+builder.Services.AddScoped<FamilyService>();
 builder.Services.AddScoped<SourceFamilyNameResolver>();
 builder.Services.AddScoped<ExternalRecipeSourceLoader>();
 builder.Services.AddScoped<ExternalRecipeStateResolver>();

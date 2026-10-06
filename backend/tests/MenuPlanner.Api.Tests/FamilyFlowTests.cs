@@ -134,6 +134,78 @@ public sealed class FamilyFlowTests
     }
 
     [Fact]
+    public async Task RegenerateInviteCode_InvalidatesPreviousCode_AndDoesNotGrantMemberRights()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        var member = await RegisterAsync(client, "member");
+
+        var (_, created) = await PostAuthorizedAsync<FamilyDto>(client, owner.Token,
+            "/api/families", new { name = "Семья" });
+        await PostAuthorizedAsync<FamilyDto>(client, member.Token, "/api/families/join",
+            new { inviteCode = created!.InviteCode });
+
+        var (regenResponse, regenerated) = await PostAuthorizedAsync<RegenerateResponse>(client, owner.Token,
+            $"/api/families/{created.Id}/invite-code/regenerate", null);
+        Assert.Equal(HttpStatusCode.OK, regenResponse.StatusCode);
+
+        var newcomer = await RegisterAsync(client, "newcomer");
+        var (oldCode, _) = await PostAuthorizedAsync<FamilyDto>(client, newcomer.Token,
+            "/api/families/join", new { inviteCode = created.InviteCode });
+        Assert.Equal(HttpStatusCode.NotFound, oldCode.StatusCode);
+
+        var (newCode, joined) = await PostAuthorizedAsync<FamilyDto>(client, newcomer.Token,
+            "/api/families/join", new { inviteCode = regenerated!.InviteCode });
+        Assert.Equal(HttpStatusCode.OK, newCode.StatusCode);
+        Assert.Equal(3, joined!.Members.Count);
+
+        // Смена кода не расширяет полномочия участника: управление остаётся у владельца.
+        var memberRegenerate = await PostAuthorizedAsync<RegenerateResponse>(client, member.Token,
+            $"/api/families/{created.Id}/invite-code/regenerate", null);
+        Assert.Equal(HttpStatusCode.Forbidden, memberRegenerate.Response.StatusCode);
+
+        var memberRemove = await DeleteAuthorizedAsync(client, member.Token,
+            $"/api/families/{created.Id}/members/{newcomer.User.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, memberRemove.StatusCode);
+    }
+
+    [Fact]
+    public async Task RegenerateAndRemove_ByOutsider_ReturnForbidden()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        var outsider = await RegisterAsync(client, "outsider");
+
+        var (_, created) = await PostAuthorizedAsync<FamilyDto>(client, owner.Token,
+            "/api/families", new { name = "Семья" });
+
+        var regenerate = await PostAuthorizedAsync<RegenerateResponse>(client, outsider.Token,
+            $"/api/families/{created!.Id}/invite-code/regenerate", null);
+        Assert.Equal(HttpStatusCode.Forbidden, regenerate.Response.StatusCode);
+
+        var remove = await DeleteAuthorizedAsync(client, outsider.Token,
+            $"/api/families/{created.Id}/members/{owner.User.Id}");
+        Assert.Equal(HttpStatusCode.Forbidden, remove.StatusCode);
+    }
+
+    [Fact]
+    public async Task Unverified_CannotRegenerateOrRemoveMember_ReturnsForbidden()
+    {
+        using var factory = new ApiFactory { AutoVerifyEmailsOnRegistration = false };
+        using var client = factory.CreateClient();
+        var unverified = await RegisterAsync(client, "unverified");
+        var familyId = Guid.NewGuid();
+
+        var regenerate = await PostAuthorizedAsync<RegenerateResponse>(client, unverified.Token,
+            $"/api/families/{familyId}/invite-code/regenerate", null);
+        Assert.Equal(HttpStatusCode.Forbidden, regenerate.Response.StatusCode);
+
+        var remove = await DeleteAuthorizedAsync(client, unverified.Token,
+            $"/api/families/{familyId}/members/{Guid.NewGuid()}");
+        Assert.Equal(HttpStatusCode.Forbidden, remove.StatusCode);
+    }
+
+    [Fact]
     public async Task RemoveMember_ByOwner_RemovesMembership()
     {
         using var client = new ApiFactory().CreateClient();

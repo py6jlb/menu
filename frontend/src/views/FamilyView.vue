@@ -1,109 +1,42 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getMyFamily, createFamily, joinFamily, regenerateInviteCode, removeMember } from '../api/families'
+import { useFamily } from '../composables/useFamily'
 import { useAuth } from '../stores/auth'
 
 const { state, isEmailVerified } = useAuth()
 
-const family = ref(null)
-const loading = ref(true)
-const error = ref('')
+const {
+  family,
+  loading,
+  loadError,
+  createError,
+  joinError,
+  copyError,
+  regenerateError,
+  removeError,
+  creating,
+  joining,
+  regenerating,
+  removing,
+  copied,
+  load,
+  create,
+  join,
+  copyInviteCode,
+  regenerate,
+  removeMember
+} = useFamily()
 
 const newFamilyName = ref('')
 const joinCode = ref('')
-const pending = ref(false)
-const copied = ref(false)
-
-async function load() {
-  loading.value = true
-  error.value = ''
-  const { response, data } = await getMyFamily()
-  if (response.status === 404) {
-    family.value = null
-  } else if (response.status === 200) {
-    family.value = data
-  } else {
-    error.value = data?.error || 'Не удалось загрузить семью.'
-  }
-  loading.value = false
-}
 
 function isOwner() {
   return family.value && family.value.ownerId === state.user?.id
 }
 
-async function onCreate() {
-  error.value = ''
-  pending.value = true
-  try {
-    const { response, data } = await createFamily(newFamilyName.value.trim())
-    if (response.status === 201) {
-      family.value = data
-    } else if (response.status === 409) {
-      error.value = data?.error || 'Вы уже состоите в семье.'
-    } else {
-      error.value = data?.error || 'Не удалось создать семью.'
-    }
-  } catch (err) {
-    error.value = err.message || 'Сервер недоступен.'
-  } finally {
-    pending.value = false
-  }
-}
-
-async function onJoin() {
-  error.value = ''
-  pending.value = true
-  try {
-    const { response, data } = await joinFamily(joinCode.value.trim())
-    if (response.status === 200) {
-      family.value = data
-    } else if (response.status === 404) {
-      error.value = data?.error || 'Семья по такому коду не найдена.'
-    } else if (response.status === 409) {
-      error.value = data?.error || 'Вы уже состоите в семье.'
-    } else {
-      error.value = data?.error || 'Не удалось присоединиться.'
-    }
-  } catch (err) {
-    error.value = err.message || 'Сервер недоступен.'
-  } finally {
-    pending.value = false
-  }
-}
-
-async function onCopyCode() {
-  try {
-    await navigator.clipboard.writeText(family.value.inviteCode)
-    copied.value = true
-    setTimeout(() => (copied.value = false), 1500)
-  } catch {
-    error.value = 'Не удалось скопировать код.'
-  }
-}
-
-async function onRegenerate() {
-  error.value = ''
-  const { response, data } = await regenerateInviteCode(family.value.id)
-  if (response.status === 200) {
-    family.value = { ...family.value, inviteCode: data.inviteCode }
-  } else {
-    error.value = data?.error || 'Не удалось обновить код.'
-  }
-}
-
 async function onRemoveMember(member) {
-  error.value = ''
   if (!window.confirm(`Удалить участника ${member.email} из семьи?`)) return
-  const { response } = await removeMember(family.value.id, member.id)
-  if (response.status === 204) {
-    family.value = {
-      ...family.value,
-      members: family.value.members.filter((m) => m.id !== member.id)
-    }
-  } else {
-    error.value = 'Не удалось удалить участника.'
-  }
+  await removeMember(member)
 }
 
 onMounted(load)
@@ -121,19 +54,24 @@ onMounted(load)
     </p>
 
     <p v-if="loading" class="loading">Загрузка…</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
+
+    <div v-else-if="loadError" class="load-recovery">
+      <p class="error">{{ loadError }}</p>
+      <button type="button" class="btn btn--ghost" @click="load">Повторить</button>
+    </div>
 
     <div v-else-if="!family" class="no-family-grid">
       <div class="card option-card">
         <div class="option-icon">👨‍👩‍👧</div>
         <h3>Создать семью</h3>
         <p class="option-desc">Создайте новую семью и делитесь меню с близкими.</p>
-        <form @submit.prevent="onCreate" class="option-form">
+        <form @submit.prevent="create(newFamilyName)" class="option-form">
           <label class="field">
             <span>Название семьи</span>
             <input v-model="newFamilyName" type="text" required />
           </label>
-          <button type="submit" class="btn btn--primary btn--block" :disabled="pending || !isEmailVerified">Создать семью</button>
+          <p v-if="createError" class="error">{{ createError }}</p>
+          <button type="submit" class="btn btn--primary btn--block" :disabled="creating || !isEmailVerified">Создать семью</button>
         </form>
       </div>
 
@@ -141,12 +79,13 @@ onMounted(load)
         <div class="option-icon">🔑</div>
         <h3>Присоединиться по коду</h3>
         <p class="option-desc">Есть код от семьи? Введите его, чтобы присоединиться.</p>
-        <form @submit.prevent="onJoin" class="option-form">
+        <form @submit.prevent="join(joinCode)" class="option-form">
           <label class="field">
             <span>Инвайт-код</span>
             <input v-model="joinCode" type="text" autocomplete="off" required placeholder="Например, ABC123" />
           </label>
-          <button type="submit" class="btn btn--primary btn--block" :disabled="pending || !isEmailVerified">Присоединиться</button>
+          <p v-if="joinError" class="error">{{ joinError }}</p>
+          <button type="submit" class="btn btn--primary btn--block" :disabled="joining || !isEmailVerified">Присоединиться</button>
         </form>
       </div>
     </div>
@@ -160,13 +99,16 @@ onMounted(load)
       <div class="invite-block">
         <span class="invite-label">Инвайт-код для приглашения</span>
         <div class="invite-code">«{{ family.inviteCode }}»</div>
-        <button type="button" class="btn btn--primary" @click="onCopyCode">
+        <button type="button" class="btn btn--primary" @click="copyInviteCode">
           {{ copied ? 'Скопировано!' : 'Копировать' }}
         </button>
-        <button v-if="isOwner() && isEmailVerified" type="button" class="btn btn--ghost" @click="onRegenerate">Обновить код</button>
+        <button v-if="isOwner() && isEmailVerified" type="button" class="btn btn--ghost" :disabled="regenerating" @click="regenerate">Обновить код</button>
+        <p v-if="copyError" class="error">{{ copyError }}</p>
+        <p v-if="regenerateError" class="error">{{ regenerateError }}</p>
       </div>
 
       <h4 class="members-title">Участники</h4>
+      <p v-if="removeError" class="error">{{ removeError }}</p>
       <ul class="members">
         <li v-for="member in family.members" :key="member.id" class="member">
           <span class="member-email">{{ member.email }}</span>
@@ -177,6 +119,7 @@ onMounted(load)
             v-if="isOwner() && isEmailVerified && member.id !== family.ownerId"
             type="button"
             class="btn btn--ghost btn--small"
+            :disabled="removing"
             @click="onRemoveMember(member)"
           >
             Удалить
@@ -199,6 +142,14 @@ onMounted(load)
   .no-family-grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+.load-recovery {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  max-width: 640px;
 }
 
 .option-card {
