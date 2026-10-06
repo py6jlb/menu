@@ -203,7 +203,7 @@ public sealed class DbServicesTests
         var cache = new ExternalRecipeNameCache(db);
         await cache.RefreshAsync(
             new[] { wrapper.Id },
-            new Dictionary<Guid, Recipe> { [source.Id] = source });
+            new Dictionary<Guid, string> { [source.Id] = source.Name });
 
         var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id);
         Assert.Equal("Свежее имя", stored.Name);
