@@ -1,18 +1,19 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getSharedRecipe, importSharedRecipe } from '../api/recipes'
 import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
+import { useRouteResource } from '../composables/useRouteResource'
 import RecipeBody from '../components/RecipeBody.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { isAuthenticated } = useAuth()
 
-const recipe = ref(null)
-const loading = ref(true)
-const error = ref('')
+const { key, resource: recipe, loading, error, load } = useRouteResource(getSharedRecipe, {
+  notFound: 'Ссылка недействительна.'
+})
 
 const family = ref(null)
 const familyLoaded = ref(false)
@@ -23,16 +24,9 @@ const isSourceFamily = computed(() =>
   Boolean(family.value && recipe.value?.sourceFamilyId === family.value.id)
 )
 
-async function load() {
-  const { response, data } = await getSharedRecipe(route.params.token)
-  if (response.status === 200) {
-    recipe.value = data
-  } else if (response.status === 404) {
-    error.value = data?.error || 'Ссылка недействительна.'
-  } else {
-    error.value = data?.error || 'Не удалось загрузить рецепт.'
-  }
-  loading.value = false
+function resetResourceState() {
+  importing.value = false
+  addError.value = ''
 }
 
 async function loadFamily() {
@@ -42,6 +36,7 @@ async function loadFamily() {
 }
 
 async function onAdd() {
+  const token = route.params.token
   const confirmed = window.confirm(
     'Добавить рецепт в вашу семью? Он может быть потерян при удалении у владельца.'
   )
@@ -49,17 +44,32 @@ async function onAdd() {
 
   addError.value = ''
   importing.value = true
-  const { response, data } = await importSharedRecipe(route.params.token)
-  if (response.status === 201 || response.status === 409) {
-    router.push(`/recipes/${data.recipeId}`)
-  } else {
+  try {
+    const { response, data } = await importSharedRecipe(token)
+    if (route.params.token !== token) return
+    if (response.status === 201 || response.status === 409) {
+      router.push(`/recipes/${data.recipeId}`)
+      return
+    }
     addError.value = data?.error || 'Не удалось добавить рецепт.'
+  } catch {
+    if (route.params.token === token) addError.value = 'Сервер недоступен. Попробуйте ещё раз.'
+  } finally {
+    if (route.params.token === token) importing.value = false
   }
-  importing.value = false
 }
 
+watch(
+  () => route.params.token,
+  (token) => {
+    if (!token || token === key.value) return
+    resetResourceState()
+    load(token)
+  }
+)
+
 onMounted(async () => {
-  await load()
+  await load(route.params.token)
   if (isAuthenticated.value) await loadFamily()
 })
 </script>
@@ -74,6 +84,9 @@ onMounted(async () => {
       <p class="empty-desc">
         Возможно, ссылку отозвали или рецепт больше не существует.
       </p>
+      <div class="actions">
+        <button type="button" class="btn btn--primary" @click="load()">Повторить</button>
+      </div>
     </div>
 
     <div v-else-if="recipe">

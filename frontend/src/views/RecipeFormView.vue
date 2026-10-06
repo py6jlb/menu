@@ -1,109 +1,114 @@
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { getRecipe, createRecipe, updateRecipe, uploadRecipePhoto, deleteRecipePhoto } from '../api/recipes'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
+import { uploadRecipePhoto, deleteRecipePhoto } from '../api/recipes'
 import { autocompleteIngredients } from '../api/ingredients'
-import { UNITS, SEASONS, parseList, joinList } from '../constants/recipe'
+import { UNITS, SEASONS } from '../constants/recipe'
+import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
 
 const route = useRoute()
 const router = useRouter()
 
-const editingId = computed(() => route.params.id || null)
-const isEdit = computed(() => Boolean(editingId.value))
+const {
+  editingId,
+  isEdit,
+  draft,
+  dirty,
+  loading,
+  saving,
+  loadError,
+  saveError,
+  setIdentity,
+  load,
+  save,
+  validate,
+  confirmNavigation
+} = useRecipeDraft({ initialId: route.params.id || null })
 
-const form = reactive({
-  name: '',
-  description: '',
-  cookTimeMinutes: 30,
-  servings: 4,
-  difficulty: 3,
-  calories: '',
-  tagsText: '',
-  seasonality: [],
-  dietText: '',
-  steps: [''],
-  ingredients: [newIngredient()]
-})
-
-const loading = ref(isEdit.value)
-const saving = ref(false)
 const error = ref('')
+const visibleError = computed(() => error.value || saveError.value)
 
 const debounceTimers = new Map()
 
 function newIngredient() {
-  return { name: '', amount: '', unit: 'g', note: '', suggestions: [], showSuggestions: false, activeIndex: -1, loadingSuggestions: false, noSuggestions: false }
+  return {
+    ...newIngredientDraft(),
+    suggestions: [],
+    showSuggestions: false,
+    activeIndex: -1,
+    loadingSuggestions: false,
+    noSuggestions: false
+  }
 }
 
-const existingPhotoUrl = ref(null)
-const selectedPhoto = ref(null)
 const selectedPhotoPreview = ref('')
-const photoRemoved = ref(false)
+
+watch(
+  () => draft.value.photo.selected,
+  (file) => {
+    if (selectedPhotoPreview.value) URL.revokeObjectURL(selectedPhotoPreview.value)
+    selectedPhotoPreview.value = file ? URL.createObjectURL(file) : ''
+  }
+)
 
 const photoActionLabel = computed(() =>
-  selectedPhoto.value || (existingPhotoUrl.value && !photoRemoved.value) ? 'Заменить фото' : 'Выбрать фото'
+  draft.value.photo.selected || (draft.value.photo.existing && !draft.value.photo.removed)
+    ? 'Заменить фото'
+    : 'Выбрать фото'
 )
 
 function onPhotoSelected(event) {
   const file = event.target.files?.[0]
   if (!file) return
-  selectedPhoto.value = file
-  if (selectedPhotoPreview.value) URL.revokeObjectURL(selectedPhotoPreview.value)
-  selectedPhotoPreview.value = URL.createObjectURL(file)
+  draft.value.photo.selected = file
+  draft.value.photo.removed = false
   event.target.value = ''
 }
 
 function clearSelectedPhoto() {
-  selectedPhoto.value = null
-  if (selectedPhotoPreview.value) {
-    URL.revokeObjectURL(selectedPhotoPreview.value)
-    selectedPhotoPreview.value = ''
-  }
+  draft.value.photo.selected = null
 }
 
 function removeExistingPhoto() {
-  photoRemoved.value = true
+  draft.value.photo.selected = null
+  draft.value.photo.removed = true
 }
 
 function undoPhotoRemoval() {
-  photoRemoved.value = false
+  draft.value.photo.removed = false
 }
 
-onBeforeUnmount(() => {
-  if (selectedPhotoPreview.value) URL.revokeObjectURL(selectedPhotoPreview.value)
-})
-
 function addStep() {
-  form.steps.push('')
+  draft.value.steps.push('')
 }
 
 function removeStep(index) {
-  form.steps.splice(index, 1)
+  draft.value.steps.splice(index, 1)
 }
 
 function moveStep(index, delta) {
   const target = index + delta
-  if (target < 0 || target >= form.steps.length) return
-  const tmp = form.steps[index]
-  form.steps[index] = form.steps[target]
-  form.steps[target] = tmp
+  if (target < 0 || target >= draft.value.steps.length) return
+  const tmp = draft.value.steps[index]
+  draft.value.steps[index] = draft.value.steps[target]
+  draft.value.steps[target] = tmp
 }
 
 function addIngredient() {
-  form.ingredients.push(newIngredient())
+  draft.value.ingredients.push(newIngredient())
 }
 
 function removeIngredient(index) {
   clearDebounce(index)
-  form.ingredients.splice(index, 1)
+  draft.value.ingredients.splice(index, 1)
 }
 
 function moveIngredient(index, delta) {
   const target = index + delta
-  if (target < 0 || target >= form.ingredients.length) return
-  const tmp = form.ingredients[index]
-  form.ingredients[index] = form.ingredients[target]
-  form.ingredients[target] = tmp
+  if (target < 0 || target >= draft.value.ingredients.length) return
+  const tmp = draft.value.ingredients[index]
+  draft.value.ingredients[index] = draft.value.ingredients[target]
+  draft.value.ingredients[target] = tmp
 }
 
 function clearDebounce(index) {
@@ -116,12 +121,15 @@ function clearDebounce(index) {
 
 function closeSuggestions(index) {
   clearDebounce(index)
-  form.ingredients[index].showSuggestions = false
-  form.ingredients[index].activeIndex = -1
+  const ing = draft.value.ingredients[index]
+  if (!ing) return
+  ing.showSuggestions = false
+  ing.activeIndex = -1
 }
 
 function onIngredientInput(index) {
-  const ing = form.ingredients[index]
+  const ing = draft.value.ingredients[index]
+  if (!ing) return
   if (!ing.name.trim()) {
     clearDebounce(index)
     ing.suggestions = []
@@ -135,12 +143,15 @@ function onIngredientInput(index) {
 }
 
 async function fetchSuggestions(index) {
-  const ing = form.ingredients[index]
+  const ing = draft.value.ingredients[index]
+  if (!ing) return
   const query = ing.name.trim()
   if (!query) return
   ing.loadingSuggestions = true
   ing.noSuggestions = false
   const { response, data } = await autocompleteIngredients(query)
+  // Ответ устарел, если строка пересоздана или сменился сам ресурс.
+  if (draft.value.ingredients[index] !== ing || ing.name.trim() !== query) return
   if (response.status === 200 && data) {
     ing.suggestions = data.items || []
     ing.showSuggestions = true
@@ -155,14 +166,14 @@ async function fetchSuggestions(index) {
 }
 
 function selectSuggestion(index, suggestion) {
-  const ing = form.ingredients[index]
+  const ing = draft.value.ingredients[index]
   ing.name = suggestion
   closeSuggestions(index)
 }
 
 function onSuggestionKeydown(index, event) {
-  const ing = form.ingredients[index]
-  if (!ing.showSuggestions || ing.suggestions.length === 0) return
+  const ing = draft.value.ingredients[index]
+  if (!ing || !ing.showSuggestions || ing.suggestions.length === 0) return
   if (event.key === 'ArrowDown') {
     event.preventDefault()
     ing.activeIndex = Math.min(ing.activeIndex + 1, ing.suggestions.length - 1)
@@ -179,117 +190,83 @@ function onSuggestionKeydown(index, event) {
 }
 
 function toggleSeason(code) {
-  const index = form.seasonality.indexOf(code)
-  if (index >= 0) form.seasonality.splice(index, 1)
-  else form.seasonality.push(code)
-}
-
-function buildPayload() {
-  return {
-    name: form.name.trim(),
-    description: form.description.trim() || null,
-    cookTimeMinutes: Number(form.cookTimeMinutes),
-    servings: Number(form.servings),
-    difficulty: Number(form.difficulty),
-    calories: form.calories === '' ? null : Number(form.calories),
-    tags: parseList(form.tagsText),
-    seasonality: form.seasonality,
-    diet: parseList(form.dietText),
-    steps: form.steps.map((s) => s.trim()).filter((s) => s.length > 0).map((text) => ({ text })),
-    ingredients: form.ingredients
-      .filter((i) => i.name.trim() || i.amount || i.unit || i.note)
-      .map((i) => ({
-        name: i.name.trim(),
-        amount: Number(i.amount),
-        unit: i.unit,
-        note: i.note.trim() || null
-      }))
-  }
-}
-
-async function loadRecipe() {
-  const { response, data } = await getRecipe(editingId.value)
-  if (response.status === 404) {
-    error.value = 'Рецепт не найден.'
-    loading.value = false
-    return
-  }
-  if (response.status !== 200) {
-    error.value = data?.error || 'Не удалось загрузить рецепт.'
-    loading.value = false
-    return
-  }
-
-  form.name = data.name
-  form.description = data.description || ''
-  existingPhotoUrl.value = data.photoUrl || null
-  form.cookTimeMinutes = data.cookTimeMinutes
-  form.servings = data.servings
-  form.difficulty = data.difficulty
-  form.calories = data.calories === null || data.calories === undefined ? '' : String(data.calories)
-  form.tagsText = joinList(data.tags)
-  form.seasonality = [...data.seasonality]
-  form.dietText = joinList(data.diet)
-  form.steps = data.steps.length ? [...data.steps] : ['']
-  form.ingredients = data.ingredients.length
-    ? data.ingredients.map((i) => ({
-        name: i.name,
-        amount: String(i.amount),
-        unit: i.unit,
-        note: i.note || ''
-      }))
-    : [newIngredient()]
-
-  loading.value = false
+  const index = draft.value.seasonality.indexOf(code)
+  if (index >= 0) draft.value.seasonality.splice(index, 1)
+  else draft.value.seasonality.push(code)
 }
 
 async function submit() {
-  error.value = ''
-  if (!form.name.trim()) {
-    error.value = 'Укажите название рецепта.'
-    return
+  error.value = validate()
+  if (error.value) return
+
+  const photoIntent = {
+    removed:
+      draft.value.photo.removed &&
+      !draft.value.photo.selected &&
+      Boolean(draft.value.photo.existing),
+    selected: draft.value.photo.selected
   }
-  saving.value = true
+
+  const result = await save()
+  if (!result.ok) return
+
+  const id = result.id
   try {
-    const payload = buildPayload()
-    const { response, data } = isEdit.value
-      ? await updateRecipe(editingId.value, payload)
-      : await createRecipe(payload)
-    if (response.status === 200 || response.status === 201) {
-      const id = data.id
-      try {
-        if (photoRemoved.value && !selectedPhoto.value && existingPhotoUrl.value) {
-          const removed = await deleteRecipePhoto(id)
-          if (removed.response.status !== 204) {
-            console.error('Не удалось удалить фото:', removed.data)
-          }
-        } else if (selectedPhoto.value) {
-          const uploaded = await uploadRecipePhoto(id, selectedPhoto.value)
-          if (uploaded.response.status !== 200) {
-            console.error('Не удалось загрузить фото:', uploaded.data)
-          }
-        }
-      } catch (err) {
-        console.error('Ошибка при работе с фото:', err)
+    if (photoIntent.removed) {
+      const removed = await deleteRecipePhoto(id)
+      if (removed.response.status !== 204) {
+        console.error('Не удалось удалить фото:', removed.data)
       }
-      router.push(`/recipes/${id}`)
-    } else {
-      error.value = data?.error || 'Не удалось сохранить рецепт.'
+    } else if (photoIntent.selected) {
+      const uploaded = await uploadRecipePhoto(id, photoIntent.selected)
+      if (uploaded.response.status !== 200) {
+        console.error('Не удалось загрузить фото:', uploaded.data)
+      }
     }
   } catch (err) {
-    error.value = err.message || 'Сервер недоступен.'
-  } finally {
-    saving.value = false
+    console.error('Ошибка при работе с фото:', err)
   }
+  router.push(`/recipes/${id}`)
+}
+
+function handleBeforeUnload(event) {
+  if (!dirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+watch(
+  () => route.params.id || null,
+  (id) => {
+    if (id === editingId.value) return
+    setIdentity(id)
+    error.value = ''
+    clearDebounceAll()
+    load()
+  }
+)
+
+onBeforeRouteLeave(() => confirmNavigation())
+
+onBeforeRouteUpdate((to, from) => {
+  if ((to.params.id || null) === (from.params.id || null)) return true
+  return confirmNavigation()
+})
+
+function clearDebounceAll() {
+  debounceTimers.forEach((timer) => clearTimeout(timer))
+  debounceTimers.clear()
 }
 
 onMounted(() => {
-  if (isEdit.value) loadRecipe()
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  if (isEdit.value) load()
 })
 
 onBeforeUnmount(() => {
-  debounceTimers.forEach((timer) => clearTimeout(timer))
-  debounceTimers.clear()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  clearDebounceAll()
+  if (selectedPhotoPreview.value) URL.revokeObjectURL(selectedPhotoPreview.value)
 })
 </script>
 
@@ -297,34 +274,46 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-heading">
       <h2>{{ isEdit ? 'Редактирование рецепта' : 'Новый рецепт' }}</h2>
+      <span v-if="dirty" class="dirty-badge">● есть изменения</span>
     </div>
 
     <p v-if="loading" class="loading">Загрузка…</p>
+
+    <div v-else-if="loadError" class="card empty-state">
+      <div class="empty-icon">🍽️</div>
+      <p class="empty-title">{{ loadError }}</p>
+      <div class="actions">
+        <button type="button" class="btn btn--primary" @click="load()">Повторить</button>
+        <router-link :to="isEdit ? `/recipes/${editingId}` : '/recipes'" class="btn btn--ghost"
+          >Отмена</router-link
+        >
+      </div>
+    </div>
 
     <form v-else @submit.prevent="submit" class="recipe-form">
       <div class="card form-section">
         <label class="field">
           <span>Название *</span>
-          <input v-model="form.name" type="text" maxlength="200" required />
+          <input v-model="draft.name" type="text" maxlength="200" required />
         </label>
 
         <label class="field">
           <span>Описание</span>
-          <textarea v-model="form.description" rows="3" maxlength="2000"></textarea>
+          <textarea v-model="draft.description" rows="3" maxlength="2000"></textarea>
         </label>
 
         <div class="row">
           <label class="field">
             <span>Время (мин) *</span>
-            <input v-model.number="form.cookTimeMinutes" type="number" min="1" max="1440" required />
+            <input v-model.number="draft.cookTimeMinutes" type="number" min="1" max="1440" required />
           </label>
           <label class="field">
             <span>Порции *</span>
-            <input v-model.number="form.servings" type="number" min="1" max="100" required />
+            <input v-model.number="draft.servings" type="number" min="1" max="100" required />
           </label>
           <label class="field">
             <span>Сложность *</span>
-            <select v-model.number="form.difficulty" required>
+            <select v-model.number="draft.difficulty" required>
               <option v-for="level in 5" :key="level" :value="level">{{ level }}</option>
             </select>
           </label>
@@ -332,26 +321,28 @@ onBeforeUnmount(() => {
 
         <label class="field">
           <span>Калорийность на порцию (ккал)</span>
-          <input v-model.number="form.calories" type="number" min="0" max="10000" />
+          <input v-model.number="draft.calories" type="number" min="0" max="10000" />
         </label>
       </div>
 
       <fieldset class="card fieldset">
         <legend>Фото</legend>
-        <div v-if="selectedPhoto" class="photo-preview">
+        <div v-if="draft.photo.selected" class="photo-preview">
           <img :src="selectedPhotoPreview" alt="Предпросмотр фото" class="photo-thumb" />
           <div class="photo-actions">
             <span class="hint">Новое фото будет загружено после сохранения.</span>
             <button type="button" class="btn btn--ghost" @click="clearSelectedPhoto">Убрать</button>
           </div>
         </div>
-        <div v-else-if="existingPhotoUrl && !photoRemoved" class="photo-preview">
-          <img :src="existingPhotoUrl" alt="Фото рецепта" class="photo-thumb" />
+        <div v-else-if="draft.photo.existing && !draft.photo.removed" class="photo-preview">
+          <img :src="draft.photo.existing" alt="Фото рецепта" class="photo-thumb" />
           <div class="photo-actions">
-            <button type="button" class="btn btn--ghost text-danger" @click="removeExistingPhoto">Удалить фото</button>
+            <button type="button" class="btn btn--ghost text-danger" @click="removeExistingPhoto">
+              Удалить фото
+            </button>
           </div>
         </div>
-        <p v-else-if="photoRemoved" class="hint">
+        <p v-else-if="draft.photo.removed" class="hint">
           Фото будет удалено после сохранения.
           <button type="button" class="btn btn--subtle" @click="undoPhotoRemoval">Отменить удаление</button>
         </p>
@@ -364,7 +355,7 @@ onBeforeUnmount(() => {
       <div class="card form-section">
         <label class="field">
           <span>Теги (через запятую)</span>
-          <input v-model="form.tagsText" type="text" placeholder="суп, первое, быстрый" />
+          <input v-model="draft.tagsText" type="text" placeholder="суп, первое, быстрый" />
         </label>
 
         <fieldset class="fieldset-inline">
@@ -374,7 +365,7 @@ onBeforeUnmount(() => {
               <input
                 type="checkbox"
                 :value="season.code"
-                :checked="form.seasonality.includes(season.code)"
+                :checked="draft.seasonality.includes(season.code)"
                 @change="toggleSeason(season.code)"
               />
               {{ season.label }}
@@ -384,14 +375,14 @@ onBeforeUnmount(() => {
 
         <label class="field">
           <span>Диета (через запятую)</span>
-          <input v-model="form.dietText" type="text" placeholder="вегетарианское, безглютеновое" />
+          <input v-model="draft.dietText" type="text" placeholder="вегетарианское, безглютеновое" />
         </label>
       </div>
 
       <fieldset class="card fieldset">
         <legend>Ингредиенты</legend>
         <p class="hint">Количество и единица измерения указываются вместе. Примечание (например, «по вкусу») не влияет на расчёт.</p>
-        <div v-for="(ing, index) in form.ingredients" :key="index" class="ingredient-row">
+        <div v-for="(ing, index) in draft.ingredients" :key="index" class="ingredient-row">
           <div class="ing-name-wrap">
             <input
               v-model="ing.name"
@@ -421,7 +412,7 @@ onBeforeUnmount(() => {
           <input v-model="ing.note" type="text" placeholder="Примечание" class="ing-note" />
           <div class="row-actions">
             <button type="button" class="btn btn--subtle icon-btn" @click="moveIngredient(index, -1)" :disabled="index === 0">↑</button>
-            <button type="button" class="btn btn--subtle icon-btn" @click="moveIngredient(index, 1)" :disabled="index === form.ingredients.length - 1">↓</button>
+            <button type="button" class="btn btn--subtle icon-btn" @click="moveIngredient(index, 1)" :disabled="index === draft.ingredients.length - 1">↓</button>
             <button type="button" class="btn btn--ghost" @click="removeIngredient(index)">Удалить</button>
           </div>
         </div>
@@ -431,18 +422,18 @@ onBeforeUnmount(() => {
       <fieldset class="card fieldset">
         <legend>Шаги приготовления *</legend>
         <p class="hint">Порядок шагов соответствует порядку в списке.</p>
-        <div v-for="(step, index) in form.steps" :key="index" class="step-row">
-          <textarea v-model="form.steps[index]" rows="2" placeholder="Шаг приготовления" maxlength="2000" class="step-textarea"></textarea>
+        <div v-for="(step, index) in draft.steps" :key="index" class="step-row">
+          <textarea v-model="draft.steps[index]" rows="2" placeholder="Шаг приготовления" maxlength="2000" class="step-textarea"></textarea>
           <div class="row-actions">
             <button type="button" class="btn btn--subtle icon-btn" @click="moveStep(index, -1)" :disabled="index === 0">↑</button>
-            <button type="button" class="btn btn--subtle icon-btn" @click="moveStep(index, 1)" :disabled="index === form.steps.length - 1">↓</button>
+            <button type="button" class="btn btn--subtle icon-btn" @click="moveStep(index, 1)" :disabled="index === draft.steps.length - 1">↓</button>
             <button type="button" class="btn btn--ghost" @click="removeStep(index)">Удалить</button>
           </div>
         </div>
         <button type="button" class="btn btn--ghost" @click="addStep">+ Добавить шаг</button>
       </fieldset>
 
-      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="visibleError" class="error">{{ visibleError }}</p>
 
       <div class="actions">
         <button type="submit" class="btn btn--primary" :disabled="saving">{{ saving ? 'Сохранение…' : 'Сохранить' }}</button>

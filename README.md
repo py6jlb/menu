@@ -84,12 +84,14 @@ npm install
 npm run dev
 ```
 
-Frontend-тесты (Vitest + jsdom, поведение недельного черновика):
+Frontend-тесты (Vitest + jsdom, поведение черновика недели и черновика рецепта):
 
 ```bash
 cd frontend
 npm test
 ```
+
+Поведенческие тесты composables: `useWeekDraft` (устойчивость недельного черновика) и `useRecipeDraft`/`useRouteResource` (identity-safe черновик и загрузка рецепта — смена ID/token, обратный порядок ответов, dirty, отмена ухода, сетевые отказы).
 
 Без установленного на хосте Node тесты и сборку прогоняют в контейнере (пишущий `docker run` — под текущим UID, чтобы не оставлять root-owned файлы):
 
