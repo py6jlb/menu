@@ -55,6 +55,23 @@ BACKUP_REMOTE=
 BACKUP_KEEP_DAILY=7
 BACKUP_KEEP_WEEKLY=4
 
+# Оповещения (menu-monitor.timer): канал оператора. URL секретен и не логируется.
+# ALERT_WEBHOOK_URL — обязателен для проверки; на него уходит JSON {"text": ...}.
+# ALERT_HEARTBEAT_URL — внешний dead-man switch (healthchecks.io, Uptime Kuma):
+# пинг при каждом запуске, тишина там означает полный отказ VPS.
+ALERT_WEBHOOK_URL=
+ALERT_HEARTBEAT_URL=
+# Публичный адрес проверки пути; пусто — берётся PUBLIC_BASE_URL/DOMAIN.
+ALERT_PUBLIC_URL=
+# Пороги: возраст complete-набора (ч), свободное место (МБ), занятость диска (%),
+# доступная память (МБ), load1 на ядро; окно дедупликации повторов (с).
+BACKUP_MAX_AGE_HOURS=26
+ALERT_DISK_MIN_FREE_MB=2048
+ALERT_DISK_MAX_USED_PERCENT=90
+ALERT_MEM_MIN_MB=256
+ALERT_LOAD_MAX_PER_CPU=2
+ALERT_DEDUP_SECONDS=3600
+
 # Дополнительные серверные ключи (обычно достаточно defaults):
 # COMPOSE_FILE=docker-compose.prod.yml
 # DRILL_CONTAINER=menu-restore-drill

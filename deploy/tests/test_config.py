@@ -102,8 +102,9 @@ class EntrypointTests(unittest.TestCase):
                          "deploy-lib.sh", "rollback.sh",
                          "build-push.sh", "deploy.sh", "backup-lib.sh", "backup.sh",
                          "restore-drill.sh", "install-backup.sh", "smoke.sh", "logs.sh", "Caddyfile",
-                         "otel-collector.yaml",
-                         "systemd/menu-backup.service", "systemd/menu-backup.timer"):
+                         "otel-collector.yaml", "alert-lib.sh", "alert.sh", "install-monitor.sh",
+                         "systemd/menu-backup.service", "systemd/menu-backup.timer",
+                         "systemd/menu-monitor.service", "systemd/menu-monitor.timer"):
             destination = self.root / "deploy" / filename
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(ROOT / "deploy" / filename, destination)
@@ -405,7 +406,8 @@ sys.exit(subprocess.run(["bash", "-c", sys.argv[-1]]).returncode)
         for filename in ("deploy/config.sh", "deploy/compose.sh", "deploy/backup-lib.sh",
                          "deploy/deploy-lib.sh", "deploy/remote-deploy.sh", "deploy/rollback.sh",
                          "deploy/backup.sh", "deploy/restore-drill.sh",
-                         "deploy/install-backup.sh", "deploy/logs.sh"):
+                         "deploy/install-backup.sh", "deploy/logs.sh",
+                         "deploy/alert-lib.sh", "deploy/alert.sh", "deploy/install-monitor.sh"):
             self.assertIn(filename, delivered)
             self.assertTrue((remote / filename).exists())
         self.assertFalse(any(".conf" in path or ".env" in path for path in delivered))

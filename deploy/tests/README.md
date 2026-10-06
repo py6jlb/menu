@@ -315,3 +315,20 @@ Compose `config` экранирует все `$` как `$$` при сериал
 
 Итог: deploy-suite прибавил `test_observability.py` (14 тестов); backend fast — новые `ObservabilityConfigurationTests` (14), `ReleaseIdentityTests` (8), `SensitivePathTests` (8 кейсов), `RequestLoggingTests` (3). Ограничения: реальные Collector, Caddy и Docker daemon в suite не запускаются — проверяются поставляемые артефакты и вызовы на публичных границах; фактический restart/rotation/отказ Collector проверяются вручную на стенде по разделу «Проверка наблюдаемости». Caddyfile-редактирование и запись Collector в volume с trace-id дополнительно проверены вживую (`caddy:2-alpine`, одноразовый `otel/opentelemetry-collector-contrib` с init-шагом) мимо suite.
 
+
+## Тикет 72: обнаружение недоступности, старых бэкапов и ресурсов
+
+`test_alerting.py` использует изолированные transport-adapters: `curl` (публичный путь, канал, heartbeat), `rclone` (complete-наборы в локальном каталоге), `df`/`nproc` (ресурсы), `systemctl`. Край эмулируется каталогом `EDGE_DIR` (файл на путь, `.status` — код). Реальные VPS, сеть, systemd и хранилище не запускаются; секреты вымышленные.
+
+| Критерий | Проверка |
+|---|---|
+| Проверяется публичный путь и readiness, а не внутренний порт | `AvailabilityTests.test_public_path_and_readiness_failure_alerts`, `test_unreachable_public_path_alerts_with_connect_cause` (`curl` на `ALERT_PUBLIC_URL/ready` и `/`) |
+| Возраст копии — по последнему complete-набору; неполный upload не считается | `BackupAgeTests.test_incomplete_upload_does_not_count_as_backup`, `test_stale_complete_set_alerts_with_age`, `test_fresh_complete_set_is_healthy` |
+| Пороги ресурсов настраиваемы; задержка отсекает краткий всплеск | `ResourceTests.test_single_spike_does_not_alarm`, `test_sustained_disk_pressure_alerts`, `test_memory_pressure_alerts_with_configurable_threshold`, `test_load_pressure_alerts_with_configurable_threshold` |
+| Канал задаётся явно, секреты не логируются, есть проверочное уведомление | `ChannelTests.test_missing_channel_is_rejected_before_external_actions`, `test_test_notification_works_without_incident`, `test_secret_channel_is_not_logged_or_put_in_argv` |
+| Дедупликация повторов и отдельное сообщение восстановления | `DedupTests.test_duplicate_event_is_suppressed_within_window`, `test_recovery_sends_separate_message_and_clears_state` |
+| Сообщение содержит время, установку/release, проблему и следующий шаг | `ChannelTests.test_message_contains_time_install_release_problem_and_next_step` |
+| Ограничение локальной проверки при полном отказе VPS; heartbeat — внешний монитор | `StructuralTests.test_monitor_units_are_bounded_and_installed`, `test_readme_documents_limits_channel_and_verification` |
+| Средства проверки не заполняют рабочий диск; установка идемпотентна | `InstallMonitorTests.test_installs_renders_and_enables_monitor_units`, временные файлы сообщений удаляются; `StructuralTests.test_install_monitor_requires_channel_and_installs_units` |
+
+Итог: deploy-suite прибавил `test_alerting.py` (26 тестов); `bash -n deploy/*.sh` и контейнерный Shellcheck новых/изменённых скриптов — чисто. Ограничения: реальные VPS-отказы, object storage, systemd и внешний монитор в suite не запускаются — проверяются вызовы на публичных границах, состояния и тексты. Сценарии остановки приложения/БД, старой копии, неполного набора, заполнения диска и восстановления проверяются на стенде по разделу «Обнаружение недоступности…» в `deploy/README.md`.
