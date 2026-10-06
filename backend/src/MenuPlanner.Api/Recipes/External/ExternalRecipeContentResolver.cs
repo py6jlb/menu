@@ -33,7 +33,7 @@ public static class ExternalRecipeContentResolver
             Calories = source.Calories,
             Tags = source.Tags,
             Seasonality = source.Seasonality,
-            Diet = source.Diet,
+            Diet = DietCatalog.NormalizeAll(source.Diet),
             CreatedAt = wrapper.CreatedAt,
             UpdatedAt = source.UpdatedAt,
             SourceRecipeId = wrapper.SourceRecipeId,

@@ -130,6 +130,11 @@ _Avoid_: Категория единиц
 _Код_: поля `Recipe` (Difficulty, Calories, Seasonality, Diet, Tags).
 _Avoid_: Характеристики, Атрибуты
 
+**Диета**:
+Метка рецепта для подбора: стандартная диета (вегетарианское, безглютеновое, постное, кетогенное) с каноническим кодом либо произвольная пользовательская метка. Известные русские и кодовые варианты сводятся к каноническому коду на записи, чтении и в подборе; произвольные метки сохраняются как есть, без перевода «по догадке».
+_Код_: `Recipe.Diet`, `DietCatalog` (`Domain/DietCatalog.cs`).
+_Avoid_: Ограничение питания, Режим
+
 **Внешний рецепт**:
 Рецепт в семье-получателе, который читает рецепт другой семьи живьём по ссылке и доступен только для чтения. Владение рецептом остаётся у семьи-источника.
 _Код_: `Recipe.SourceRecipeId` (не null), `isExternal`.
@@ -218,7 +223,7 @@ _Avoid_: Версия, Номер, ETag
 
 ## Разделение кода
 
-**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
+**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, `DietCatalog`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
 
 **БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `RecipeReader`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`). Обработчики Minimal API получают его параметром. Фоновая отправка очереди — hosted-сервис `EmailDeliveryWorker`.
 

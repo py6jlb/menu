@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   useRecipeDraft,
   newIngredientDraft,
+  emptyDraft,
   serializeDraft,
   draftToPayload,
   photoIntentFromDraft,
@@ -945,5 +946,47 @@ describe('serializeDraft', () => {
       ]
     }
     expect(serializeDraft(reorderedIngredients)).not.toBe(serializeDraft(base))
+  })
+})
+
+describe('useRecipeDraft — стандартные диеты', () => {
+  it('загрузка разделяет стандартные коды и произвольные метки без ложного dirty', async () => {
+    const state = make({
+      initialId: 'A',
+      loadRecipe: vi
+        .fn()
+        .mockResolvedValue(ok(recipeData('A', { diet: ['vegetarian', 'моя диета'] })))
+    })
+
+    await state.load()
+
+    expect(state.draft.value.diets).toEqual(['vegetarian'])
+    expect(state.draft.value.dietText).toBe('моя диета')
+    expect(state.dirty.value).toBe(false)
+  })
+
+  it('сохранение объединяет выбранные коды и произвольные метки', async () => {
+    const createRecipe = vi.fn().mockResolvedValue(created(recipeData('NEW')))
+    const state = make({ createRecipe })
+    state.draft.value.name = 'Новый'
+    state.draft.value.diets = ['vegetarian']
+    state.draft.value.dietText = 'моя диета, lean'
+
+    await state.save()
+
+    expect(createRecipe).toHaveBeenCalledWith(
+      expect.objectContaining({ diet: ['vegetarian', 'моя диета', 'lean'] })
+    )
+  })
+
+  it('draftToPayload не дублирует совпадающие метки', () => {
+    const draft = { ...emptyDraft(), diets: ['vegetarian'], dietText: 'vegetarian, моя диета' }
+    expect(draftToPayload(draft).diet).toEqual(['vegetarian', 'моя диета'])
+  })
+
+  it('serializeDraft не зависит от порядка диет', () => {
+    const first = { ...emptyDraft(), diets: ['vegetarian', 'lean'], dietText: 'моя диета' }
+    const second = { ...emptyDraft(), diets: ['lean', 'vegetarian'], dietText: 'моя диета' }
+    expect(serializeDraft(first)).toBe(serializeDraft(second))
   })
 })

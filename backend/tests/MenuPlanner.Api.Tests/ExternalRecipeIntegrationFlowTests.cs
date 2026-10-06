@@ -75,7 +75,7 @@ public sealed class ExternalRecipeIntegrationFlowTests
         Assert.Equal(2, updated.Servings);
         Assert.Equal(new[] { "острое", "зимнее" }, updated.Tags);
         Assert.Equal(new[] { "autumn" }, updated.Seasonality);
-        Assert.Equal(new[] { "вегетарианское" }, updated.Diet);
+        Assert.Equal(new[] { "vegetarian" }, updated.Diet);
     }
 
     [Fact]

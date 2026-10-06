@@ -1,5 +1,5 @@
 <script setup>
-import { unitLabel, seasonLabel } from '../constants/recipe'
+import { unitLabel, seasonLabel, dietLabel } from '../constants/recipe'
 
 defineProps({
   recipe: { type: Object, required: true }
@@ -32,7 +32,7 @@ defineProps({
       🍂 {{ seasonLabel(season) }}
     </span>
     <span v-for="diet in recipe.diet" :key="`diet-${diet}`" class="badge badge--diet">
-      {{ diet }}
+      {{ dietLabel(diet) }}
     </span>
   </div>
 
