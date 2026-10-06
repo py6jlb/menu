@@ -193,3 +193,11 @@ _Avoid_: Строка, Продукт (продукт — это имя внут
 Умножение количества ингредиента на коэффициент «порции в плане / порции рецепта».
 _Код_: `ShoppingListBuilder.Scale`.
 _Avoid_: Умножение, Ресайз
+
+## Разделение кода
+
+**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `RecipeMatcher`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
+
+**БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `SourceFamilyNameResolver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`). Обработчики Minimal API получают его параметром.
+
+_Avoid_: `static`-метод, принимающий `AppDbContext`; service locator; имя `*Service` у чистого правила.

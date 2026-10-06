@@ -23,9 +23,10 @@ public static class RecipeShareEndpoints
         Guid id,
         ClaimsPrincipal principal,
         AppDbContext db,
+        CurrentUserContext currentUser,
         ShareOptions options)
     {
-        var error = await FindRecipeAsync(id, principal, db);
+        var error = await FindRecipeAsync(id, principal, db, currentUser);
         if (error is not null)
             return error;
 
@@ -50,9 +51,10 @@ public static class RecipeShareEndpoints
         Guid id,
         ClaimsPrincipal principal,
         AppDbContext db,
+        CurrentUserContext currentUser,
         ShareOptions options)
     {
-        var error = await AuthorizeOwnerAsync(id, principal, db);
+        var error = await AuthorizeOwnerAsync(id, principal, db, currentUser);
         if (error is not null)
             return error;
 
@@ -74,9 +76,10 @@ public static class RecipeShareEndpoints
         Guid id,
         ClaimsPrincipal principal,
         AppDbContext db,
+        CurrentUserContext currentUser,
         ShareOptions options)
     {
-        var error = await AuthorizeOwnerAsync(id, principal, db);
+        var error = await AuthorizeOwnerAsync(id, principal, db, currentUser);
         if (error is not null)
             return error;
 
@@ -104,9 +107,9 @@ public static class RecipeShareEndpoints
     }
 
     private static async Task<IResult?> AuthorizeOwnerAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db)
+        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
     {
-        var access = await ResolveAccessAsync(id, principal, db);
+        var access = await ResolveAccessAsync(id, principal, db, currentUser);
         if (access.Error is not null)
             return access.Error;
 
@@ -120,8 +123,8 @@ public static class RecipeShareEndpoints
     }
 
     private static async Task<IResult?> FindRecipeAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db) =>
-        (await ResolveAccessAsync(id, principal, db)).Error;
+        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser) =>
+        (await ResolveAccessAsync(id, principal, db, currentUser)).Error;
 
     /// <summary>
     /// Общая часть проверок владельца/участника: авторизация, семья, рецепт своей семьи
@@ -129,13 +132,13 @@ public static class RecipeShareEndpoints
     /// дальнейшей проверки владельца.
     /// </summary>
     private static async Task<RecipeAccess> ResolveAccessAsync(
-        Guid id, ClaimsPrincipal principal, AppDbContext db)
+        Guid id, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
     {
         var userId = CurrentUser.UserId(principal);
         if (userId is null)
             return new RecipeAccess(Results.Unauthorized(), Guid.Empty, Guid.Empty);
 
-        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
+        var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return new RecipeAccess(NotFoundRecipe(), Guid.Empty, Guid.Empty);
 

@@ -17,6 +17,8 @@ using MenuPlanner.Api.Health;
 using MenuPlanner.Api.Ingredients;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes;
+using MenuPlanner.Api.Recipes.External;
+using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.Settings;
 using MenuPlanner.Api.ShoppingList;
 
@@ -61,6 +63,11 @@ builder.Services.AddScoped<AuthCodeLifecycle>();
 builder.Services.AddScoped<EmailVerificationService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<AuthSessionValidator>();
+builder.Services.AddScoped<CurrentUserContext>();
+builder.Services.AddScoped<SourceFamilyNameResolver>();
+builder.Services.AddScoped<ExternalRecipeSourceLoader>();
+builder.Services.AddScoped<ExternalRecipeStateResolver>();
+builder.Services.AddScoped<RepetitionCounter>();
 builder.Services.AddScoped<AdminBootstrap>();
 
 builder.Services.AddSingleton(services => new ShareOptions

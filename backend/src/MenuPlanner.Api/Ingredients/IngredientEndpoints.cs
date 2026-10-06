@@ -17,9 +17,9 @@ public static class IngredientEndpoints
     }
 
     private static async Task<IResult> AutocompleteAsync(
-        string? q, ClaimsPrincipal principal, AppDbContext db)
+        string? q, ClaimsPrincipal principal, AppDbContext db, CurrentUserContext currentUser)
     {
-        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
+        var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.Json(new IngredientAutocompleteDto(Array.Empty<string>()));
 

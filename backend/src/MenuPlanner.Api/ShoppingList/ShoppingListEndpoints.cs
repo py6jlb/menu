@@ -23,9 +23,12 @@ public static class ShoppingListEndpoints
     private static async Task<IResult> GetAsync(
         string weekStart,
         ClaimsPrincipal principal,
-        AppDbContext db)
+        AppDbContext db,
+        CurrentUserContext currentUser,
+        ExternalRecipeStateResolver stateResolver,
+        ExternalRecipeSourceLoader sourceLoader)
     {
-        var familyId = await CurrentUser.FamilyIdAsync(principal, db);
+        var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
             return Results.NotFound(new ShoppingListErrorDto("Вы не состоите в семье."));
 
@@ -43,11 +46,11 @@ public static class ShoppingListEndpoints
         if (plan is null)
             return Results.Json(new ShoppingListDto(Format(monday), Array.Empty<ShoppingListItemDto>()));
 
-        var states = await ExternalRecipeStateResolver.ResolveManyAsync(
-            db, ExternalPlanContent.SourceLinks(plan.Entries));
+        var states = await stateResolver.ResolveManyAsync(
+            ExternalPlanContent.SourceLinks(plan.Entries));
 
-        var liveSources = await ExternalRecipeContentResolver.LoadSourcesAsync(
-            db, ExternalPlanContent.SourceRecipeIds(plan.Entries));
+        var liveSources = await sourceLoader.LoadSourcesAsync(
+            ExternalPlanContent.SourceRecipeIds(plan.Entries));
 
         var lines = new List<IngredientLine>();
         foreach (var entry in plan.Entries)
