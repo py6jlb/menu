@@ -49,7 +49,7 @@ public sealed class PostgresRecipeReadTests : PostgresTestBase
     }
 
     [PostgresFact]
-    public async Task ReadIngredientSuggestions_DoesNotLoadSteps_AndDoesNotGrowWithExternalCount()
+    public async Task ReadIngredientSuggestions_AggregatesInSql_ReadsNoSteps_AndDoesNotGrowWithExternalCount()
     {
         var (recipient1, _) = await SeedAsync(externalCount: 1, chunksPerSource: 3);
         var first = new CommandRecordingInterceptor();
@@ -62,9 +62,17 @@ public sealed class PostgresRecipeReadTests : PostgresTestBase
         await using (var db = NewContext(second))
             items = await Reader(db).ReadIngredientSuggestionsAsync(recipient2.Id, null);
 
-        Assert.Equal(first.Commands.Count, second.Commands.Count);
-        Assert.NotEmpty(items);
+        IReadOnlyList<string> filtered;
+        await using (var db = NewContext())
+            filtered = await Reader(db).ReadIngredientSuggestionsAsync(recipient2.Id, "  ПРОДУКТ 1 ");
+
+        // 25 источников × 3 ингредиента = 75 строк, но в памяти оказываются только
+        // различимые названия с частотами: объём не растёт с содержимым коллекции.
+        Assert.Equal(3, items.Count);
         Assert.Contains("Продукт 0", items);
+        Assert.Equal("Продукт 1", Assert.Single(filtered));
+        Assert.Equal(first.Commands.Count, second.Commands.Count);
+        Assert.Contains(second.Commands, c => c.Contains("GROUP BY", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(second.Commands, c => c.Contains("RecipeSteps", StringComparison.Ordinal));
     }
 

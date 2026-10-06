@@ -343,7 +343,7 @@ public sealed class RecipeReaderTests
     }
 
     [Fact]
-    public async Task ReadIngredientSuggestions_CombinesOwnAndLiveExternal_RankingByFrequency()
+    public async Task ReadIngredientSuggestions_RanksByFrequency_NotAlphabetically()
     {
         await using var db = NewDb();
         var sourceFamily = NewFamily();
@@ -351,8 +351,7 @@ public sealed class RecipeReaderTests
         db.Families.AddRange(sourceFamily, recipientFamily);
 
         var source = NewRecipe(sourceFamily.Id, "Источник");
-        source.Ingredients.Add(Ingredient("Лук"));
-        source.Ingredients.Add(Ingredient("Свёкла"));
+        source.Ingredients.Add(Ingredient("Абрикос"));
         db.Recipes.Add(source);
 
         var wrapper = NewRecipe(recipientFamily.Id, "Внешний");
@@ -363,16 +362,47 @@ public sealed class RecipeReaderTests
         db.RecipeShares.Add(NewShare(source.Id, "tok"));
 
         var own = NewRecipe(recipientFamily.Id, "Свой");
-        own.Ingredients.Add(Ingredient("Лук"));
-        own.Ingredients.Add(Ingredient("лук "));
+        own.Ingredients.Add(Ingredient("Яблоко"));
+        own.Ingredients.Add(Ingredient("Яблоко"));
         db.Recipes.Add(own);
         await db.SaveChangesAsync();
 
         var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
 
-        Assert.Equal("Лук", items[0]);
-        Assert.Contains("Свёкла", items);
+        // «Яблоко» встречается чаще, но идёт позже «Абрикоса» по алфавиту.
+        Assert.Equal("Яблоко", items[0]);
+        Assert.Contains("Абрикос", items);
         Assert.Equal(2, items.Count);
+    }
+
+    [Fact]
+    public async Task ReadIngredientSuggestions_MergesSameNameAcrossOwnAndExternal()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+
+        var source = NewRecipe(sourceFamily.Id, "Источник");
+        source.Ingredients.Add(Ingredient("помидор"));
+        db.Recipes.Add(source);
+
+        var wrapper = NewRecipe(recipientFamily.Id, "Внешний");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "tok"));
+
+        var own = NewRecipe(recipientFamily.Id, "Свой");
+        own.Ingredients.Add(Ingredient("Помидор"));
+        db.Recipes.Add(own);
+        await db.SaveChangesAsync();
+
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+
+        Assert.Single(items);
+        Assert.Equal("Помидор", items[0], ignoreCase: true);
     }
 
     [Fact]
@@ -452,7 +482,7 @@ public sealed class RecipeReaderTests
         var own = NewRecipe(family.Id, "Свой");
         for (var i = 0; i < 12; i++)
             own.Ingredients.Add(Ingredient($"Продукт {i:D2}"));
-        own.Ingredients.Add(Ingredient("  продукт 00  "));
+        own.Ingredients.Add(Ingredient(" Продукт 00 "));
         db.Recipes.Add(own);
         await db.SaveChangesAsync();
 

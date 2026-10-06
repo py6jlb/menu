@@ -95,22 +95,22 @@ public sealed class ExternalRecipeSourceLoader
     }
 
     /// <summary>
-    /// Только названия ингредиентов источников, одним скалярным запросом без загрузки
-    /// рецептов, шагов и остальных полей. Для автодополнения, которому нужны лишь строки
-    /// названий и которое само считает частоту и ограничивает выдачу.
+    /// Различимые названия ингредиентов источников с частотами, одним скалярным запросом
+    /// без загрузки рецептов, шагов и остальных полей. Поиск по префиксу и агрегация
+    /// выполняются в SQL (<see cref="IngredientUsageQuery"/>), поэтому объём чтения не
+    /// зависит от полного содержимого коллекции и пофайлового запроса на источник нет.
     /// </summary>
-    public async Task<List<string>> LoadIngredientNamesAsync(
-        IEnumerable<Guid> sourceRecipeIds, CancellationToken cancellationToken = default)
+    public async Task<List<IngredientUsage>> LoadIngredientSuggestionsAsync(
+        IEnumerable<Guid> sourceRecipeIds, string normalizedQuery, CancellationToken cancellationToken = default)
     {
         var ids = sourceRecipeIds.Distinct().ToList();
         if (ids.Count == 0)
-            return new List<string>();
+            return new List<IngredientUsage>();
 
-        return await _db.Recipes
-            .AsNoTracking()
-            .Where(r => ids.Contains(r.Id))
-            .SelectMany(r => r.Ingredients)
-            .Select(i => i.Name)
+        return await IngredientUsageQuery
+            .Build(
+                _db.Recipes.AsNoTracking().Where(r => ids.Contains(r.Id)).SelectMany(r => r.Ingredients),
+                normalizedQuery)
             .ToListAsync(cancellationToken);
     }
 }

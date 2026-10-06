@@ -207,20 +207,25 @@ public sealed class RecipeReader
     /// <summary>
     /// Актуальные названия ингредиентов семьи для автодополнения: свои рецепты плюс живой
     /// контент доступных внешних (warning включён — контент ещё читается; broken исключён,
-    /// устаревших ингредиентов не даёт). Названия читаются скалярной проекцией одним
-    /// запросом на группу, без шагов и полного содержимого коллекции и без запроса на
-    /// каждый внешний рецепт. Нормализация trim/lowercase, поиск по префиксу, ранжирование
-    /// по частоте и затем названию и ограничение выдачи — здесь, единообразно для обоих
+    /// устаревших ингредиентов не даёт). Пустые имена отсекаются, поиск по префиксу и
+    /// группировка по нормализованному названию идут в SQL (<see cref="IngredientUsageQuery"/>),
+    /// поэтому в память попадают только различимые названия с частотами, а не полное
+    /// содержимое коллекции; пофайлового запроса на каждый внешний рецепт нет. Ранжирование
+    /// по частоте, затем названию, и ограничение выдачи — здесь, единообразно для обоих
     /// источников.
     /// </summary>
     public async Task<IReadOnlyList<string>> ReadIngredientSuggestionsAsync(
         Guid familyId, string? query, CancellationToken cancellationToken = default)
     {
-        var names = await _db.Recipes
-            .AsNoTracking()
-            .Where(r => r.FamilyId == familyId && r.SourceRecipeId == null)
-            .SelectMany(r => r.Ingredients)
-            .Select(i => i.Name)
+        var normalizedQuery = query?.Trim().ToLowerInvariant() ?? "";
+
+        var own = await IngredientUsageQuery
+            .Build(
+                _db.Recipes
+                    .AsNoTracking()
+                    .Where(r => r.FamilyId == familyId && r.SourceRecipeId == null)
+                    .SelectMany(r => r.Ingredients),
+                normalizedQuery)
             .ToListAsync(cancellationToken);
 
         var external = await _db.Recipes
@@ -230,34 +235,33 @@ public sealed class RecipeReader
                 r.Id, r.SourceRecipeId!.Value, r.SourceToken))
             .ToListAsync(cancellationToken);
 
-        if (external.Count > 0)
-        {
-            var states = await _states.ResolveManyAsync(external);
-            var liveSourceIds = external
-                .Where(l => states.GetValueOrDefault(l.WrapperId, ExternalRecipeState.Broken)
-                    != ExternalRecipeState.Broken)
-                .Select(l => l.SourceRecipeId)
-                .ToList();
+        var externalUsages = external.Count == 0
+            ? new List<IngredientUsage>()
+            : await _sources.LoadIngredientSuggestionsAsync(
+                await ResolveLiveSourceIdsAsync(external), normalizedQuery, cancellationToken);
 
-            names.AddRange(await _sources.LoadIngredientNamesAsync(liveSourceIds, cancellationToken));
-        }
-
-        var normalizedQuery = query?.Trim().ToLowerInvariant() ?? "";
-
-        var groups = names
-            .Where(n => !string.IsNullOrWhiteSpace(n))
-            .Select(n => n.Trim())
-            .GroupBy(n => n.ToLowerInvariant())
-            .Select(g => new IngredientGroup(g.Key, g.First(), g.Count()));
-
-        if (normalizedQuery.Length > 0)
-            groups = groups.Where(x => x.Normalized.StartsWith(normalizedQuery, StringComparison.Ordinal));
-
-        return groups
+        return own
+            .Concat(externalUsages)
+            .GroupBy(x => x.Normalized)
+            .Select(g => new IngredientUsage(g.Key, g.First().Name, g.Sum(x => x.Usage)))
             .OrderByDescending(x => x.Usage)
             .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
             .Take(MaxIngredientSuggestions)
             .Select(x => x.Name)
+            .ToList();
+    }
+
+    /// <summary>
+    /// id источников, доступных для чтения: warning ещё можно прочитать, broken — нет.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> ResolveLiveSourceIdsAsync(
+        IReadOnlyList<ExternalSourceLink> links)
+    {
+        var states = await _states.ResolveManyAsync(links);
+        return links
+            .Where(l => states.GetValueOrDefault(l.WrapperId, ExternalRecipeState.Broken)
+                != ExternalRecipeState.Broken)
+            .Select(l => l.SourceRecipeId)
             .ToList();
     }
 
@@ -391,8 +395,6 @@ public sealed class RecipeReader
 
         return new ExternalContext(states, familyNames);
     }
-
-    private sealed record IngredientGroup(string Normalized, string Name, int Usage);
 
     private sealed record StoredSummary(
         Guid Id,
