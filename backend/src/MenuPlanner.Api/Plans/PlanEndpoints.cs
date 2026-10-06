@@ -197,7 +197,7 @@ public static class PlanEndpoints
                     : ExternalRecipeContentResolver.Resolve(e.Recipe, liveSources).Name,
                 e.Portions,
                 states.TryGetValue(e.RecipeId, out var state)
-                    ? ExternalRecipeStateService.Code(state)
+                    ? ExternalRecipeStateRules.Code(state)
                     : null))
             .ToList();
 

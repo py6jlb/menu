@@ -13,7 +13,7 @@ public readonly record struct ExternalSourceLink(
 
 /// <summary>
 /// Загружает из БД факты (жив ли источник, каков текущий токен/отзыв шеринга)
-/// и применяет к ним чистое правило <see cref="ExternalRecipeStateService.Resolve"/>.
+/// и применяет к ним чистое правило <see cref="ExternalRecipeStateRules.Resolve"/>.
 /// </summary>
 public static class ExternalRecipeStateResolver
 {
@@ -49,7 +49,7 @@ public static class ExternalRecipeStateResolver
                 && string.Equals(share.Token, link.SourceToken, StringComparison.Ordinal);
             var revoked = share?.RevokedAt is not null;
 
-            result[link.WrapperId] = ExternalRecipeStateService.Resolve(
+            result[link.WrapperId] = ExternalRecipeStateRules.Resolve(
                 sourceExists, tokenMatches, revoked);
         }
 

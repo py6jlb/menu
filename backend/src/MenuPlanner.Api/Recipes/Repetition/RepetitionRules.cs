@@ -3,7 +3,7 @@ using MenuPlanner.Api.Data;
 
 namespace MenuPlanner.Api.Recipes.Repetition;
 
-public static class RepetitionService
+public static class RepetitionRules
 {
     public const int DefaultWindowWeeks = 3;
     public const int MinWindowWeeks = 1;

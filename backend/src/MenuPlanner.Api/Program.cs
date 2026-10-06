@@ -60,6 +60,7 @@ builder.Services.AddSingleton<IAuthCodeGenerator, RandomAuthCodeGenerator>();
 builder.Services.AddScoped<AuthCodeLifecycle>();
 builder.Services.AddScoped<EmailVerificationService>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<AuthSessionValidator>();
 builder.Services.AddScoped<AdminBootstrap>();
 
 builder.Services.AddSingleton(services => new ShareOptions
@@ -104,7 +105,9 @@ builder.Services
         };
         options.Events = new JwtBearerEvents
         {
-            OnTokenValidated = TokenVersionValidator.ValidateAsync
+            OnTokenValidated = context => context.HttpContext.RequestServices
+                .GetRequiredService<AuthSessionValidator>()
+                .ValidateAsync(context)
         };
     });
 builder.Services.AddAuthorization();

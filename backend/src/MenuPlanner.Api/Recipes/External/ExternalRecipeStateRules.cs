@@ -16,11 +16,11 @@ public enum ExternalRecipeState
 }
 
 /// <summary>
-/// Чистое правило состояния внешнего рецепта в стиле <c>RepetitionService</c>.
+/// Чистое правило состояния внешнего рецепта в стиле <c>RepetitionRules</c>.
 /// Не знает про HTTP и БД: вызывающий сам сообщает, жив ли источник, совпадает ли
 /// сохранённый внешним рецептом токен с текущим токеном шеринга и не отозван ли шеринг.
 /// </summary>
-public static class ExternalRecipeStateService
+public static class ExternalRecipeStateRules
 {
     /// <summary>
     /// Единое правило предупреждения: источник удалён → «сломанная»; иначе, если токен

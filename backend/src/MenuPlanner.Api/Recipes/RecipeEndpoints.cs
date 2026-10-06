@@ -120,7 +120,7 @@ public static class RecipeEndpoints
             {
                 var isExternal = r.SourceRecipeId is not null;
                 var state = isExternal
-                    ? ExternalRecipeStateService.Code(states[r.Id])
+                    ? ExternalRecipeStateRules.Code(states[r.Id])
                     : null;
                 var sourceFamilyName = isExternal && r.SourceFamilyId is Guid sourceFamilyId
                     ? sourceFamilyNames.GetValueOrDefault(sourceFamilyId)
@@ -186,7 +186,7 @@ public static class RecipeEndpoints
         var state = await ExternalRecipeStateResolver.ResolveManyAsync(
             db,
             new[] { new ExternalSourceLink(recipe.Id, sourceId, recipe.SourceToken) });
-        var stateCode = ExternalRecipeStateService.Code(state[recipe.Id]);
+        var stateCode = ExternalRecipeStateRules.Code(state[recipe.Id]);
 
         if (source is null)
         {
@@ -760,7 +760,7 @@ public static class RecipeEndpoints
         ClaimsPrincipal principal, AppDbContext db, Guid familyId)
     {
         var userId = CurrentUser.UserId(principal);
-        var weeks = RepetitionService.DefaultWindowWeeks;
+        var weeks = RepetitionRules.DefaultWindowWeeks;
 
         if (userId is { } id)
         {
@@ -771,7 +771,7 @@ public static class RecipeEndpoints
                 weeks = settings.RepetitionWindowWeeks;
         }
 
-        var (windowStart, windowEnd) = RepetitionService.Window(RepetitionService.CurrentWeekStart(), weeks);
-        return await RepetitionService.CountForFamilyAsync(db, familyId, windowStart, windowEnd);
+        var (windowStart, windowEnd) = RepetitionRules.Window(RepetitionRules.CurrentWeekStart(), weeks);
+        return await RepetitionRules.CountForFamilyAsync(db, familyId, windowStart, windowEnd);
     }
 }
