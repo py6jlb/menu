@@ -5,9 +5,9 @@ using MenuPlanner.Api.Domain;
 namespace MenuPlanner.Api.Plans;
 
 /// <summary>Исход ревизионной мутации недели.</summary>
-public enum WeekPlanMutation
+public enum WeekPlanMutationOutcome
 {
-    Saved,
+    Success,
     Conflict
 }
 
@@ -23,7 +23,7 @@ public sealed class WeekPlanSaver
 
     public WeekPlanSaver(AppDbContext db) => _db = db;
 
-    public async Task<WeekPlanMutation> SaveAsync(
+    public async Task<WeekPlanMutationOutcome> SaveAsync(
         Guid familyId,
         DateOnly weekStart,
         IReadOnlyList<PlanEntryRequest> entries,
@@ -39,7 +39,7 @@ public sealed class WeekPlanSaver
         {
             // Плана нет — создать его можно только от исходной ревизии.
             if (expectedRevision != WeekPlanRevisions.Initial)
-                return WeekPlanMutation.Conflict;
+                return WeekPlanMutationOutcome.Conflict;
 
             plan = new WeekPlan
             {
@@ -55,7 +55,7 @@ public sealed class WeekPlanSaver
         else
         {
             if (plan.Revision != expectedRevision)
-                return WeekPlanMutation.Conflict;
+                return WeekPlanMutationOutcome.Conflict;
 
             plan.Revision += 1;
             plan.UpdatedAt = now;
@@ -85,13 +85,13 @@ public sealed class WeekPlanSaver
             // смешать записи. Транзакция откачена, трекер очищается — состояние
             // контекста непротиворечиво для последующего чтения конфликта.
             _db.ChangeTracker.Clear();
-            return WeekPlanMutation.Conflict;
+            return WeekPlanMutationOutcome.Conflict;
         }
 
-        return WeekPlanMutation.Saved;
+        return WeekPlanMutationOutcome.Success;
     }
 
-    public async Task<WeekPlanMutation> DeleteAsync(
+    public async Task<WeekPlanMutationOutcome> DeleteAsync(
         Guid familyId,
         DateOnly weekStart,
         int expectedRevision,
@@ -103,10 +103,10 @@ public sealed class WeekPlanSaver
 
         // Повторное удаление без новых данных идемпотентно: удалять уже нечего.
         if (plan is null)
-            return WeekPlanMutation.Saved;
+            return WeekPlanMutationOutcome.Success;
 
         if (plan.Revision != expectedRevision)
-            return WeekPlanMutation.Conflict;
+            return WeekPlanMutationOutcome.Conflict;
 
         _db.WeekPlans.Remove(plan);
 
@@ -117,9 +117,9 @@ public sealed class WeekPlanSaver
         catch (DbUpdateException)
         {
             _db.ChangeTracker.Clear();
-            return WeekPlanMutation.Conflict;
+            return WeekPlanMutationOutcome.Conflict;
         }
 
-        return WeekPlanMutation.Saved;
+        return WeekPlanMutationOutcome.Success;
     }
 }

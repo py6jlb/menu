@@ -85,7 +85,7 @@ public static class PlanEndpoints
 
         var outcome = await saver.SaveAsync(
             familyId.Value, monday, entries, request.ExpectedRevision, DateTime.UtcNow);
-        if (outcome == WeekPlanMutation.Conflict)
+        if (outcome == WeekPlanMutationOutcome.Conflict)
             return await ConflictAsync(db, familyId.Value, monday, stateResolver, sourceLoader);
 
         var saved = await LoadPlanAsync(db, familyId.Value, monday)
@@ -127,7 +127,7 @@ public static class PlanEndpoints
         }
 
         var outcome = await saver.DeleteAsync(familyId.Value, monday, expectedRevision.Value);
-        if (outcome == WeekPlanMutation.Conflict)
+        if (outcome == WeekPlanMutationOutcome.Conflict)
             return await ConflictAsync(db, familyId.Value, monday, stateResolver, sourceLoader);
 
         return Results.NoContent();

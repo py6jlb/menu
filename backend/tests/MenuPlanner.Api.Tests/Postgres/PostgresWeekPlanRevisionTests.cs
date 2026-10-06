@@ -34,7 +34,7 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
         return (family.Id, first, second);
     }
 
-    private static Task<WeekPlanMutation> SaveAsync(
+    private static Task<WeekPlanMutationOutcome> SaveAsync(
         AppDbContext db, Guid familyId, Recipe recipe, int day, int expectedRevision) =>
         new WeekPlanSaver(db).SaveAsync(
             familyId, Monday, new[] { new PlanEntryRequest(day, "lunch", recipe.Id, 2) },
@@ -50,7 +50,7 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
 
         var outcome = await SaveAsync(db, familyId, first, day: 0, expectedRevision: WeekPlanRevisions.Initial);
 
-        Assert.Equal(WeekPlanMutation.Saved, outcome);
+        Assert.Equal(WeekPlanMutationOutcome.Success, outcome);
         var plan = await db.WeekPlans.SingleAsync(p => p.FamilyId == familyId);
         Assert.Equal(1, plan.Revision);
     }
@@ -78,7 +78,7 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
             },
             expectedRevision: 1, DateTime.UtcNow);
 
-        Assert.Equal(WeekPlanMutation.Saved, outcome);
+        Assert.Equal(WeekPlanMutationOutcome.Success, outcome);
         var saved = await db.WeekPlans.Include(p => p.Entries).SingleAsync(p => p.FamilyId == familyId);
         Assert.Equal(2, saved.Revision);
         Assert.Equal(2, saved.Entries.Count);
@@ -103,7 +103,7 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
             familyId, Monday, new[] { new PlanEntryRequest(0, "lunch", second.Id, 5) },
             expectedRevision: 1, DateTime.UtcNow);
 
-        Assert.Equal(WeekPlanMutation.Saved, outcome);
+        Assert.Equal(WeekPlanMutationOutcome.Success, outcome);
         var saved = await db.WeekPlans.Include(p => p.Entries).SingleAsync(p => p.FamilyId == familyId);
         var entry = Assert.Single(saved.Entries);
         Assert.Equal(second.Id, entry.RecipeId);
@@ -115,7 +115,7 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
     {
         var (familyId, first, second) = await SeedAsync();
         await using (var seed = NewContext())
-            Assert.Equal(WeekPlanMutation.Saved,
+            Assert.Equal(WeekPlanMutationOutcome.Success,
                 await SaveAsync(seed, familyId, first, day: 0, expectedRevision: WeekPlanRevisions.Initial));
 
         var barrier = new AsyncBarrier(2);
@@ -123,8 +123,8 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
             SaveRaceAsync(familyId, first, day: 1, barrier, "UPDATE \"WeekPlans\""),
             SaveRaceAsync(familyId, second, day: 3, barrier, "UPDATE \"WeekPlans\""));
 
-        Assert.Equal(1, results.Count(r => r == WeekPlanMutation.Saved));
-        Assert.Equal(1, results.Count(r => r == WeekPlanMutation.Conflict));
+        Assert.Equal(1, results.Count(r => r == WeekPlanMutationOutcome.Success));
+        Assert.Equal(1, results.Count(r => r == WeekPlanMutationOutcome.Conflict));
 
         await using var verify = NewContext();
         var plan = await verify.WeekPlans.Include(p => p.Entries).SingleAsync(p => p.FamilyId == familyId);
@@ -143,8 +143,8 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
             SaveRaceAsync(familyId, first, day: 0, barrier, "INSERT INTO \"WeekPlans\"", WeekPlanRevisions.Initial),
             SaveRaceAsync(familyId, second, day: 0, barrier, "INSERT INTO \"WeekPlans\"", WeekPlanRevisions.Initial));
 
-        Assert.Equal(1, results.Count(r => r == WeekPlanMutation.Saved));
-        Assert.Equal(1, results.Count(r => r == WeekPlanMutation.Conflict));
+        Assert.Equal(1, results.Count(r => r == WeekPlanMutationOutcome.Success));
+        Assert.Equal(1, results.Count(r => r == WeekPlanMutationOutcome.Conflict));
 
         await using var verify = NewContext();
         Assert.Single(await verify.WeekPlans.Where(p => p.FamilyId == familyId).ToListAsync());
@@ -155,18 +155,18 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
     {
         var (familyId, first, _) = await SeedAsync();
         await using (var seed = NewContext())
-            Assert.Equal(WeekPlanMutation.Saved,
+            Assert.Equal(WeekPlanMutationOutcome.Success,
                 await SaveAsync(seed, familyId, first, day: 0, expectedRevision: WeekPlanRevisions.Initial));
 
         await using (var stale = NewContext())
-            Assert.Equal(WeekPlanMutation.Conflict,
+            Assert.Equal(WeekPlanMutationOutcome.Conflict,
                 await new WeekPlanSaver(stale).DeleteAsync(familyId, Monday, expectedRevision: 0));
 
         await using (var verify = NewContext())
             Assert.NotNull(await verify.WeekPlans.SingleOrDefaultAsync(p => p.FamilyId == familyId));
 
         await using (var matching = NewContext())
-            Assert.Equal(WeekPlanMutation.Saved,
+            Assert.Equal(WeekPlanMutationOutcome.Success,
                 await new WeekPlanSaver(matching).DeleteAsync(familyId, Monday, expectedRevision: 1));
 
         await using (var verify = NewContext())
@@ -177,11 +177,11 @@ public sealed class PostgresWeekPlanRevisionTests : PostgresTestBase
 
         // Повторное удаление без новых данных идемпотентно.
         await using (var again = NewContext())
-            Assert.Equal(WeekPlanMutation.Saved,
+            Assert.Equal(WeekPlanMutationOutcome.Success,
                 await new WeekPlanSaver(again).DeleteAsync(familyId, Monday, expectedRevision: 1));
     }
 
-    private async Task<WeekPlanMutation> SaveRaceAsync(
+    private async Task<WeekPlanMutationOutcome> SaveRaceAsync(
         Guid familyId, Recipe recipe, int day, AsyncBarrier barrier, string fragment, int expectedRevision = 1)
     {
         await using var db = NewContext(new BarrierNonQueryInterceptor(barrier, fragment));
