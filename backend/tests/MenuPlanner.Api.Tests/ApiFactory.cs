@@ -65,6 +65,8 @@ public class ApiFactory : WebApplicationFactory<Program>
             var settings = new Dictionary<string, string?>
             {
                 ["PHOTOS_DIR"] = PhotosDir,
+                // Фоновая уборка фото в тестах выключена: проход запускают явно.
+                ["PHOTO_CLEANUP_ENABLED"] = "false",
                 ["SMTP_HOST"] = "",
                 ["SHARE_BASE_URL"] = "https://menu.example.com",
                 ["DEPLOYMENT_MODE"] = "lab"
