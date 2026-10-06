@@ -52,6 +52,26 @@ public sealed class ExternalRecipeSourceLoader
     }
 
     /// <summary>
+    /// Источники для расчёта закупки: только ингредиенты и порции, шаги не загружаются.
+    /// Отсутствующие в БД в карту не попадают.
+    /// </summary>
+    public async Task<Dictionary<Guid, Recipe>> LoadIngredientSourcesAsync(
+        IEnumerable<Guid> sourceRecipeIds, CancellationToken cancellationToken = default)
+    {
+        var ids = sourceRecipeIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, Recipe>();
+
+        var sources = await _db.Recipes
+            .AsNoTracking()
+            .Include(r => r.Ingredients)
+            .Where(r => ids.Contains(r.Id))
+            .ToListAsync(cancellationToken);
+
+        return sources.ToDictionary(s => s.Id);
+    }
+
+    /// <summary>
     /// Подробное чтение одного источника с шагами и ингредиентами; null, если источник удалён.
     /// </summary>
     public async Task<Recipe?> LoadFullAsync(
