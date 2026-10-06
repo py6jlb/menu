@@ -1,0 +1,14 @@
+[Unit]
+Description=Menu planner: проверка доступности, бэкапов и ресурсов
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=menu
+WorkingDirectory=/opt/menu
+# Проверка не должна влиять на приложение: ограничены память, CPU и приоритет.
+Nice=10
+CPUQuota=25%
+MemoryMax=256M
+ExecStart=/opt/menu/deploy/alert.sh

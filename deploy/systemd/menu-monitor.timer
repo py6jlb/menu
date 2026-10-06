@@ -1,0 +1,13 @@
+[Unit]
+Description=Menu planner: периодическая проверка доступности и ресурсов
+
+[Timer]
+# Периодичность выше, чем у бэкапа: недоступность и ресурсы нужно замечать раньше
+# суток. RandomizedDelaySec разносит запуски и не даёт всплесков.
+OnBootSec=5min
+OnUnitActiveSec=5min
+RandomizedDelaySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

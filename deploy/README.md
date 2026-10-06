@@ -17,6 +17,9 @@
 | `backup-lib.sh` | доверенная библиотека complete-набора: id, manifest, состояние, ротация |
 | `restore-drill.sh` | проверочное восстановление complete-набора с запуском релиза |
 | `install-backup.sh` | установка и обновление systemd-units бэкапа |
+| `alert.sh` | проверка публичного пути, возраста complete-набора и давления ресурсов с оповещением |
+| `alert-lib.sh` | доверенная библиотека оповещения: URL, возраст набора, метрики, тексты сообщений |
+| `install-monitor.sh` | установка и обновление systemd-units проверки, проверка канала |
 | `config.sh` | доверенная библиотека чтения literal-конфигурации |
 | `release.sh` | доверенная библиотека релиза: clean-tree, хэши конфигурации, manifest |
 | `compose.sh` | серверный Compose без автоматического чтения `.env` |
@@ -149,6 +152,17 @@ unset ADMIN_PW
 - **`/ready`** — readiness: проверяет доступность БД (`CanConnectAsync`) с ограниченным временем (`READINESS_TIMEOUT_SECONDS`, default 3 c) и отвечает `200`/`status=ready` либо `503`/`status=not-ready`. Тело содержит только статус и имя сервиса; строка подключения, текст исключения и секреты не раскрываются. Готовность не требует перезапуска процесса: при возвращении БД `/ready` снова `200`.
 - Контейнер `backend` объявлен с `restart: unless-stopped`: Docker не перезапускает контейнер по статусу `unhealthy`, поэтому временная неготовность не превращается в бесконечный цикл рестартов.
 
+## Обнаружение недоступности, старых бэкапов и ресурсов
+
+`deploy/alert.sh` по таймеру (`menu-monitor.timer`, каждые 5 минут) проверяет публичный путь, возраст резервной копии и давление ресурсов и сообщает оператору. Канал задаётся явно: `ALERT_WEBHOOK_URL` (URL секретен и не попадает в журналы и аргументы процесса — curl читает его из временного `--config`; в сообщении и состоянии канала нет). `install-monitor.sh` ставит units; проверочное уведомление без реальной аварии — `sudo MONITOR_TEST=1 /opt/menu/deploy/install-monitor.sh` или `/opt/menu/deploy/alert.sh --test`, доставка при этом контролируется.
+
+- **Публичный путь и readiness.** Проверяются `ALERT_PUBLIC_URL/ready` (код 200 и `status=ready`) и `/` (SPA) через внешний адрес, а не внутренний порт; адрес берётся из `ALERT_PUBLIC_URL`, иначе `PUBLIC_BASE_URL`/`DOMAIN`. HTTP без домена допускается только в `DEPLOYMENT_MODE=lab`.
+- **Возраст копии.** Возраст считается по последнему **complete**-набору в `BACKUP_REMOTE` (`rclone lsf complete/`), поэтому неполный upload или сбойный backup не обновляет время успеха. Порог — `BACKUP_MAX_AGE_HOURS` (26).
+- **Ресурсы с порогами.** Свободное место (`ALERT_DISK_MIN_FREE_MB`, `ALERT_DISK_MAX_USED_PERCENT`), доступная память (`ALERT_MEM_MIN_MB`) и load на ядро (`ALERT_LOAD_MAX_PER_CPU`) считаются опасными только при `ALERT_BREACH_SAMPLES` подряд пробах (default 2) с задержкой `ALERT_SAMPLE_INTERVAL_SECONDS`, поэтому краткий всплеск не поднимает ложную тревогу.
+- **Сообщение и повторы.** Уведомление содержит время (UTC), установку и release (если есть), тип проблемы, причину и **следующий диагностический** шаг; пользовательские данные не раскрываются. Повтор того же события дедуплицируется в окне `ALERT_DEDUP_SECONDS`, а переход к восстановлению даёт отдельное сообщение `RECOVERED`.
+- **Ограничение при полном отказе VPS.** Локальный таймер не может сообщить о недоступности всего VPS (он на нём же и живёт), поэтому локальная проверка **не выдаётся за внешний** мониторинг. Внешний контроль настраивает оператор: `ALERT_HEARTBEAT_URL` — dead-man switch стороннего сервиса (например, healthchecks.io или Uptime Kuma). Пинг отправляется при каждом завершившемся запуске, поэтому тишина означает полный отказ VPS, а отдельная проблема компонента приходит в основной канал.
+- **Проверка на стенде.** Останови приложение/БД, состарь complete-набор, оставь только неполный новый набор, заполни диск — каждое событие даёт проверяемое уведомление и, после устранения, отдельное сообщение восстановления. Средства проверки не заполняют рабочий диск: используются `df`, `curl` и небольшие временные файлы сообщений, удаляемые после отправки.
+
 ## Воспроизводимый релиз
 
 - **Manifest.** `deploy/release/<tag>.json`: `commit`, `tag`, `builtAt`, `backendDigest`, `frontendDigest`, `config` (хэши файлов среза). Хранится локально после сборки и на сервере (`/opt/menu/release.json`); используется для диагностики, отката и smoke-проверки идентичности.
@@ -217,7 +231,7 @@ SMTP_PASSWORD=пробел $HOME ${SMTP_USER} $$ # "двойные" 'одина�
 | Область | Разрешённые ключи |
 |---|---|
 | Локально (`deploy/local.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `VPS_HOST`, `VPS_USER`, `VPS_SSH_PORT`, `APP_DIR` |
-| Сервер (`/opt/menu/server.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DEPLOYMENT_MODE`, `PUBLIC_BASE_URL`, `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_FROM_NAME`, `SMTP_SECURITY`, `SMTP_TIMEOUT_SECONDS`, `EMAIL_TRANSPORT`, `DOMAIN`, `SHARE_BASE_URL`, `BACKUP_REMOTE`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `COMPOSE_FILE`, `DRILL_CONTAINER` |
+| Сервер (`/opt/menu/server.conf`) | `DOCKERHUB_USER`, `IMAGE_TAG`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DEPLOYMENT_MODE`, `PUBLIC_BASE_URL`, `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_FROM_NAME`, `SMTP_SECURITY`, `SMTP_TIMEOUT_SECONDS`, `EMAIL_TRANSPORT`, `DOMAIN`, `SHARE_BASE_URL`, `BACKUP_REMOTE`, `BACKUP_KEEP_DAILY`, `BACKUP_KEEP_WEEKLY`, `COMPOSE_FILE`, `DRILL_CONTAINER`, `ALERT_WEBHOOK_URL`, `ALERT_HEARTBEAT_URL`, `ALERT_PUBLIC_URL`, `BACKUP_MAX_AGE_HOURS`, `ALERT_DISK_MIN_FREE_MB`, `ALERT_DISK_MAX_USED_PERCENT`, `ALERT_MEM_MIN_MB`, `ALERT_LOAD_MAX_PER_CPU`, `ALERT_DEDUP_SECONDS` |
 
 | Скрипт | Обязательно до внешних действий |
 |---|---|
