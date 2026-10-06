@@ -80,6 +80,7 @@ builder.Services.AddScoped<CurrentUserContext>();
 builder.Services.AddScoped<SourceFamilyNameResolver>();
 builder.Services.AddScoped<ExternalRecipeSourceLoader>();
 builder.Services.AddScoped<ExternalRecipeStateResolver>();
+builder.Services.AddScoped<RecipeSharingService>();
 builder.Services.AddScoped<RepetitionCounter>();
 builder.Services.AddScoped<AdminBootstrap>();
 
