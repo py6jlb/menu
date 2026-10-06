@@ -11,7 +11,8 @@
 | `deploy.sh` | доставка конфигураций выпускаемого коммита и рестарт на прибитом теге; `--schema-change` заявляет рискованную миграцию |
 | `smoke.sh` | проверка запущенного релиза: идентичность manifest, путь через край (readiness, SPA, asset, `/api`), диагностика при провале |
 | `Caddyfile` | маршрутизация края (`/api`, `/health`, `/ready`, SPA) |
-| `otel-collector.yaml` | приём OTLP-логов, вывод в консоль и файл (3 дня) |
+| `otel-collector.yaml` | приём OTLP-логов, вывод в консоль и файл; границы памяти/пакета и ротация (3 дня / 50 МБ × 10) |
+| `logs.sh` | поиск контрольной записи журнала по trace-id в volume коллектора |
 | `backup.sh` | согласованный backup-набор БД и фото в объектное хранилище |
 | `backup-lib.sh` | доверенная библиотека complete-набора: id, manifest, состояние, ротация |
 | `restore-drill.sh` | проверочное восстановление complete-набора с запуском релиза |
@@ -159,6 +160,40 @@ unset ADMIN_PW
 ### Обновление базовых образов
 
 Базовые образы закреплены контролируемыми тегами в `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose*.yml`, `deploy/backup.sh` и перечислены в `release_base_images` (`deploy/release.sh`). Порядок обновления: изменить тег в одном коммите, прогнать `./deploy/build-push.sh` и `scripts/test-postgres.sh`, задеплоить на стенд и проверить `./deploy/smoke.sh`. Node держим на поддерживаемой LTS (`frontend/.nvmrc`, `engines`), установка — только по `frontend/package-lock.json` (`npm ci`); чистая установка не должна менять lockfile.
+
+## Наблюдаемость и диагностика
+
+Экспорт совпадает с настроенными pipelines коллектора: сохраняются **только логи**. Полные traces не хранятся согласованно, поэтому их OTLP-экспорт выключен (`OTEL_TRACES_EXPORT_ENABLED=false`); Activity и trace-id формируются всегда и связывают структурированные записи backend. Включение экспорта traces — отдельное осознанное решение после появления согласованного хранилища.
+
+- **Структурированная запись запроса.** Одна строка на запрос: operation (шаблон маршрута), статус, длительность, `TraceId` и `ReleaseId`. Release-id берётся из `RELEASE_ID` (в prod — закреплённый `IMAGE_TAG`), иначе из manifest; при отсутствии обоих — `unknown`, и стартовая запись сообщает об этом явно, не ломая приложение.
+- **Минимизация секретов.** Share-токены в пути заменяются плейсхолдером `{token}` в журналах backend и в access-/error-логах Caddy (`format filter` + `regexp`); Cookie/Authorization Caddy редактирует сам. Тела запросов не логируются; коды подтверждения/сброса, credentials и JWT в журналы не попадают (в production `EMAIL_TRANSPORT=log` запрещён, поэтому письмо с кодом не пишется).
+- **Границы и отказ Collector.** Backend экспортирует логи фоном с ограниченной очередью (`OTEL_LOG_QUEUE_SIZE`, default 2048) и тайм-аутом (`OTEL_EXPORT_TIMEOUT_MS`, default 10 с); при недоступном Collector записи отбрасываются, память не растёт, пользовательский запрос не блокируется. Коллектор дополнительно ограничен `memory_limiter` (180 МБ) и пакетом `batch` (≤2048 записей / 5 с).
+- **Volume и права.** Одноразовый сервис `otel-logs-init` (root, alpine) готовит volume `otel_logs` под uid коллектора `10001:10001`, поэтому запись реальна и переживает `restart: unless-stopped`. Файл `logs.json` ротируется по размеру (50 МБ) и возрасту (3 дня), не более 10 бэкапов; **хранение ограничено одновременно возрастом (не более 3 дней) и числом файлов (не более 10)**, что дополнительно ограничено docker json-file (`max-size=10m`, `max-file=3`).
+- **Диагностика края.** Caddy пишет access-логи JSON в stdout; при публичном отказе (в т.ч. `502`/`504` от Caddy) URI с share-токеном минимизируется, поэтому край годится для корреляции публичных отказов, не раскрывая ссылку.
+- **Поиск по trace-id.** `./deploy/logs.sh <trace-id>` читает `logs.json` из volume коллектора и печатает контрольные записи; trace-id виден в ответе `500` (`traceId`) и в записях backend.
+
+### Проверка наблюдаемости на стенде (тикет 71)
+
+Полный APM, трейсы и дашборды не требуются. На изолированном стенде:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+# 1. Запрос, который виден в журнале: публичный просмотр несуществующей ссылки.
+curl -s -o /dev/null https://<домен>/api/shared/check-control-record
+docker compose logs --no-color backend | grep "HTTP"        # operation/trace-id/release-id
+# 2. Контрольная запись находится по trace-id (из ответа 500 или из строки backend).
+./deploy/logs.sh <trace-id>
+# 3. Перезапуск сохраняет журналы.
+docker compose restart otel-collector && ./deploy/logs.sh <trace-id>
+# 4. Отказ Collector не блокирует запросы и не растит память.
+docker compose stop otel-collector
+for i in $(seq 1 200); do curl -s -o /dev/null https://<домен>/health; done
+docker stats --no-stream menu-planner-backend-1                  # память ограничена
+docker compose start otel-collector && ./deploy/logs.sh <trace-id>  # восстановление
+# 5. Ротация: размер/число файлов и фактическое окно.
+docker compose exec otel-collector ls -l /var/log/otel || \
+  docker run --rm -v menu-planner_otel_logs:/logs:ro alpine:3.20 ls -l /logs
+```
 
 ## Формат и приоритет
 

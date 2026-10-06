@@ -1,5 +1,19 @@
+{
+	# Единый формат журналов: share-токены в пути заменяются и в access-, и в
+	# error-записях. Защищённые заголовки (Cookie/Authorization) Caddy редактирует
+	# сам. Так край не раскрывает ссылку при публичном отказе.
+	log {
+		format filter {
+			request>uri regexp "^(/(?:api/shared|r)/)[^/?#]+" "${1}REDACTED"
+		}
+	}
+}
+
 {$DOMAIN} {
 	encode zstd gzip
+
+	# Доступ-логи JSON в stdout; docker json-file уже ограничен по размеру/числу.
+	log
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"

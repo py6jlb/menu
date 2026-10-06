@@ -7,17 +7,24 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
+  # Жёсткий предел памяти: при переполнении данные отбрасываются, процесс не растёт.
   memory_limiter:
     check_interval: 1s
     limit_mib: 180
     spike_limit_mib: 40
-  batch: {}
+  # Пакет ограничен по размеру и времени: writer не копит неограниченный буфер.
+  batch:
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+    timeout: 5s
 
 exporters:
   debug:
     verbosity: normal
   file:
     path: /var/log/otel/logs.json
+    # Ротация по размеру (50 МБ на файл) и возрасту (3 дня), не более 10 бэкапов.
+    # Хранение ограничено одновременно возрастом и числом файлов — см. deploy/README.md.
     rotation:
       max_megabytes: 50
       max_days: 3
@@ -25,11 +32,14 @@ exporters:
       localtime: true
 
 service:
+  telemetry:
+    logs:
+      level: info
   pipelines:
+    # Экспорт совпадает с настроенными pipelines: сохраняются только логи.
+    # Полные traces не хранятся согласованно и в коллектор не отправляются;
+    # trace-id для корреляции журналов формирует backend (Activity).
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch]
       exporters: [debug, file]
-  telemetry:
-    logs:
-      level: info

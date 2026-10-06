@@ -101,7 +101,7 @@ class EntrypointTests(unittest.TestCase):
         for filename in ("config.sh", "release.sh", "compose.sh", "remote-deploy.sh",
                          "deploy-lib.sh", "rollback.sh",
                          "build-push.sh", "deploy.sh", "backup-lib.sh", "backup.sh",
-                         "restore-drill.sh", "install-backup.sh", "smoke.sh", "Caddyfile",
+                         "restore-drill.sh", "install-backup.sh", "smoke.sh", "logs.sh", "Caddyfile",
                          "otel-collector.yaml",
                          "systemd/menu-backup.service", "systemd/menu-backup.timer"):
             destination = self.root / "deploy" / filename
@@ -405,7 +405,7 @@ sys.exit(subprocess.run(["bash", "-c", sys.argv[-1]]).returncode)
         for filename in ("deploy/config.sh", "deploy/compose.sh", "deploy/backup-lib.sh",
                          "deploy/deploy-lib.sh", "deploy/remote-deploy.sh", "deploy/rollback.sh",
                          "deploy/backup.sh", "deploy/restore-drill.sh",
-                         "deploy/install-backup.sh"):
+                         "deploy/install-backup.sh", "deploy/logs.sh"):
             self.assertIn(filename, delivered)
             self.assertTrue((remote / filename).exists())
         self.assertFalse(any(".conf" in path or ".env" in path for path in delivered))

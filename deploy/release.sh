@@ -36,7 +36,8 @@ release_config_files() {
     deploy/rollback.sh \
     deploy/backup.sh \
     deploy/restore-drill.sh \
-    deploy/smoke.sh
+    deploy/smoke.sh \
+    deploy/logs.sh
 }
 
 # release_config_hashes <root>: строки "<относительный путь> <sha256>".
