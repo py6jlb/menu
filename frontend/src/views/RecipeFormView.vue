@@ -178,6 +178,17 @@ function closeSuggestions(ing) {
   autocomplete.close(ing.uid)
 }
 
+/** id активной подсказки для aria-activedescendant (или undefined, если её нет). */
+function activeOptionId(ing) {
+  const state = autocomplete.stateFor(ing.uid)
+  if (!state.showSuggestions || state.activeIndex < 0) return undefined
+  return `${ing.uid}-option-${state.activeIndex}`
+}
+
+function suggestionListId(ing) {
+  return `${ing.uid}-suggestions`
+}
+
 function onIngredientInput(ing) {
   autocomplete.input(ing.uid, ing.name)
 }
@@ -288,7 +299,7 @@ onBeforeUnmount(() => {
   <section>
     <div class="page-heading">
       <h2>{{ isEdit ? 'Редактирование рецепта' : 'Новый рецепт' }}</h2>
-      <span v-if="photoPartial" class="dirty-badge">● текст сохранён, фото — нет</span>
+      <span v-if="photoPartial" class="dirty-badge" role="status">● текст сохранён, фото — нет</span>
       <span v-else-if="dirty" class="dirty-badge">● есть изменения</span>
     </div>
 
@@ -369,7 +380,7 @@ onBeforeUnmount(() => {
           Допустимы {{ PHOTO_TYPES_LABEL }}, размер — до {{ PHOTO_MAX_LABEL }}, не более
           {{ PHOTO_DIMENSIONS_LABEL }}. Проверка на сервере остаётся окончательной.
         </p>
-        <p v-if="photoValidationError" class="error">{{ photoValidationError }}</p>
+        <p v-if="photoValidationError" class="error" role="alert">{{ photoValidationError }}</p>
       </fieldset>
 
       <div class="card form-section">
@@ -383,6 +394,7 @@ onBeforeUnmount(() => {
           <div class="chips">
             <label v-for="season in SEASONS" :key="season.code" class="chip">
               <input
+                class="sr-only"
                 type="checkbox"
                 :value="season.code"
                 :checked="draft.seasonality.includes(season.code)"
@@ -398,6 +410,7 @@ onBeforeUnmount(() => {
           <div class="chips">
             <label v-for="diet in DIETS" :key="diet.code" class="chip">
               <input
+                class="sr-only"
                 type="checkbox"
                 :value="diet.code"
                 :checked="draft.diets.includes(diet.code)"
@@ -424,31 +437,85 @@ onBeforeUnmount(() => {
               type="text"
               placeholder="Название"
               class="ing-name"
+              role="combobox"
+              aria-autocomplete="list"
+              :aria-label="`Ингредиент ${index + 1}: название`"
+              :aria-expanded="ingredientState(ing).showSuggestions"
+              :aria-controls="suggestionListId(ing)"
+              :aria-activedescendant="activeOptionId(ing)"
               @input="onIngredientInput(ing)"
               @keydown="onSuggestionKeydown(ing, $event)"
               @blur="closeSuggestions(ing)"
             />
-            <ul v-if="ingredientState(ing).showSuggestions" class="suggestions">
+            <ul
+              v-if="ingredientState(ing).showSuggestions"
+              :id="suggestionListId(ing)"
+              class="suggestions"
+              role="listbox"
+              :aria-label="`Подсказки ингредиента ${index + 1}`"
+            >
               <li
                 v-for="(suggestion, sIndex) in ingredientState(ing).suggestions"
+                :id="`${ing.uid}-option-${sIndex}`"
                 :key="suggestion"
+                role="option"
                 :class="{ active: sIndex === ingredientState(ing).activeIndex }"
+                :aria-selected="sIndex === ingredientState(ing).activeIndex"
                 @mousedown.prevent="selectSuggestion(ing, suggestion)"
               >
                 {{ suggestion }}
               </li>
-              <li v-if="ingredientState(ing).noSuggestions" class="no-suggestions">Нет подсказок</li>
+              <li v-if="ingredientState(ing).noSuggestions" class="no-suggestions" role="presentation">
+                Нет подсказок
+              </li>
             </ul>
           </div>
-          <input v-model.number="ing.amount" type="number" min="0" step="0.01" placeholder="Кол-во" class="ing-amount" />
-          <select v-model="ing.unit" class="ing-unit">
+          <input
+            v-model.number="ing.amount"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Кол-во"
+            class="ing-amount"
+            :aria-label="`Ингредиент ${index + 1}: количество`"
+          />
+          <select v-model="ing.unit" class="ing-unit" :aria-label="`Ингредиент ${index + 1}: единица измерения`">
             <option v-for="unit in UNITS" :key="unit.code" :value="unit.code">{{ unit.label }}</option>
           </select>
-          <input v-model="ing.note" type="text" placeholder="Примечание" class="ing-note" />
+          <input
+            v-model="ing.note"
+            type="text"
+            placeholder="Примечание"
+            class="ing-note"
+            :aria-label="`Ингредиент ${index + 1}: примечание`"
+          />
           <div class="row-actions">
-            <button type="button" class="btn btn--subtle icon-btn" @click="moveIngredient(index, -1)" :disabled="index === 0">↑</button>
-            <button type="button" class="btn btn--subtle icon-btn" @click="moveIngredient(index, 1)" :disabled="index === draft.ingredients.length - 1">↓</button>
-            <button type="button" class="btn btn--ghost" @click="removeIngredient(index)">Удалить</button>
+            <button
+              type="button"
+              class="btn btn--subtle icon-btn"
+              :aria-label="`Переместить ингредиент ${index + 1} вверх`"
+              :disabled="index === 0"
+              @click="moveIngredient(index, -1)"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="btn btn--subtle icon-btn"
+              :aria-label="`Переместить ингредиент ${index + 1} вниз`"
+              :disabled="index === draft.ingredients.length - 1"
+              @click="moveIngredient(index, 1)"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost"
+              :aria-label="`Удалить ингредиент ${index + 1}`"
+              @click="removeIngredient(index)"
+            >
+              Удалить
+            </button>
           </div>
         </div>
         <button type="button" class="btn btn--ghost" @click="addIngredient">+ Добавить ингредиент</button>
@@ -458,17 +525,47 @@ onBeforeUnmount(() => {
         <legend>Шаги приготовления *</legend>
         <p class="hint">Порядок шагов соответствует порядку в списке.</p>
         <div v-for="(step, index) in draft.steps" :key="index" class="step-row">
-          <textarea v-model="draft.steps[index]" rows="2" placeholder="Шаг приготовления" maxlength="2000" class="step-textarea"></textarea>
+          <textarea
+            v-model="draft.steps[index]"
+            rows="2"
+            placeholder="Шаг приготовления"
+            maxlength="2000"
+            class="step-textarea"
+            :aria-label="`Шаг ${index + 1}`"
+          ></textarea>
           <div class="row-actions">
-            <button type="button" class="btn btn--subtle icon-btn" @click="moveStep(index, -1)" :disabled="index === 0">↑</button>
-            <button type="button" class="btn btn--subtle icon-btn" @click="moveStep(index, 1)" :disabled="index === draft.steps.length - 1">↓</button>
-            <button type="button" class="btn btn--ghost" @click="removeStep(index)">Удалить</button>
+            <button
+              type="button"
+              class="btn btn--subtle icon-btn"
+              :aria-label="`Переместить шаг ${index + 1} вверх`"
+              :disabled="index === 0"
+              @click="moveStep(index, -1)"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="btn btn--subtle icon-btn"
+              :aria-label="`Переместить шаг ${index + 1} вниз`"
+              :disabled="index === draft.steps.length - 1"
+              @click="moveStep(index, 1)"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              class="btn btn--ghost"
+              :aria-label="`Удалить шаг ${index + 1}`"
+              @click="removeStep(index)"
+            >
+              Удалить
+            </button>
           </div>
         </div>
         <button type="button" class="btn btn--ghost" @click="addStep">+ Добавить шаг</button>
       </fieldset>
 
-      <div v-if="conflictMessage" class="error conflict-box">
+      <div v-if="conflictMessage" class="error conflict-box" role="alert">
         <p>{{ conflictMessage }}</p>
         <p v-if="conflictRevision" class="hint">Актуальная версия на сервере: {{ conflictRevision }}</p>
         <button type="button" class="btn btn--ghost" @click="reloadLatest">
@@ -476,14 +573,14 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div v-if="photoError" class="error conflict-box">
+      <div v-if="photoError" class="error conflict-box" role="alert">
         <p>{{ photoError }}</p>
         <button type="button" class="btn btn--ghost" :disabled="photoSaving" @click="onRetryPhoto">
           {{ photoSaving ? 'Повтор…' : photoUnknown ? 'Проверить и повторить' : 'Повторить фото' }}
         </button>
       </div>
 
-      <p v-if="visibleError" class="error">
+      <p v-if="visibleError" class="error" role="alert">
         {{ visibleError }}
         <span v-if="fieldErrorLabel" class="hint">Поле: {{ fieldErrorLabel }}</span>
       </p>
@@ -557,6 +654,7 @@ onBeforeUnmount(() => {
 }
 
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -571,8 +669,9 @@ onBeforeUnmount(() => {
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.chip input {
-  display: none;
+.chip:has(input:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .chip:has(input:checked) {

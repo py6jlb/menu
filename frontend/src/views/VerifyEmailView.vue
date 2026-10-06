@@ -114,7 +114,7 @@ onMounted(() => {
       <template v-else>
         <form @submit.prevent="submit" class="auth-form">
           <label class="field">
-            <label>Код из письма</label>
+            <span>Код из письма</span>
             <input
               v-model="code"
               type="text"
@@ -127,16 +127,16 @@ onMounted(() => {
               class="code-input"
             />
           </label>
-          <p v-if="error" class="error">{{ error }}</p>
-          <p v-else-if="success" class="success">{{ success }}</p>
+          <p v-if="error" class="error" role="alert">{{ error }}</p>
+          <p v-else-if="success" class="success" role="status">{{ success }}</p>
           <button type="submit" class="btn btn--primary btn--block" :disabled="pending || code.trim().length < 6">
             {{ pending ? 'Проверяем…' : 'Подтвердить' }}
           </button>
         </form>
 
         <div class="resend-block">
-          <p v-if="resendMessage" class="success">{{ resendMessage }}</p>
-          <p v-else-if="resendError" class="error">{{ resendError }}</p>
+          <p v-if="resendMessage" class="success" role="status">{{ resendMessage }}</p>
+          <p v-else-if="resendError" class="error" role="alert">{{ resendError }}</p>
           <button
             type="button"
             class="btn btn--ghost btn--block"

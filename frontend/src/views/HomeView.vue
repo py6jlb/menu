@@ -37,14 +37,20 @@ onMounted(checkApi)
       <div class="hero-emoji">🍲</div>
     </div>
 
-    <div class="health-chip" :class="`health-${health.state}`" @click="checkApi" role="button" title="Проверить подключение к API">
-      <span class="dot"></span>
-      <span>
+    <button
+      type="button"
+      class="health-chip"
+      :class="`health-${health.state}`"
+      title="Проверить подключение к API"
+      @click="checkApi"
+    >
+      <span class="dot" aria-hidden="true"></span>
+      <span aria-live="polite">
         <template v-if="health.state === 'checking'">Проверка…</template>
         <template v-else-if="health.state === 'connected'">API подключено</template>
         <template v-else>API недоступно</template>
       </span>
-    </div>
+    </button>
 
     <div class="quick-grid">
       <router-link to="/recipes" class="card quick-card">
@@ -117,7 +123,9 @@ onMounted(checkApi)
   gap: 0.5rem;
   margin-top: 1rem;
   padding: 0.45rem 0.9rem;
+  border: none;
   border-radius: 999px;
+  font-family: inherit;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;

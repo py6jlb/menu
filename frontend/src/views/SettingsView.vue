@@ -48,11 +48,11 @@ onMounted(load)
     </div>
 
     <p v-if="loading" class="loading">Загрузка…</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
+    <p v-else-if="error" class="error" role="alert">{{ error }}</p>
 
     <div v-else class="card settings-card">
-      <p v-if="savedMessage" class="success">{{ savedMessage }}</p>
-      <p v-else-if="saveError" class="error">{{ saveError }}</p>
+      <p v-if="savedMessage" class="success" role="status">{{ savedMessage }}</p>
+      <p v-else-if="saveError" class="error" role="alert">{{ saveError }}</p>
 
       <p v-if="!isEmailVerified" class="notice">
         Подтвердите почту, чтобы менять настройки.

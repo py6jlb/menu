@@ -48,14 +48,14 @@ async function submit() {
 
       <form @submit.prevent="submit" class="auth-form">
         <label class="field">
-          <label>Email</label>
+          <span>Email</span>
           <input v-model="email" type="email" autocomplete="email" required />
         </label>
         <label class="field">
-          <label>Пароль</label>
+          <span>Пароль</span>
           <input v-model="password" type="password" autocomplete="current-password" required />
         </label>
-        <p v-if="error" class="error">{{ error }}</p>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
         <button type="submit" class="btn btn--primary btn--block" :disabled="pending">
           {{ pending ? 'Вход…' : 'Войти' }}
         </button>

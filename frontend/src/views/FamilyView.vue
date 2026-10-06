@@ -56,7 +56,7 @@ onMounted(load)
     <p v-if="loading" class="loading">Загрузка…</p>
 
     <div v-else-if="loadError" class="load-recovery">
-      <p class="error">{{ loadError }}</p>
+      <p class="error" role="alert">{{ loadError }}</p>
       <button type="button" class="btn btn--ghost" @click="load">Повторить</button>
     </div>
 
@@ -70,7 +70,7 @@ onMounted(load)
             <span>Название семьи</span>
             <input v-model="newFamilyName" type="text" required />
           </label>
-          <p v-if="createError" class="error">{{ createError }}</p>
+          <p v-if="createError" class="error" role="alert">{{ createError }}</p>
           <button type="submit" class="btn btn--primary btn--block" :disabled="creating || !isEmailVerified">Создать семью</button>
         </form>
       </div>
@@ -84,7 +84,7 @@ onMounted(load)
             <span>Инвайт-код</span>
             <input v-model="joinCode" type="text" autocomplete="off" required placeholder="Например, ABC123" />
           </label>
-          <p v-if="joinError" class="error">{{ joinError }}</p>
+          <p v-if="joinError" class="error" role="alert">{{ joinError }}</p>
           <button type="submit" class="btn btn--primary btn--block" :disabled="joining || !isEmailVerified">Присоединиться</button>
         </form>
       </div>
@@ -103,12 +103,12 @@ onMounted(load)
           {{ copied ? 'Скопировано!' : 'Копировать' }}
         </button>
         <button v-if="isOwner() && isEmailVerified" type="button" class="btn btn--ghost" :disabled="regenerating" @click="regenerate">Обновить код</button>
-        <p v-if="copyError" class="error">{{ copyError }}</p>
-        <p v-if="regenerateError" class="error">{{ regenerateError }}</p>
+        <p v-if="copyError" class="error" role="alert">{{ copyError }}</p>
+        <p v-if="regenerateError" class="error" role="alert">{{ regenerateError }}</p>
       </div>
 
       <h4 class="members-title">Участники</h4>
-      <p v-if="removeError" class="error">{{ removeError }}</p>
+      <p v-if="removeError" class="error" role="alert">{{ removeError }}</p>
       <ul class="members">
         <li v-for="member in family.members" :key="member.id" class="member">
           <span class="member-email">{{ member.email }}</span>
