@@ -65,6 +65,8 @@ public sealed record RecipeMatchCandidate(
 /// </summary>
 public sealed class RecipeReader
 {
+    private const int MaxIngredientSuggestions = 10;
+
     private readonly AppDbContext _db;
     private readonly ExternalRecipeSourceLoader _sources;
     private readonly ExternalRecipeStateResolver _states;
@@ -200,6 +202,67 @@ public sealed class RecipeReader
         }
 
         return candidates;
+    }
+
+    /// <summary>
+    /// Актуальные названия ингредиентов семьи для автодополнения: свои рецепты плюс живой
+    /// контент доступных внешних (warning включён — контент ещё читается; broken исключён,
+    /// устаревших ингредиентов не даёт). Пустые имена отсекаются, поиск по префиксу и
+    /// группировка по нормализованному названию идут в SQL (<see cref="IngredientUsageQuery"/>),
+    /// поэтому в память попадают только различимые названия с частотами, а не полное
+    /// содержимое коллекции; пофайлового запроса на каждый внешний рецепт нет. Ранжирование
+    /// по частоте, затем названию, и ограничение выдачи — здесь, единообразно для обоих
+    /// источников.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> ReadIngredientSuggestionsAsync(
+        Guid familyId, string? query, CancellationToken cancellationToken = default)
+    {
+        var normalizedQuery = query?.Trim().ToLowerInvariant() ?? "";
+
+        var own = await IngredientUsageQuery
+            .Build(
+                _db.Recipes
+                    .AsNoTracking()
+                    .Where(r => r.FamilyId == familyId && r.SourceRecipeId == null)
+                    .SelectMany(r => r.Ingredients),
+                normalizedQuery)
+            .ToListAsync(cancellationToken);
+
+        var external = await _db.Recipes
+            .AsNoTracking()
+            .Where(r => r.FamilyId == familyId && r.SourceRecipeId != null)
+            .Select(r => new ExternalSourceLink(
+                r.Id, r.SourceRecipeId!.Value, r.SourceToken))
+            .ToListAsync(cancellationToken);
+
+        var externalUsages = external.Count == 0
+            ? new List<IngredientUsage>()
+            : await _sources.LoadIngredientSuggestionsAsync(
+                await ResolveLiveSourceIdsAsync(external), normalizedQuery, cancellationToken);
+
+        return own
+            .Concat(externalUsages)
+            .GroupBy(x => x.Normalized)
+            .Select(g => new IngredientUsage(g.Key, g.First().Name, g.Sum(x => x.Usage)))
+            .OrderByDescending(x => x.Usage)
+            .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(MaxIngredientSuggestions)
+            .Select(x => x.Name)
+            .ToList();
+    }
+
+    /// <summary>
+    /// id источников, доступных для чтения: warning ещё можно прочитать, broken — нет.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> ResolveLiveSourceIdsAsync(
+        IReadOnlyList<ExternalSourceLink> links)
+    {
+        var states = await _states.ResolveManyAsync(links);
+        return links
+            .Where(l => states.GetValueOrDefault(l.WrapperId, ExternalRecipeState.Broken)
+                != ExternalRecipeState.Broken)
+            .Select(l => l.SourceRecipeId)
+            .ToList();
     }
 
     /// <summary>

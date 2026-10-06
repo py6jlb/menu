@@ -93,4 +93,24 @@ public sealed class ExternalRecipeSourceLoader
 
         return summaries.ToDictionary(s => s.Id);
     }
+
+    /// <summary>
+    /// Различимые названия ингредиентов источников с частотами, одним скалярным запросом
+    /// без загрузки рецептов, шагов и остальных полей. Поиск по префиксу и агрегация
+    /// выполняются в SQL (<see cref="IngredientUsageQuery"/>), поэтому объём чтения не
+    /// зависит от полного содержимого коллекции и пофайлового запроса на источник нет.
+    /// </summary>
+    public async Task<List<IngredientUsage>> LoadIngredientSuggestionsAsync(
+        IEnumerable<Guid> sourceRecipeIds, string normalizedQuery, CancellationToken cancellationToken = default)
+    {
+        var ids = sourceRecipeIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new List<IngredientUsage>();
+
+        return await IngredientUsageQuery
+            .Build(
+                _db.Recipes.AsNoTracking().Where(r => ids.Contains(r.Id)).SelectMany(r => r.Ingredients),
+                normalizedQuery)
+            .ToListAsync(cancellationToken);
+    }
 }

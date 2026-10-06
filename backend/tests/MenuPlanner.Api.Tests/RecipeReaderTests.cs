@@ -342,6 +342,187 @@ public sealed class RecipeReaderTests
         Assert.Equal("Борщ", after.Recipe.Name);
     }
 
+    [Fact]
+    public async Task ReadIngredientSuggestions_RanksByFrequency_NotAlphabetically()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+
+        var source = NewRecipe(sourceFamily.Id, "Источник");
+        source.Ingredients.Add(Ingredient("Абрикос"));
+        db.Recipes.Add(source);
+
+        var wrapper = NewRecipe(recipientFamily.Id, "Внешний");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "tok"));
+
+        var own = NewRecipe(recipientFamily.Id, "Свой");
+        own.Ingredients.Add(Ingredient("Яблоко"));
+        own.Ingredients.Add(Ingredient("Яблоко"));
+        db.Recipes.Add(own);
+        await db.SaveChangesAsync();
+
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+
+        // «Яблоко» встречается чаще, но идёт позже «Абрикоса» по алфавиту.
+        Assert.Equal("Яблоко", items[0]);
+        Assert.Contains("Абрикос", items);
+        Assert.Equal(2, items.Count);
+    }
+
+    [Fact]
+    public async Task ReadIngredientSuggestions_MergesSameNameAcrossOwnAndExternal()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+
+        var source = NewRecipe(sourceFamily.Id, "Источник");
+        source.Ingredients.Add(Ingredient("помидор"));
+        db.Recipes.Add(source);
+
+        var wrapper = NewRecipe(recipientFamily.Id, "Внешний");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "tok"));
+
+        var own = NewRecipe(recipientFamily.Id, "Свой");
+        own.Ingredients.Add(Ingredient("Помидор"));
+        db.Recipes.Add(own);
+        await db.SaveChangesAsync();
+
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+
+        Assert.Single(items);
+        Assert.Equal("Помидор", items[0], ignoreCase: true);
+    }
+
+    [Fact]
+    public async Task ReadIngredientSuggestions_BrokenSourceExcluded_WarningIncluded()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+
+        var liveSource = NewRecipe(sourceFamily.Id, "Живой");
+        liveSource.Ingredients.Add(Ingredient("Морковь"));
+        db.Recipes.Add(liveSource);
+
+        var warning = NewRecipe(recipientFamily.Id, "Отозванный");
+        warning.SourceRecipeId = liveSource.Id;
+        warning.SourceFamilyId = sourceFamily.Id;
+        warning.SourceToken = "stale";
+        db.Recipes.Add(warning);
+
+        var broken = NewRecipe(recipientFamily.Id, "Сломанный");
+        broken.SourceRecipeId = Guid.NewGuid();
+        broken.SourceFamilyId = sourceFamily.Id;
+        broken.SourceToken = "tok";
+        broken.Ingredients.Add(Ingredient("Устаревшее"));
+        db.Recipes.Add(broken);
+
+        db.RecipeShares.Add(NewShare(liveSource.Id, "fresh"));
+        await db.SaveChangesAsync();
+
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+
+        Assert.Contains("Морковь", items);
+        Assert.DoesNotContain("Устаревшее", items);
+    }
+
+    [Fact]
+    public async Task ReadIngredientSuggestions_ReflectsSourceEditOnNextRead()
+    {
+        await using var db = NewDb();
+        var sourceFamily = NewFamily();
+        var recipientFamily = NewFamily();
+        db.Families.AddRange(sourceFamily, recipientFamily);
+
+        var source = NewRecipe(sourceFamily.Id, "Источник");
+        var ingredient = Ingredient("Свёкла");
+        source.Ingredients.Add(ingredient);
+        db.Recipes.Add(source);
+
+        var wrapper = NewRecipe(recipientFamily.Id, "Внешний");
+        wrapper.SourceRecipeId = source.Id;
+        wrapper.SourceFamilyId = sourceFamily.Id;
+        wrapper.SourceToken = "tok";
+        db.Recipes.Add(wrapper);
+        db.RecipeShares.Add(NewShare(source.Id, "tok"));
+        await db.SaveChangesAsync();
+
+        var reader = Reader(db);
+        var before = await reader.ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+        Assert.Contains("Свёкла", before);
+
+        ingredient.Name = "Капуста";
+        await db.SaveChangesAsync();
+
+        var after = await reader.ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+        Assert.Contains("Капуста", after);
+        Assert.DoesNotContain("Свёкла", after);
+    }
+
+    [Fact]
+    public async Task ReadIngredientSuggestions_NormalizesPrefixes_AndCapsAtTen()
+    {
+        await using var db = NewDb();
+        var family = NewFamily();
+        db.Families.Add(family);
+
+        var own = NewRecipe(family.Id, "Свой");
+        for (var i = 0; i < 12; i++)
+            own.Ingredients.Add(Ingredient($"Продукт {i:D2}"));
+        own.Ingredients.Add(Ingredient(" Продукт 00 "));
+        db.Recipes.Add(own);
+        await db.SaveChangesAsync();
+
+        var reader = Reader(db);
+        var items = await reader.ReadIngredientSuggestionsAsync(family.Id, "  ПРОДУКТ  ");
+
+        Assert.Equal(10, items.Count);
+        Assert.Equal("Продукт 00", items[0]);
+        Assert.All(items, i => Assert.StartsWith("Продукт", i, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReadIngredientSuggestions_DoesNotLeakForeignFamilyIngredients()
+    {
+        await using var db = NewDb();
+        var mine = NewFamily();
+        var other = NewFamily();
+        db.Families.AddRange(mine, other);
+
+        var own = NewRecipe(mine.Id, "Мой");
+        own.Ingredients.Add(Ingredient("Своё"));
+        var foreign = NewRecipe(other.Id, "Чужой");
+        foreign.Ingredients.Add(Ingredient("Чужое"));
+        db.Recipes.AddRange(own, foreign);
+        await db.SaveChangesAsync();
+
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(mine.Id, null);
+
+        Assert.Contains("Своё", items);
+        Assert.DoesNotContain("Чужое", items);
+    }
+
+    private static RecipeIngredient Ingredient(string name) => new()
+    {
+        Order = 0,
+        Name = name,
+        Amount = 1m,
+        Unit = "pcs"
+    };
+
     private static RecipeReader Reader(AppDbContext db) => new(
         db,
         new ExternalRecipeSourceLoader(db),

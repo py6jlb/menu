@@ -135,6 +135,70 @@ public sealed class ExternalRecipeIntegrationFlowTests
     }
 
     [Fact]
+    public async Task Autocomplete_ReflectsLiveSourceEdits()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var (owner, recipient, _, sourceId) = await ImportAsync(client,
+            FullRequest("Салат", ingredients: new[]
+            {
+                ("Свёкла", 2m, "pcs")
+            }));
+
+        var (_, before) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
+            client, recipient.Token, "/api/ingredients/autocomplete");
+        Assert.Contains("Свёкла", before!.Items);
+
+        await PutRecipeAsync(client, owner.Token, sourceId,
+            FullRequest("Салат", ingredients: new[]
+            {
+                ("Капуста", 1m, "pcs")
+            }));
+
+        var (_, after) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
+            client, recipient.Token, "/api/ingredients/autocomplete");
+        Assert.Contains("Капуста", after!.Items);
+        Assert.DoesNotContain("Свёкла", after.Items);
+    }
+
+    [Fact]
+    public async Task Autocomplete_WarningExternal_StillIncludesLiveIngredients()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var (owner, recipient, _, sourceId) = await ImportAsync(client,
+            FullRequest("Салат", ingredients: new[]
+            {
+                ("Морковь", 2m, "pcs")
+            }));
+
+        await DeleteAuthorizedAsync(client, owner.Token, $"/api/recipes/{sourceId}/share");
+
+        var (_, items) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
+            client, recipient.Token, "/api/ingredients/autocomplete");
+        Assert.Contains("Морковь", items!.Items);
+    }
+
+    [Fact]
+    public async Task Autocomplete_BrokenExternal_DoesNotIncludeStaleIngredients()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var (owner, recipient, _, sourceId) = await ImportAsync(client,
+            FullRequest("Салат", ingredients: new[]
+            {
+                ("Сельдерей", 2m, "pcs")
+            }));
+        var (_, sourceDetail) = await GetAuthorizedAsync<RecipeDto>(
+            client, owner.Token, $"/api/recipes/{sourceId}");
+
+        var delete = await DeleteAuthorizedAsync(
+            client, owner.Token, $"/api/recipes/{sourceId}?revision={sourceDetail!.Revision}");
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        var (_, items) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
+            client, recipient.Token, "/api/ingredients/autocomplete");
+        Assert.DoesNotContain("Сельдерей", items!.Items);
+    }
+
+    [Fact]
     public async Task Match_UsesLiveExternalContent()
     {
         using var client = new ApiFactory().CreateClient();
