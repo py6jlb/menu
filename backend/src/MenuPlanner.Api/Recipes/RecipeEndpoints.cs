@@ -261,16 +261,27 @@ public static class RecipeEndpoints
         if (file is null || file.Length == 0)
             return Results.BadRequest(new RecipeErrorDto("Выберите файл изображения."));
 
-        if (!RecipeCatalog.PhotoContentTypes.TryGetValue(file.ContentType, out var extension))
-            return Results.BadRequest(new RecipeErrorDto("Файл должен быть изображением (JPEG, PNG, WebP или GIF)."));
-
         if (file.Length > RecipeCatalog.PhotoMaxBytes)
             return Results.BadRequest(new RecipeErrorDto(
                 $"Размер фото не должен превышать {RecipeCatalog.PhotoMaxBytes / (1024 * 1024)} МБ."));
 
-        await using var content = file.OpenReadStream();
+        byte[] bytes;
+        await using (var content = file.OpenReadStream())
+        {
+            using var buffer = new MemoryStream();
+            await content.CopyToAsync(buffer);
+            bytes = buffer.ToArray();
+        }
+
+        // Формат определяется по содержимому, а не по ContentType/имени файла:
+        // поддельный MIME, повреждённый файл и «бомба» отклоняются до записи в БД.
+        using var probe = new MemoryStream(bytes, writable: false);
+        if (!RecipeImageValidator.TryValidate(probe, out var photo, out var validationError))
+            return Results.BadRequest(new RecipeErrorDto(validationError!));
+
+        using var upload = new MemoryStream(bytes, writable: false);
         var result = await mutations.UploadPhotoAsync(
-            new RecipeTarget(id, familyId.Value), revision, extension, content);
+            new RecipeTarget(id, familyId.Value), revision, photo!.Extension, upload);
         return MutationResult(result, result.Recipe is null ? null : ToDto(result.Recipe));
     }
 

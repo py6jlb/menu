@@ -8,6 +8,7 @@ import {
   PHOTO_ACCEPT,
   PHOTO_MAX_LABEL,
   PHOTO_TYPES_LABEL,
+  PHOTO_DIMENSIONS_LABEL,
   validatePhotoFile,
   recipeFieldLabel
 } from '../constants/recipe'
@@ -323,8 +324,8 @@ onBeforeUnmount(() => {
           <input type="file" :accept="PHOTO_ACCEPT" class="file-input" @change="onPhotoSelected" />
         </label>
         <p class="hint">
-          Допустимы {{ PHOTO_TYPES_LABEL }}, размер — до {{ PHOTO_MAX_LABEL }}. Проверка на сервере
-          остаётся окончательной.
+          Допустимы {{ PHOTO_TYPES_LABEL }}, размер — до {{ PHOTO_MAX_LABEL }}, не более
+          {{ PHOTO_DIMENSIONS_LABEL }}. Проверка на сервере остаётся окончательной.
         </p>
         <p v-if="photoValidationError" class="error">{{ photoValidationError }}</p>
       </fieldset>

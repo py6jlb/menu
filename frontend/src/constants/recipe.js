@@ -84,6 +84,9 @@ export const PHOTO_ACCEPT = PHOTO_TYPES.join(',')
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024
 export const PHOTO_MAX_LABEL = '5 МБ'
 export const PHOTO_TYPES_LABEL = 'JPEG, PNG, WebP или GIF'
+export const PHOTO_MAX_DIMENSION = 8000
+export const PHOTO_MAX_PIXELS = 25000000
+export const PHOTO_DIMENSIONS_LABEL = '8000 пикселей по стороне и 25 мегапикселей'
 
 /** Проверка файла до отправки; серверная валидация остаётся окончательной. */
 export function validatePhotoFile(file) {

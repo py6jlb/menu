@@ -99,7 +99,7 @@ public sealed class ExternalRecipeImportTests
         await CreateFamilyAsync(client, owner.Token, "Семья источника");
         var source = await CreateRecipeAsync(client, owner.Token, "Борщ", FullRequest());
         var (photoResponse, uploaded) = await PutPhotoAuthorizedAsync<RecipeDto>(
-            client, owner.Token, source.Id, source.Revision, new byte[] { 0x89, 0x50, 0x4E, 0x47 }, "image/png", "photo.png");
+            client, owner.Token, source.Id, source.Revision, TestImages.Png(), "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.OK, photoResponse.StatusCode);
         Assert.NotNull(uploaded!.PhotoUrl);
         var share = await ShareAsync(client, owner.Token, source.Id);
@@ -385,7 +385,7 @@ public sealed class ExternalRecipeImportTests
 
         var (photoResponse, _) = await PutPhotoAuthorizedAsync<RecipeErrorDto>(
             client, externalId.RecipientToken, externalId.RecipeId, null,
-            new byte[] { 1, 2, 3 }, "image/png", "photo.png");
+            TestImages.Png(), "image/png", "photo.png");
         Assert.Equal(HttpStatusCode.Forbidden, photoResponse.StatusCode);
 
         var deletePhotoResponse = await DeleteAuthorizedAsync(
