@@ -265,13 +265,20 @@ onMounted(async () => {
           </span>
         </div>
 
+        <p v-if="!isEmailVerified" class="external-note">
+          Подтвердите почту, чтобы скопировать рецепт или убрать его из семьи.
+          <router-link :to="{ name: 'verify', query: { returnTo: route.fullPath } }"
+            >Ввести код</router-link
+          >
+        </p>
+
         <template v-if="recipe.state === 'broken'">
           <p class="external-broken">
             Источник удалил рецепт — содержимое недоступно. Имя сохранено, но рецепт больше
             нельзя готовить. Уберите его из семьи или замените в плане недели.
           </p>
           <p v-if="copyError" class="error">{{ copyError }}</p>
-          <div class="external-actions">
+          <div v-if="isEmailVerified" class="external-actions">
             <button type="button" class="btn btn--primary" disabled title="Источник удалён">
               Сделать копию
             </button>
@@ -292,7 +299,7 @@ onMounted(async () => {
             сделайте копию, чтобы сохранить.
           </p>
           <p v-if="copyError" class="error">{{ copyError }}</p>
-          <div class="external-actions">
+          <div v-if="isEmailVerified" class="external-actions">
             <button type="button" class="btn btn--primary" :disabled="copying" @click="onCopy">
               {{ copying ? 'Сохранение…' : 'Сделать копию, чтобы сохранить' }}
             </button>
@@ -312,7 +319,7 @@ onMounted(async () => {
             Рецепт доступен только для чтения — изменения вносит семья-источник.
           </p>
           <p v-if="copyError" class="error">{{ copyError }}</p>
-          <div class="external-actions">
+          <div v-if="isEmailVerified" class="external-actions">
             <button type="button" class="btn btn--primary" :disabled="copying" @click="onCopy">
               {{ copying ? 'Сохранение…' : 'Сделать копию' }}
             </button>

@@ -2,13 +2,14 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../stores/auth'
+import { sessionStore } from '../stores/storage'
 
 const DISMISS_KEY = 'menu_planner_verify_banner_dismissed'
 
 const route = useRoute()
 const { state, isAuthenticated, isEmailVerified } = useAuth()
 
-const dismissed = ref(sessionStorage.getItem(DISMISS_KEY) === '1')
+const dismissed = ref(sessionStore.get(DISMISS_KEY) === '1')
 
 const visible = computed(
   () =>
@@ -20,7 +21,7 @@ const visible = computed(
 
 function dismiss() {
   dismissed.value = true
-  sessionStorage.setItem(DISMISS_KEY, '1')
+  sessionStore.set(DISMISS_KEY, '1')
 }
 </script>
 

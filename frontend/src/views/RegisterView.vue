@@ -1,10 +1,12 @@
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../stores/auth'
 import { apiJson } from '../api/client'
+import { sanitizeReturnTo } from '../router/returnTo'
 import { rateLimitMessage } from '../composables/useCooldown'
 
+const route = useRoute()
 const router = useRouter()
 const { setSession } = useAuth()
 
@@ -23,7 +25,7 @@ async function submit() {
     })
     if (response.status === 201) {
       setSession(data.token, data.user)
-      router.push({ name: 'verify' })
+      router.push(sanitizeReturnTo(route.query.returnTo) || { name: 'verify' })
     } else if (response.status === 429) {
       error.value = rateLimitMessage(response, data)
     } else if (response.status === 409) {

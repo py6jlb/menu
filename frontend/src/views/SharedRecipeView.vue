@@ -9,7 +9,7 @@ import RecipeBody from '../components/RecipeBody.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { isAuthenticated } = useAuth()
+const { isAuthenticated, isEmailVerified } = useAuth()
 
 const { key, resource: recipe, loading, error, load } = useRouteResource(getSharedRecipe, {
   notFound: 'Ссылка недействительна.'
@@ -102,8 +102,16 @@ onMounted(async () => {
         <p class="invite-text">Хотите сохранить рецепт в своё меню?</p>
         <p class="invite-desc">Войдите или зарегистрируйтесь, затем добавьте рецепт в свою семью.</p>
         <div class="invite-actions">
-          <router-link to="/login" class="btn btn--ghost btn--small">Войти</router-link>
-          <router-link to="/register" class="btn btn--primary btn--small">Регистрация</router-link>
+          <router-link
+            :to="{ name: 'login', query: { returnTo: route.fullPath } }"
+            class="btn btn--ghost btn--small"
+            >Войти</router-link
+          >
+          <router-link
+            :to="{ name: 'register', query: { returnTo: route.fullPath } }"
+            class="btn btn--primary btn--small"
+            >Регистрация</router-link
+          >
         </div>
       </div>
 
@@ -120,6 +128,20 @@ onMounted(async () => {
       <div v-else-if="isSourceFamily" class="card invite invite--muted">
         <p class="invite-text">Это рецепт вашей семьи</p>
         <p class="invite-desc">Он уже доступен вам и другим участникам.</p>
+      </div>
+
+      <div v-else-if="familyLoaded && !isEmailVerified" class="card invite">
+        <p class="invite-text">Подтвердите почту, чтобы добавить рецепт</p>
+        <p class="invite-desc">
+          Импорт рецепта в семью доступен после подтверждения почты.
+        </p>
+        <div class="invite-actions">
+          <router-link
+            :to="{ name: 'verify', query: { returnTo: route.fullPath } }"
+            class="btn btn--primary btn--small"
+            >Подтвердить почту</router-link
+          >
+        </div>
       </div>
 
       <div v-else-if="familyLoaded" class="card invite">
