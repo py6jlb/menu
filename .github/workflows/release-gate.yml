@@ -1,14 +1,11 @@
 name: release-gate
 
-# CI согласован с хостингом репозитория (GitHub) и локальным контейнерным
-# запуском: те же этапы выполняет scripts/release-gate.sh. Публикация образов
-# идёт только после зелёного гейта и только по тегу.
+# ВЫКЛЮЧЕНО: автоматические запуски (push/PR/теги) отключены — сборка и
+# публикация выполняются локально теми же скриптами (scripts/release-gate.sh,
+# deploy/build-push.sh). Оставлен ручной запуск: Actions → release-gate →
+# Run workflow. Чтобы вернуть авто-гейт, верните блоки push/pull_request.
 
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 jobs:

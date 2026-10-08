@@ -70,7 +70,7 @@ Dev-стек остаётся прежним: `docker compose up --build`.
 
 ### Гейт релиза
 
-Перед публикацией образы проходят единый автоматический гейт — одна успешная сборка публикацией не считается. Гейт запускается локально и в CI (GitHub Actions, `.github/workflows/release-gate.yml`) и не требует production-секретов:
+Перед публикацией образы проходят единый автоматический гейт — одна успешная сборка публикацией не считается. Гейт запускается локально и не требует production-секретов (workflow `.github/workflows/release-gate.yml` оставлен для ручного запуска, авто-триггеры выключены):
 
 ```bash
 scripts/release-gate.sh                  # быстрые этапы (shellcheck, deploy-suite, Compose/Caddy/Collector, backend, PostgreSQL, миграции, frontend, зависимости)

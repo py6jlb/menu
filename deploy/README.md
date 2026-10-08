@@ -137,7 +137,7 @@ scripts/release-gate.sh --only backend,postgres --skip deps
 
 Каждый этап пишет диагностику в `deploy/gate-artifacts/<этап>.log` (каталог в `.gitignore`), а при провале гейт печатает этап, причину (хвост журнала) и путь к полному журналу; сводка — `deploy/gate-artifacts/summary.txt`. Намеренная SQL-ошибка проваливает `postgres`, гонка во frontend-тесте — `frontend`, неверная Compose/Caddy/Collector-конфигурация — `infra`, каждый со своей диагностикой. Гейт не требует production-секретов, не деплоит сервер и не публикует образы.
 
-Локально на хосте нужен только Docker (SDK/Python-зависимостей сверх stdlib нет): те же критические проверки воспроизводятся `scripts/release-gate.sh` без установки .NET SDK и Node. В CI (GitHub Actions, `.github/workflows/release-gate.yml`) гейт выполняется на push/PR; job публикации зависит от него (`needs`) и запускается только по тегу, уже после browser smoke.
+Локально на хосте нужен только Docker (SDK/Python-зависимостей сверх stdlib нет): те же критические проверки воспроизводятся `scripts/release-gate.sh` без установки .NET SDK и Node. Workflow `.github/workflows/release-gate.yml` оставлен как ручной (`workflow_dispatch`), авто-запуски на push/PR/тегах выключены; job публикации зависит от гейта (`needs`) и запускается только при ручном запуске на теге, уже после browser smoke.
 
 ### Browser smoke
 
