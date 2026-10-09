@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue'
 import { useShoppingList } from '../composables/useShoppingList'
 import { DAYS, MEALS, weekRangeLabel, toIso } from '../constants/plan'
 import { CATEGORIES, OTHER_CATEGORY } from '../constants/recipe'
+import { useOnlineStatus } from '../composables/useOnlineStatus'
 
 const KNOWN_CATEGORIES = new Set(CATEGORIES.map((c) => c.code))
 
@@ -49,6 +50,12 @@ const showEmptyPlan = computed(
   () => hasPlan.value && items.value.length === 0 && excluded.value.length === 0
 )
 const showStaleNotice = computed(() => !resultIsCurrent.value && Boolean(resultWeekLabel.value))
+
+// Офлайн: показываем кэшированный список, честно помечая его возраст.
+const { online } = useOnlineStatus()
+const showOfflineNote = computed(
+  () => !online.value && (items.value.length > 0 || excluded.value.length > 0)
+)
 
 function dayLabel(day) {
   return DAYS[day]?.label || `День ${day + 1}`
@@ -109,6 +116,10 @@ onMounted(load)
 
       <p v-if="showStaleNotice" class="notice">
         Показан результат за {{ resultWeekLabel }} — его не удалось обновить.
+      </p>
+
+      <p v-if="showOfflineNote" class="notice">
+        Нет сети — показаны данные на момент последнего просмотра.
       </p>
 
       <div v-if="excluded.length" class="card incomplete">

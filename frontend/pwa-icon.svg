@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Меню">
+  <!-- Монограмма «М»: терракотовый фон, белый штрих. Векторный знак без шрифта,
+       чтобы генерация PNG не зависела от доступных шрифтов. -->
+  <rect width="512" height="512" fill="#c96f2a"/>
+  <path d="M150 372 V140 L256 300 L362 140 V372" fill="none" stroke="#ffffff"
+        stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

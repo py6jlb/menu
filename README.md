@@ -111,6 +111,18 @@ npm test
 docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/app -w /app/frontend node:24-alpine npm test
 ```
 
+## PWA и офлайн
+
+Приложение устанавливается как PWA и работает офлайн только для чтения. Service worker (`vite-plugin-pwa`) прекэширует оболочку и локальный шрифт Nunito; читающие API-ответы (список покупок, план, рецепты, семья, настройки, автодополнение, публичный просмотр по ссылке) кэшируются по стратегии network-first и доступны без сети. Аутентификация, админка и управление ссылками не кэшируются; кэш данных чистится при выходе и при `401`. Обновление версии предлагается баннером, а не применяется молча. Push-уведомлений нет.
+
+Проверить офлайн: `npm run build && npm run preview` — в dev service worker отключён, чтобы не мешать HMR. Иконки приложения генерируются из `frontend/pwa-icon.svg` (монограмма «М»):
+
+```bash
+docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/app -w /app/frontend node:24 \
+  npx --yes @vite-pwa/assets-generator@2.0.0 pwa-icon.svg --preset minimal --root .
+# готовые png/ico из frontend/ перенести в frontend/public/
+```
+
 ## Конфигурация backend
 
 - Подключение БД: при заданном `DB_HOST` используется structured-набор `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` через `NpgsqlConnectionStringBuilder` (так работает prod-Compose, сохраняя literal-пароли). Без `DB_HOST` прежний приоритет: `ConnectionStrings:Default` (env `ConnectionStrings__Default` или JSON-default с `Host=db`) → `DB_CONNECTION_STRING` → fallback с `Host=localhost`. Dev-Compose и EF factory сохраняют прежние overrides без `DB_HOST`. Подробности и defaults — в [`deploy/README.md`](deploy/README.md#literal-параметры-подключения-backend).
@@ -361,7 +373,7 @@ unset ADMIN_PW
 
 | Метод | Путь | Описание |
 |-------|------|----------|
-| GET  | `/api/shopping-list?weekStart={weekStart}` | Список покупок на неделю: `{ weekStart, hasPlan, items: [{ name, amount, unit, display }], excluded: [{ day, mealType, recipeId, recipeName, reason }] }`; рецепты с состоянием `broken` (источник удалён) исключаются из `items` и возвращаются в `excluded`; `hasPlan` отличает отсутствующий план (`false`) от пустого (`true`) |
+| GET  | `/api/shopping-list?weekStart={weekStart}` | Список покупок на неделю: `{ weekStart, hasPlan, items: [{ name, amount, unit, display, category }], excluded: [{ day, mealType, recipeId, recipeName, reason }] }`; `category` — код категории продукта или `null` («Прочее»); рецепты с состоянием `broken` (источник удалён) исключаются из `items` и возвращаются в `excluded`; `hasPlan` отличает отсутствующий план (`false`) от пустого (`true`) |
 
 `weekStart` — дата понедельника в формате `yyyy-MM-dd` (не понедельник → `400`). Пользователь без семьи → `404`.
 
