@@ -238,4 +238,59 @@ public sealed class ShoppingListBuilderTests
 
         Assert.Equal(new[] { "мука", "вода", "яйцо", "соль" }, items.Select(i => i.Name).ToArray());
     }
+
+    [Fact]
+    public void Category_ResolvedByMajority_AcrossLines()
+    {
+        var items = ShoppingListBuilder.Build(new[]
+        {
+            new IngredientLine("мука", 300m, "g", "groceries"),
+            new IngredientLine("мука", 200m, "g", "groceries"),
+            new IngredientLine("мука", 100m, "g", "bakery")
+        });
+
+        Assert.Equal("groceries", Assert.Single(items).Category);
+    }
+
+    [Fact]
+    public void Category_Tie_BecomesOther()
+    {
+        var items = ShoppingListBuilder.Build(new[]
+        {
+            new IngredientLine("сыр", 100m, "g", "dairy"),
+            new IngredientLine("сыр", 100m, "g", "frozen")
+        });
+
+        Assert.Null(Assert.Single(items).Category);
+    }
+
+    [Fact]
+    public void Category_EmptyOrMissing_BecomesOther()
+    {
+        var items = ShoppingListBuilder.Build(new[]
+        {
+            new IngredientLine("специя", 1m, "tsp"),
+            new IngredientLine("специя", 1m, "tsp", null),
+            new IngredientLine("специя", 1m, "tsp", "")
+        });
+
+        Assert.Null(Assert.Single(items).Category);
+    }
+
+    [Fact]
+    public void Items_Ordered_ByCategoryThenGroupThenName_OtherLast()
+    {
+        var items = ShoppingListBuilder.Build(new[]
+        {
+            new IngredientLine("яйцо", 1m, "pcs"),
+            new IngredientLine("молоко", 1m, "l", "dairy"),
+            new IngredientLine("мука", 300m, "g", "groceries"),
+            new IngredientLine("помидор", 2m, "pcs", "vegetables")
+        });
+
+        Assert.Equal(
+            new[] { "помидор", "молоко", "мука", "яйцо" },
+            items.Select(i => i.Name).ToArray());
+        Assert.Null(items[^1].Category);
+    }
 }

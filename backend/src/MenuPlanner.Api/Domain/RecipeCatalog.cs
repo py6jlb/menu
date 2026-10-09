@@ -9,6 +9,7 @@ public static class RecipeCatalog
     public const int IngredientNameMaxLength = 200;
     public const int UnitMaxLength = 32;
     public const int NoteMaxLength = 500;
+    public const int IngredientCategoryMaxLength = 32;
     public const int CookTimeMin = 1;
     public const int CookTimeMax = 1440;
     public const int ServingsMin = 1;
@@ -48,4 +49,35 @@ public static class RecipeCatalog
 
     public static readonly IReadOnlyList<string> Seasons =
         new[] { "winter", "spring", "summer", "autumn" };
+
+    // Категории продуктов для группировки списка покупок: конечный справочник,
+    // порядок задаёт порядок отделов в магазине. Пустое значение (null) — «Прочее»,
+    // отдельным кодом не выражается и в списке всегда идёт последним.
+    public static readonly IReadOnlyList<string> IngredientCategories = new[]
+    {
+        "vegetables",
+        "meat",
+        "fish",
+        "dairy",
+        "bakery",
+        "groceries",
+        "sauces_spices",
+        "oils_vinegar",
+        "frozen",
+        "sweets_snacks",
+        "drinks"
+    };
+
+    /// <summary>Порядковый номер категории в справочнике; null (Прочее) — в конце.</summary>
+    public static int IngredientCategoryRank(string? category)
+    {
+        if (category is null)
+            return int.MaxValue;
+        for (var i = 0; i < IngredientCategories.Count; i++)
+        {
+            if (IngredientCategories[i] == category)
+                return i;
+        }
+        return int.MaxValue;
+    }
 }

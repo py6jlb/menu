@@ -258,4 +258,45 @@ public sealed class RecipeValidationTests
 
         Assert.Equal(new[] { "суп" }, normalized);
     }
+
+    [Fact]
+    public void IngredientCategory_FromCatalog_IsAccepted()
+    {
+        var request = Valid() with
+        {
+            Ingredients = new List<RecipeIngredientRequest> { new("Молоко", 200m, "ml", null, "dairy") }
+        };
+
+        Assert.Null(RecipeValidation.Validate(request));
+    }
+
+    [Fact]
+    public void IngredientCategory_OutsideCatalog_IsRejected()
+    {
+        var request = Valid() with
+        {
+            Ingredients = new List<RecipeIngredientRequest> { new("Молоко", 200m, "ml", null, "молочка") }
+        };
+
+        var error = RecipeValidation.Validate(request);
+        Assert.Equal("ingredient_category_invalid", error!.Code);
+        Assert.Equal("ingredients[0].category", error.Field);
+    }
+
+    [Fact]
+    public void MapIngredients_NormalizesBlankCategory_ToNull_AndKeepsValidCode()
+    {
+        var request = Valid() with
+        {
+            Ingredients = new List<RecipeIngredientRequest>
+            {
+                new("Молоко", 200m, "ml", null, "  "),
+                new("Сыр", 100m, "g", null, "dairy")
+            }
+        };
+
+        var mapped = RecipeValidation.MapIngredients(request);
+        Assert.Null(mapped[0].Category);
+        Assert.Equal("dairy", mapped[1].Category);
+    }
 }

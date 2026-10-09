@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
+  CATEGORIES,
   DIETS,
+  OTHER_CATEGORY,
   PHOTO_MAX_BYTES,
   PHOTO_MAX_DIMENSION,
   PHOTO_MAX_PIXELS,
   PHOTO_TYPES,
+  categoryLabel,
   combineDiets,
   dietLabel,
   recipeFieldLabel,
@@ -120,10 +123,34 @@ describe('dietLabel', () => {
   })
 })
 
+describe('CATEGORIES', () => {
+  it('категории идут по отделам и имеют код, подпись и иконку', () => {
+    expect(CATEGORIES[0]).toEqual({ code: 'vegetables', label: 'Овощи, фрукты, зелень', icon: '🥦' })
+    expect(CATEGORIES.at(-1).code).toBe('drinks')
+    expect(CATEGORIES.every((c) => c.code && c.label && c.icon)).toBe(true)
+    expect(new Set(CATEGORIES.map((c) => c.code)).size).toBe(CATEGORIES.length)
+  })
+
+  it('«Прочее» — пустой код, не часть выбираемого справочника', () => {
+    expect(OTHER_CATEGORY).toEqual({ code: '', label: 'Прочее', icon: '🧺' })
+    expect(CATEGORIES.some((c) => c.code === '')).toBe(false)
+  })
+})
+
+describe('categoryLabel', () => {
+  it('переводит код, пустой и неизвестный — в «Прочее»', () => {
+    expect(categoryLabel('dairy')).toBe('Молочные продукты, яйца')
+    expect(categoryLabel('')).toBe('Прочее')
+    expect(categoryLabel(null)).toBe('Прочее')
+    expect(categoryLabel('нечто')).toBe('Прочее')
+  })
+})
+
 describe('recipeFieldLabel', () => {
   it('подписывает простое поле и путь ингредиента', () => {
     expect(recipeFieldLabel('name')).toBe('Название')
     expect(recipeFieldLabel('ingredients[1].amount')).toBe('Ингредиент 2: количество')
+    expect(recipeFieldLabel('ingredients[2].category')).toBe('Ингредиент 3: категория')
     expect(recipeFieldLabel('ingredients[0]')).toBe('Ингредиент 1')
   })
 

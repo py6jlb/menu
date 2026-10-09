@@ -10,5 +10,11 @@ public sealed class RecipeIngredient
     public required string Unit { get; set; }
     public string? Note { get; set; }
 
+    /// <summary>
+    /// Код категории продукта из <see cref="RecipeCatalog.IngredientCategories"/> или null
+    /// для «Прочего». Категория — свойство ингредиента, а не отдельного продукта.
+    /// </summary>
+    public string? Category { get; set; }
+
     public Recipe? Recipe { get; set; }
 }

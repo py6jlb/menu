@@ -43,7 +43,7 @@ public static class ShoppingListEndpoints
         var content = ShoppingListContentBuilder.Build(plan);
 
         var items = content.Items
-            .Select(i => new ShoppingListItemDto(i.Name, i.Amount, i.Unit, i.Display))
+            .Select(i => new ShoppingListItemDto(i.Name, i.Amount, i.Unit, i.Display, i.Category))
             .ToList();
         var excluded = content.Excluded
             .Select(e => new ShoppingListExcludedDto(e.Day, e.MealType, e.RecipeId, e.RecipeName, e.Reason))

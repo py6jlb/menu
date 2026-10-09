@@ -58,19 +58,19 @@ public sealed class PostgresRecipeReadTests : PostgresTestBase
 
         var (recipient2, _) = await SeedAsync(externalCount: 25, chunksPerSource: 3);
         var second = new CommandRecordingInterceptor();
-        IReadOnlyList<string> items;
+        IReadOnlyList<IngredientSuggestion> items;
         await using (var db = NewContext(second))
             items = await Reader(db).ReadIngredientSuggestionsAsync(recipient2.Id, null);
 
-        IReadOnlyList<string> filtered;
+        IReadOnlyList<IngredientSuggestion> filtered;
         await using (var db = NewContext())
             filtered = await Reader(db).ReadIngredientSuggestionsAsync(recipient2.Id, "  ПРОДУКТ 1 ");
 
         // 25 источников × 3 ингредиента = 75 строк, но в памяти оказываются только
         // различимые названия с частотами: объём не растёт с содержимым коллекции.
         Assert.Equal(3, items.Count);
-        Assert.Contains("Продукт 0", items);
-        Assert.Equal("Продукт 1", Assert.Single(filtered));
+        Assert.Contains(items, i => i.Name == "Продукт 0");
+        Assert.Equal("Продукт 1", Assert.Single(filtered).Name);
         Assert.Equal(first.Commands.Count, second.Commands.Count);
         Assert.Contains(second.Commands, c => c.Contains("GROUP BY", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(second.Commands, c => c.Contains("RecipeSteps", StringComparison.Ordinal));
@@ -100,8 +100,8 @@ public sealed class PostgresRecipeReadTests : PostgresTestBase
         await using var context = NewContext(commands);
         var items = await Reader(context).ReadIngredientSuggestionsAsync(recipient.Id, null);
 
-        Assert.DoesNotContain("Устаревшее", items);
-        Assert.Contains("Продукт 0", items);
+        Assert.DoesNotContain(items, i => i.Name == "Устаревшее");
+        Assert.Contains(items, i => i.Name == "Продукт 0");
     }
 
     [PostgresFact]

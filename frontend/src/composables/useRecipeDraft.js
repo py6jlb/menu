@@ -35,7 +35,7 @@ export function nextIngredientId() {
 }
 
 export function newIngredientDraft() {
-  return { uid: nextIngredientId(), name: '', amount: '', unit: 'g', note: '' }
+  return { uid: nextIngredientId(), name: '', amount: '', unit: 'g', note: '', category: '' }
 }
 
 /** Пустое фото-состояние черновика. */
@@ -85,7 +85,8 @@ export function draftFromRecipe(data) {
             name: i.name || '',
             amount: i.amount === null || i.amount === undefined ? '' : String(i.amount),
             unit: i.unit || 'g',
-            note: i.note || ''
+            note: i.note || '',
+            category: i.category || ''
           }))
         : [newIngredientDraft()],
     photo: { existing: data.photoUrl || null, removed: false, selected: null }
@@ -118,7 +119,8 @@ export function draftToPayload(draft, revision = null) {
         name: (i.name || '').trim(),
         amount: Number(i.amount),
         unit: i.unit,
-        note: (i.note || '').trim() || null
+        note: (i.note || '').trim() || null,
+        category: (i.category || '').trim() || null
       }))
   }
 }
@@ -164,7 +166,8 @@ export function serializeDraft(draft) {
         name: (i.name || '').trim(),
         amount: comparableNumber(i.amount),
         unit: i.unit || '',
-        note: (i.note || '').trim()
+        note: (i.note || '').trim(),
+        category: (i.category || '').trim()
       })),
     photo: {
       existing: draft.photo?.existing || null,

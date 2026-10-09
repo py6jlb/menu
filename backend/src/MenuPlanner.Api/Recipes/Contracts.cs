@@ -2,7 +2,8 @@ namespace MenuPlanner.Api.Recipes;
 
 public sealed record RecipeStepRequest(string? Text);
 
-public sealed record RecipeIngredientRequest(string? Name, decimal? Amount, string? Unit, string? Note);
+public sealed record RecipeIngredientRequest(
+    string? Name, decimal? Amount, string? Unit, string? Note, string? Category = null);
 
 public sealed record RecipeRequest(
     string? Name,
@@ -42,7 +43,8 @@ public sealed record RecipeIngredientDto(
     string Name,
     decimal Amount,
     string Unit,
-    string? Note);
+    string? Note,
+    string? Category = null);
 
 public sealed record RecipeDto(
     Guid Id,

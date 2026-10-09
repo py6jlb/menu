@@ -3,10 +3,12 @@ using MenuPlanner.Api.Domain;
 namespace MenuPlanner.Api.Recipes.External;
 
 /// <summary>
-/// Название ингредиента, сведённое по нормализованному виду (trim/lowercase), с частотой
-/// употребления в рамках выбранного набора рецептов.
+/// Название ингредиента, сведённое по нормализованному виду (trim/lowercase) и категории
+/// продукта, с частотой употребления в рамках выбранного набора рецептов. Разбиение по
+/// категории позволяет затем определить категорию подсказки по большинству — тем же
+/// правилом, что и в списке покупок.
 /// </summary>
-public sealed record IngredientUsage(string Normalized, string Name, int Usage);
+public sealed record IngredientUsage(string Normalized, string Name, string? Category, int Usage);
 
 /// <summary>
 /// Скалярная агрегация названий ингредиентов для автодополнения. Пустые имена отсекаются,
@@ -27,7 +29,8 @@ public static class IngredientUsageQuery
 
         return ingredients
             .Where(i => i.Name.Trim() != "")
-            .GroupBy(i => i.Name.Trim().ToLower())
-            .Select(g => new IngredientUsage(g.Key, g.Min(x => x.Name.Trim())!, g.Count()));
+            .GroupBy(i => new { Normalized = i.Name.Trim().ToLower(), i.Category })
+            .Select(g => new IngredientUsage(
+                g.Key.Normalized, g.Min(x => x.Name.Trim())!, g.Key.Category, g.Count()));
     }
 }

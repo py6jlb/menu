@@ -56,7 +56,8 @@ public static class ShoppingListContentBuilder
                 lines.Add(new IngredientLine(
                     ingredient.Name,
                     ShoppingListBuilder.Scale(ingredient.Amount, entry.Portions, content.Servings),
-                    ingredient.Unit));
+                    ingredient.Unit,
+                    ingredient.Category));
             }
         }
 
