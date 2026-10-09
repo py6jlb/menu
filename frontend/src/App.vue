@@ -3,12 +3,15 @@ import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from './stores/auth'
 import { ensureSession } from './composables/useSession'
+import { useOnlineStatus } from './composables/useOnlineStatus'
 import { returnToQuery } from './router/returnTo'
 import EmailVerifyBanner from './components/EmailVerifyBanner.vue'
+import UpdatePrompt from './components/UpdatePrompt.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { state, isAuthenticated, isAdmin, roleLabel, clearSession } = useAuth()
+const { online } = useOnlineStatus()
 
 function logout() {
   // Уход с защищённого маршрута делает наблюдатель ниже — один раз, без гонки.
@@ -63,8 +66,13 @@ watch(isAuthenticated, (authenticated) => {
       </nav>
     </header>
 
+    <div v-if="!online" class="offline-banner" role="status">
+      📴 Нет сети — доступен только просмотр.
+    </div>
+
     <main class="page">
       <EmailVerifyBanner />
+      <UpdatePrompt />
       <router-view />
     </main>
 
@@ -201,6 +209,34 @@ input:focus, select:focus, textarea:focus {
 
 input::placeholder, textarea::placeholder {
   color: var(--text-faint);
+}
+
+/* ---- offline / update banners ---- */
+.offline-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1rem;
 }
 
 /* ---- layout ---- */

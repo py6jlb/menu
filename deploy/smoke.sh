@@ -99,6 +99,26 @@ edge_fetch -O /dev/null "$EDGE_BASE$asset_path" \
   || die "asset $asset_path не отдаётся через край"
 log "SPA отвечает, asset $asset_path существует"
 
+log "PWA: манифест и service worker отдаются через край"
+manifest_body="$(edge_fetch -O - "$EDGE_BASE/manifest.webmanifest")" \
+  || die "Манифест не отдаётся через край"
+printf '%s' "$manifest_body" | grep -q '"name"' || die "Манифест не содержит name"
+manifest_headers="$(edge_fetch -S -O /dev/null "$EDGE_BASE/manifest.webmanifest" 2>&1 || true)"
+printf '%s' "$manifest_headers" | grep -qi 'cache-control: no-cache' \
+  || die "Манифест отдаётся без no-cache"
+edge_fetch -O /dev/null "$EDGE_BASE/sw.js" || die "Service worker не отдаётся через край"
+sw_headers="$(edge_fetch -S -O /dev/null "$EDGE_BASE/sw.js" 2>&1 || true)"
+printf '%s' "$sw_headers" | grep -qi 'cache-control: no-cache' \
+  || die "Service worker отдаётся без no-cache"
+log "PWA: манифест и service worker отдаются с no-cache"
+
+log "Отсутствующий хешированный asset отдаёт 404 (не SPA-fallback)"
+missing_status="$(edge_fetch -S -O /dev/null "$EDGE_BASE/assets/__smoke_missing__.js" 2>&1 \
+  | grep -oE 'HTTP/[0-9.]+ [0-9]{3}' | tail -n1 | grep -oE '[0-9]{3}$' || true)"
+[ "$missing_status" = "404" ] \
+  || die "Отсутствующий asset не отдаёт 404 (код ${missing_status:-нет})"
+log "Отсутствующий asset отдаёт 404"
+
 log "Безопасный запрос к /api через край"
 api_status="$(edge_fetch -S -O /dev/null "$EDGE_BASE/api/recipes" 2>&1 \
   | grep -oE 'HTTP/[0-9.]+ [0-9]{3}' | tail -n1 | grep -oE '[0-9]{3}$' || true)"

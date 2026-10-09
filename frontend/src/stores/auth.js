@@ -1,5 +1,6 @@
 import { reactive, ref, computed } from 'vue'
 import { localStore } from './storage'
+import { clearApiCache } from '../pwa/apiCache'
 
 const TOKEN_KEY = 'menu_planner_token'
 const USER_KEY = 'menu_planner_user'
@@ -64,6 +65,8 @@ function clearSession() {
   state.user = null
   localStore.remove(TOKEN_KEY)
   localStore.remove(USER_KEY)
+  // Офлайн-кэш авторизованных ответов не должен переживать выход.
+  clearApiCache()
 }
 
 /**
@@ -88,6 +91,7 @@ function onStorage(event) {
     if (!event.newValue) {
       state.token = ''
       state.user = null
+      clearApiCache()
       return
     }
     state.token = event.newValue

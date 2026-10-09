@@ -10,8 +10,10 @@ import { externalState } from '../constants/external'
 import { repetitionChip, repetitionTitle, repetitionWindowNote } from '../constants/repetition'
 import { useDialog } from '../composables/useDialog'
 import { useAuth } from '../stores/auth'
+import { useOnlineStatus } from '../composables/useOnlineStatus'
 
 const { isEmailVerified } = useAuth()
+const { online } = useOnlineStatus()
 
 const route = useRoute()
 
@@ -218,6 +220,10 @@ onBeforeUnmount(() => {
         →
       </button>
     </div>
+
+    <p v-if="!online" class="notice">
+      Нет сети — показаны данные на момент последнего просмотра.
+    </p>
 
     <p v-if="savedMessage" class="success" role="status">{{ savedMessage }}</p>
     <div v-else-if="conflict" class="conflict">

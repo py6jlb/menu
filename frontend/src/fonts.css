@@ -1,0 +1,10 @@
+/* Nunito хостится локально (@fontsource): кириллица + латиница, веса 400/600/700/800.
+   Ассеты попадают в сборку и прекэшируются service worker'ом — шрифт работает офлайн. */
+@import '@fontsource/nunito/cyrillic-400.css';
+@import '@fontsource/nunito/latin-400.css';
+@import '@fontsource/nunito/cyrillic-600.css';
+@import '@fontsource/nunito/latin-600.css';
+@import '@fontsource/nunito/cyrillic-700.css';
+@import '@fontsource/nunito/latin-700.css';
+@import '@fontsource/nunito/cyrillic-800.css';
+@import '@fontsource/nunito/latin-800.css';

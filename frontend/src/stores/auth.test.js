@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 
 const TOKEN_KEY = 'menu_planner_token'
 const USER_KEY = 'menu_planner_user'
@@ -156,5 +156,33 @@ describe('auth — синхронизация вкладок', () => {
 
     expect(auth.state.user).toBeNull()
     expect(auth.state.token).toBe('tok')
+  })
+})
+
+describe('auth — очистка офлайн-кэша', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('выход чистит runtime-кэш API', async () => {
+    const del = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('caches', { delete: del })
+    const { useAuth } = await loadStore()
+    const auth = useAuth()
+    auth.setSession('tok', { id: 'u1' })
+
+    auth.clearSession()
+
+    expect(del).toHaveBeenCalledWith('menu-api')
+  })
+
+  it('401 текущего токена чистит runtime-кэш API', async () => {
+    const del = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('caches', { delete: del })
+    const { useAuth } = await loadStore()
+    const auth = useAuth()
+    auth.setSession('tok', { id: 'u1' })
+
+    auth.invalidateSession('tok')
+
+    expect(del).toHaveBeenCalledWith('menu-api')
   })
 })
