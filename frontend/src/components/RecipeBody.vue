@@ -1,5 +1,5 @@
 <script setup>
-import { unitLabel, seasonLabel, dietLabel } from '../constants/recipe'
+import { unitLabel, seasonLabel, dietLabel, categoryLabel } from '../constants/recipe'
 import { repetitionChip, repetitionTitle } from '../constants/repetition'
 
 defineProps({
@@ -48,6 +48,7 @@ defineProps({
         <li v-for="ingredient in recipe.ingredients" :key="ingredient.id" class="ingredient">
           <span class="amount">{{ ingredient.amount }} {{ unitLabel(ingredient.unit) }}</span>
           <span class="name">{{ ingredient.name }}</span>
+          <span v-if="ingredient.category" class="category">{{ categoryLabel(ingredient.category) }}</span>
           <span v-if="ingredient.note" class="note">{{ ingredient.note }}</span>
         </li>
       </ul>
@@ -177,6 +178,15 @@ defineProps({
 
 .name {
   overflow-wrap: anywhere;
+}
+
+.category {
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
 }
 
 .note {

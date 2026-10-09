@@ -35,10 +35,10 @@ public sealed class IngredientAutocompleteTests
             client, owner.Token, "/api/ingredients/autocomplete?q=%D0%BF%D0%BE");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(data);
-        Assert.Contains("Помидор", data.Items);
-        Assert.Contains("ПомидорЧерри", data.Items);
-        Assert.DoesNotContain("Лук", data.Items);
-        Assert.DoesNotContain("Чеснок", data.Items);
+        Assert.Contains(data.Items, i => i.Name == "Помидор");
+        Assert.Contains(data.Items, i => i.Name == "ПомидорЧерри");
+        Assert.DoesNotContain(data.Items, i => i.Name == "Лук");
+        Assert.DoesNotContain(data.Items, i => i.Name == "Чеснок");
     }
 
     [Fact]
@@ -56,12 +56,12 @@ public sealed class IngredientAutocompleteTests
         var (lowerResponse, lowerData) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, owner.Token, "/api/ingredients/autocomplete?q=%D0%BF%D0%BE");
         Assert.Equal(HttpStatusCode.OK, lowerResponse.StatusCode);
-        Assert.Contains("Помидор", lowerData!.Items);
+        Assert.Contains(lowerData!.Items, i => i.Name == "Помидор");
 
         var (upperResponse, upperData) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, owner.Token, "/api/ingredients/autocomplete?q=%D0%9F%D0%9E");
         Assert.Equal(HttpStatusCode.OK, upperResponse.StatusCode);
-        Assert.Contains("Помидор", upperData!.Items);
+        Assert.Contains(upperData!.Items, i => i.Name == "Помидор");
     }
 
     [Fact]
@@ -87,9 +87,9 @@ public sealed class IngredientAutocompleteTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(data);
         Assert.Equal(3, data.Items.Count);
-        Assert.Equal("Чеснок", data.Items[0]);
-        Assert.Contains("Лук", data.Items);
-        Assert.Contains("Помидор", data.Items);
+        Assert.Equal("Чеснок", data.Items[0].Name);
+        Assert.Contains(data.Items, i => i.Name == "Лук");
+        Assert.Contains(data.Items, i => i.Name == "Помидор");
     }
 
     [Fact]
@@ -115,15 +115,15 @@ public sealed class IngredientAutocompleteTests
             client, second.Token, "/api/ingredients/autocomplete?q=");
         Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
         Assert.NotNull(secondData);
-        Assert.Contains("Морковь", secondData.Items);
-        Assert.DoesNotContain("Помидор", secondData.Items);
-        Assert.DoesNotContain("Лук", secondData.Items);
+        Assert.Contains(secondData.Items, i => i.Name == "Морковь");
+        Assert.DoesNotContain(secondData.Items, i => i.Name == "Помидор");
+        Assert.DoesNotContain(secondData.Items, i => i.Name == "Лук");
 
         var (firstResponse, firstData) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, first.Token, "/api/ingredients/autocomplete?q=%D0%BF%D0%BE");
         Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
-        Assert.Contains("Помидор", firstData!.Items);
-        Assert.DoesNotContain("Морковь", firstData.Items);
+        Assert.Contains(firstData!.Items, i => i.Name == "Помидор");
+        Assert.DoesNotContain(firstData.Items, i => i.Name == "Морковь");
     }
 
     [Fact]

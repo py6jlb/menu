@@ -2,17 +2,9 @@
 import { computed, onMounted } from 'vue'
 import { useShoppingList } from '../composables/useShoppingList'
 import { DAYS, MEALS, weekRangeLabel, toIso } from '../constants/plan'
+import { CATEGORIES, OTHER_CATEGORY } from '../constants/recipe'
 
-const GROUPS = [
-  { key: 'weight', label: 'Вес', icon: '⚖️', units: ['g', 'kg'] },
-  { key: 'volume', label: 'Объём', icon: '🧴', units: ['ml', 'l'] },
-  { key: 'pieces', label: 'Штуки', icon: '🔢', units: ['pcs'] },
-  { key: 'household', label: 'Бытовые меры', icon: '🥄', units: ['glass', 'tbsp', 'tsp', 'pinch'] }
-]
-
-function groupOf(unit) {
-  return GROUPS.find((g) => g.units.includes(unit)) || GROUPS[GROUPS.length - 1]
-}
+const KNOWN_CATEGORIES = new Set(CATEGORIES.map((c) => c.code))
 
 const {
   weekStart,
@@ -34,12 +26,20 @@ const resultWeekLabel = computed(() =>
   resultWeekDate.value ? weekRangeLabel(resultWeekDate.value) : ''
 )
 
-const groups = computed(() =>
-  GROUPS.map((g) => ({
-    ...g,
-    items: items.value.filter((item) => groupOf(item.unit).key === g.key)
-  })).filter((g) => g.items.length > 0)
-)
+// Верхний уровень — категории в порядке справочника, «Прочее» последней.
+// Внутри — плоский список: бэкенд уже отсортировал его по группе единиц, затем по названию.
+// Неизвестный код категории (не из справочника) честно попадает в «Прочее», не теряется.
+const groups = computed(() => {
+  const byCategory = new Map()
+  for (const item of items.value) {
+    const code = item.category && KNOWN_CATEGORIES.has(item.category) ? item.category : ''
+    if (!byCategory.has(code)) byCategory.set(code, [])
+    byCategory.get(code).push(item)
+  }
+  return [...CATEGORIES, OTHER_CATEGORY]
+    .map((category) => ({ ...category, items: byCategory.get(category.code) || [] }))
+    .filter((category) => category.items.length > 0)
+})
 
 const planWeek = computed(() => resultWeekDate.value || weekStart.value)
 const planLink = computed(() => ({ name: 'plan', query: { week: toIso(planWeek.value) } }))
@@ -141,7 +141,7 @@ onMounted(load)
         <router-link :to="planLink" class="btn btn--primary">Перейти к плану</router-link>
       </div>
 
-      <div v-for="group in groups" :key="group.key" class="card group">
+      <div v-for="group in groups" :key="group.code || 'other'" class="card group">
         <h3 class="group-title"><span class="group-icon">{{ group.icon }}</span> {{ group.label }}</h3>
         <ul class="item-list">
           <li v-for="item in group.items" :key="`${item.name}-${item.unit}`" class="item">

@@ -58,6 +58,12 @@ public sealed record RecipeMatchCandidate(
     ExternalRecipeState? State);
 
 /// <summary>
+/// Подсказка названия ингредиента с категорией продукта (или null для «Прочего»).
+/// Категория — та же, что показал бы список покупок: по большинству.
+/// </summary>
+public sealed record IngredientSuggestion(string Name, string? Category);
+
+/// <summary>
 /// Единое предметное чтение рецепта для списка и деталей. Прячет от потребителей связь
 /// локального рецепта с источником, доступность источника и происхождение: вызывающий
 /// получает уже разрешённые состояние, подпись семьи-источника и правильный контент.
@@ -214,7 +220,7 @@ public sealed class RecipeReader
     /// по частоте, затем названию, и ограничение выдачи — здесь, единообразно для обоих
     /// источников.
     /// </summary>
-    public async Task<IReadOnlyList<string>> ReadIngredientSuggestionsAsync(
+    public async Task<IReadOnlyList<IngredientSuggestion>> ReadIngredientSuggestionsAsync(
         Guid familyId, string? query, CancellationToken cancellationToken = default)
     {
         var normalizedQuery = query?.Trim().ToLowerInvariant() ?? "";
@@ -243,12 +249,30 @@ public sealed class RecipeReader
         return own
             .Concat(externalUsages)
             .GroupBy(x => x.Normalized)
-            .Select(g => new IngredientUsage(g.Key, g.First().Name, g.Sum(x => x.Usage)))
+            .Select(g => new
+            {
+                Name = g.First().Name,
+                Usage = g.Sum(x => x.Usage),
+                Category = ResolveSuggestionCategory(g)
+            })
             .OrderByDescending(x => x.Usage)
             .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
             .Take(MaxIngredientSuggestions)
-            .Select(x => x.Name)
+            .Select(x => new IngredientSuggestion(x.Name, x.Category))
             .ToList();
+    }
+
+    /// <summary>
+    /// Категория подсказки — по большинству частот среди вариантов использования продукта,
+    /// тем же правилом, что и категория позиции списка покупок.
+    /// </summary>
+    private static string? ResolveSuggestionCategory(IEnumerable<IngredientUsage> usages)
+    {
+        var votes = usages
+            .Where(u => !string.IsNullOrEmpty(u.Category))
+            .GroupBy(u => u.Category!)
+            .ToDictionary(g => g.Key, g => g.Sum(u => u.Usage));
+        return IngredientCategoryRules.ResolveMajority(votes);
     }
 
     /// <summary>

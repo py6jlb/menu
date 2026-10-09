@@ -5,6 +5,7 @@ import {
   UNITS,
   SEASONS,
   DIETS,
+  CATEGORIES,
   PHOTO_ACCEPT,
   PHOTO_MAX_LABEL,
   PHOTO_TYPES_LABEL,
@@ -193,8 +194,11 @@ function onIngredientInput(ing) {
   autocomplete.input(ing.uid, ing.name)
 }
 
+// Подсказка — объект { name, category }. Категорию подставляем только если поле пустое,
+// чтобы не затирать уже сделанный пользователем выбор.
 function selectSuggestion(ing, suggestion) {
-  ing.name = suggestion
+  ing.name = suggestion.name
+  if (!ing.category && suggestion.category) ing.category = suggestion.category
   autocomplete.close(ing.uid)
 }
 
@@ -429,7 +433,7 @@ onBeforeUnmount(() => {
 
       <fieldset class="card fieldset">
         <legend>Ингредиенты</legend>
-        <p class="hint">Количество и единица измерения указываются вместе. Примечание (например, «по вкусу») не влияет на расчёт.</p>
+        <p class="hint">Количество и единица измерения указываются вместе. Категория задаёт отдел в списке покупок; «— не выбрано» попадёт в «Прочее». Примечание (например, «по вкусу») не влияет на расчёт.</p>
         <div v-for="(ing, index) in draft.ingredients" :key="ing.uid" class="ingredient-row">
           <div class="ing-name-wrap">
             <input
@@ -457,13 +461,13 @@ onBeforeUnmount(() => {
               <li
                 v-for="(suggestion, sIndex) in ingredientState(ing).suggestions"
                 :id="`${ing.uid}-option-${sIndex}`"
-                :key="suggestion"
+                :key="suggestion.name"
                 role="option"
                 :class="{ active: sIndex === ingredientState(ing).activeIndex }"
                 :aria-selected="sIndex === ingredientState(ing).activeIndex"
                 @mousedown.prevent="selectSuggestion(ing, suggestion)"
               >
-                {{ suggestion }}
+                {{ suggestion.name }}
               </li>
               <li v-if="ingredientState(ing).noSuggestions" class="no-suggestions" role="presentation">
                 Нет подсказок
@@ -481,6 +485,16 @@ onBeforeUnmount(() => {
           />
           <select v-model="ing.unit" class="ing-unit" :aria-label="`Ингредиент ${index + 1}: единица измерения`">
             <option v-for="unit in UNITS" :key="unit.code" :value="unit.code">{{ unit.label }}</option>
+          </select>
+          <select
+            v-model="ing.category"
+            class="ing-category"
+            :aria-label="`Ингредиент ${index + 1}: категория продукта`"
+          >
+            <option value="">— не выбрано</option>
+            <option v-for="category in CATEGORIES" :key="category.code" :value="category.code">
+              {{ category.icon }} {{ category.label }}
+            </option>
           </select>
           <input
             v-model="ing.note"
@@ -716,7 +730,7 @@ onBeforeUnmount(() => {
 
 @media (min-width: 640px) {
   .ingredient-row {
-    grid-template-columns: 1fr 6rem 7.5rem 1fr auto;
+    grid-template-columns: minmax(0, 1fr) 5.5rem 6.5rem 9rem minmax(0, 1fr) auto;
     align-items: center;
     background: transparent;
     border: none;
@@ -737,12 +751,16 @@ onBeforeUnmount(() => {
     grid-column: 3 / 4;
   }
 
-  .ing-note {
+  .ing-category {
     grid-column: 4 / 5;
   }
 
-  .row-actions {
+  .ing-note {
     grid-column: 5 / 6;
+  }
+
+  .row-actions {
+    grid-column: 6 / 7;
     justify-content: flex-start;
     flex-wrap: nowrap;
     gap: 0.25rem;

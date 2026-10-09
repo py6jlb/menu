@@ -126,12 +126,12 @@ public sealed class ExternalRecipeIntegrationFlowTests
 
         var (_, all) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, recipient.Token, "/api/ingredients/autocomplete");
-        Assert.Contains("Свёкла", all!.Items);
-        Assert.Contains("Сметана", all.Items);
+        Assert.Contains(all!.Items, i => i.Name == "Свёкла");
+        Assert.Contains(all.Items, i => i.Name == "Сметана");
 
         var (_, filtered) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, recipient.Token, "/api/ingredients/autocomplete?q=свё");
-        Assert.Contains("Свёкла", filtered!.Items);
+        Assert.Contains(filtered!.Items, i => i.Name == "Свёкла");
     }
 
     [Fact]
@@ -146,7 +146,7 @@ public sealed class ExternalRecipeIntegrationFlowTests
 
         var (_, before) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, recipient.Token, "/api/ingredients/autocomplete");
-        Assert.Contains("Свёкла", before!.Items);
+        Assert.Contains(before!.Items, i => i.Name == "Свёкла");
 
         await PutRecipeAsync(client, owner.Token, sourceId,
             FullRequest("Салат", ingredients: new[]
@@ -156,8 +156,8 @@ public sealed class ExternalRecipeIntegrationFlowTests
 
         var (_, after) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, recipient.Token, "/api/ingredients/autocomplete");
-        Assert.Contains("Капуста", after!.Items);
-        Assert.DoesNotContain("Свёкла", after.Items);
+        Assert.Contains(after!.Items, i => i.Name == "Капуста");
+        Assert.DoesNotContain(after.Items, i => i.Name == "Свёкла");
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public sealed class ExternalRecipeIntegrationFlowTests
 
         var (_, items) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, recipient.Token, "/api/ingredients/autocomplete");
-        Assert.Contains("Морковь", items!.Items);
+        Assert.Contains(items!.Items, i => i.Name == "Морковь");
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class ExternalRecipeIntegrationFlowTests
 
         var (_, items) = await GetAuthorizedAsync<IngredientAutocompleteDto>(
             client, recipient.Token, "/api/ingredients/autocomplete");
-        Assert.DoesNotContain("Сельдерей", items!.Items);
+        Assert.DoesNotContain(items!.Items, i => i.Name == "Сельдерей");
     }
 
     [Fact]

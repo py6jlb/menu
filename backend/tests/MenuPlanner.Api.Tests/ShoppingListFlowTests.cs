@@ -200,6 +200,55 @@ public sealed class ShoppingListFlowTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    [Fact]
+    public async Task Get_ResolvesCategory_ByMajorityAcrossRecipes()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+
+        var first = await CreateRecipeWithCategoriesAsync(client, owner.Token, "Каша", servings: 1,
+            ("молоко", 200m, "ml", "dairy"));
+        var second = await CreateRecipeWithCategoriesAsync(client, owner.Token, "Суфле", servings: 1,
+            ("молоко", 100m, "ml", "dairy"));
+        var third = await CreateRecipeWithCategoriesAsync(client, owner.Token, "Соус", servings: 1,
+            ("молоко", 50m, "ml", "drinks"));
+
+        var put = await PutAuthorizedAsync<WeekPlanDto>(client, owner.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "breakfast", first.Id, 1),
+                new PlanEntryRequest(1, "lunch", second.Id, 1),
+                new PlanEntryRequest(2, "dinner", third.Id, 1)
+            }));
+        Assert.Equal(HttpStatusCode.OK, put.Response.StatusCode);
+
+        var (_, list) = await GetAuthorizedAsync<ShoppingListDto>(client, owner.Token,
+            $"/api/shopping-list?weekStart={Monday}");
+
+        var milk = Assert.Single(list!.Items, i => i.Name == "молоко");
+        Assert.Equal("dairy", milk.Category);
+    }
+
+    [Fact]
+    public async Task Get_RecipeRoundTrip_PreservesIngredientCategory()
+    {
+        using var client = new ApiFactory().CreateClient();
+        var owner = await RegisterAsync(client, "owner");
+        await CreateFamilyAsync(client, owner.Token, "Семья");
+
+        var created = await CreateRecipeWithCategoriesAsync(client, owner.Token, "Каша", servings: 1,
+            ("молоко", 200m, "ml", "dairy"),
+            ("соль", 1m, "tsp", null));
+
+        var (response, detail) = await GetAuthorizedAsync<RecipeDto>(client, owner.Token,
+            $"/api/recipes/{created.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("dairy", detail!.Ingredients[0].Category);
+        Assert.Null(detail.Ingredients[1].Category);
+    }
+
     private static async Task<RecipeDto> CreateRecipeAsync(
         HttpClient client, string token, string name, int servings,
         params (string Name, decimal Amount, string Unit)[] ingredients)
@@ -217,6 +266,31 @@ public sealed class ShoppingListFlowTests
             Steps: new List<RecipeStepRequest> { new("Приготовить.") },
             Ingredients: ingredients
                 .Select(i => new RecipeIngredientRequest(i.Name, i.Amount, i.Unit, null))
+                .ToList());
+
+        var (response, recipe) = await PostAuthorizedAsync<RecipeDto>(client, token, "/api/recipes", request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(recipe);
+        return recipe!;
+    }
+
+    private static async Task<RecipeDto> CreateRecipeWithCategoriesAsync(
+        HttpClient client, string token, string name, int servings,
+        params (string Name, decimal Amount, string Unit, string? Category)[] ingredients)
+    {
+        var request = new RecipeRequest(
+            Name: name,
+            Description: null,
+            CookTimeMinutes: 30,
+            Servings: servings,
+            Difficulty: 2,
+            Calories: null,
+            Tags: new List<string>(),
+            Seasonality: new List<string>(),
+            Diet: new List<string>(),
+            Steps: new List<RecipeStepRequest> { new("Приготовить.") },
+            Ingredients: ingredients
+                .Select(i => new RecipeIngredientRequest(i.Name, i.Amount, i.Unit, null, i.Category))
                 .ToList());
 
         var (response, recipe) = await PostAuthorizedAsync<RecipeDto>(client, token, "/api/recipes", request);

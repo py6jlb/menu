@@ -63,6 +63,33 @@ public sealed class ShoppingListContentBuilderTests
         Assert.Empty(content.Excluded);
     }
 
+    [Fact]
+    public void Build_CarriesIngredientCategory_ToAggregatedItem()
+    {
+        var recipe = new Recipe
+        {
+            Id = OwnId,
+            FamilyId = Guid.NewGuid(),
+            Name = "Каша",
+            Servings = 1
+        };
+        recipe.Ingredients.Add(new RecipeIngredient
+        {
+            Id = Guid.NewGuid(),
+            RecipeId = OwnId,
+            Order = 0,
+            Name = "молоко",
+            Amount = 200m,
+            Unit = "ml",
+            Category = "dairy"
+        });
+        var plan = Plan(Entry(0, "breakfast", OwnId, "Каша", null, recipe));
+
+        var content = ShoppingListContentBuilder.Build(plan);
+
+        Assert.Equal("dairy", Assert.Single(content.Items).Category);
+    }
+
     private static WeekPlanContent Plan(params PlanContentEntry[] entries) =>
         new(new DateOnly(2026, 9, 7), 1, entries);
 

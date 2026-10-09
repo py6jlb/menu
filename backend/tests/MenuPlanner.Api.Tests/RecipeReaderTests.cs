@@ -370,8 +370,8 @@ public sealed class RecipeReaderTests
         var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
 
         // «Яблоко» встречается чаще, но идёт позже «Абрикоса» по алфавиту.
-        Assert.Equal("Яблоко", items[0]);
-        Assert.Contains("Абрикос", items);
+        Assert.Equal("Яблоко", items[0].Name);
+        Assert.Contains(items, i => i.Name == "Абрикос");
         Assert.Equal(2, items.Count);
     }
 
@@ -402,7 +402,7 @@ public sealed class RecipeReaderTests
         var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
 
         Assert.Single(items);
-        Assert.Equal("Помидор", items[0], ignoreCase: true);
+        Assert.Equal("Помидор", items[0].Name, ignoreCase: true);
     }
 
     [Fact]
@@ -435,8 +435,8 @@ public sealed class RecipeReaderTests
 
         var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
 
-        Assert.Contains("Морковь", items);
-        Assert.DoesNotContain("Устаревшее", items);
+        Assert.Contains(items, i => i.Name == "Морковь");
+        Assert.DoesNotContain(items, i => i.Name == "Устаревшее");
     }
 
     [Fact]
@@ -462,14 +462,14 @@ public sealed class RecipeReaderTests
 
         var reader = Reader(db);
         var before = await reader.ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
-        Assert.Contains("Свёкла", before);
+        Assert.Contains(before, i => i.Name == "Свёкла");
 
         ingredient.Name = "Капуста";
         await db.SaveChangesAsync();
 
         var after = await reader.ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
-        Assert.Contains("Капуста", after);
-        Assert.DoesNotContain("Свёкла", after);
+        Assert.Contains(after, i => i.Name == "Капуста");
+        Assert.DoesNotContain(after, i => i.Name == "Свёкла");
     }
 
     [Fact]
@@ -490,8 +490,8 @@ public sealed class RecipeReaderTests
         var items = await reader.ReadIngredientSuggestionsAsync(family.Id, "  ПРОДУКТ  ");
 
         Assert.Equal(10, items.Count);
-        Assert.Equal("Продукт 00", items[0]);
-        Assert.All(items, i => Assert.StartsWith("Продукт", i, StringComparison.Ordinal));
+        Assert.Equal("Продукт 00", items[0].Name);
+        Assert.All(items, i => Assert.StartsWith("Продукт", i.Name, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -511,16 +511,37 @@ public sealed class RecipeReaderTests
 
         var items = await Reader(db).ReadIngredientSuggestionsAsync(mine.Id, null);
 
-        Assert.Contains("Своё", items);
-        Assert.DoesNotContain("Чужое", items);
+        Assert.Contains(items, i => i.Name == "Своё");
+        Assert.DoesNotContain(items, i => i.Name == "Чужое");
     }
 
-    private static RecipeIngredient Ingredient(string name) => new()
+    [Fact]
+    public async Task ReadIngredientSuggestions_ResolvesCategory_ByMajority()
+    {
+        await using var db = NewDb();
+        var family = NewFamily();
+        db.Families.Add(family);
+
+        var dairyHeavy = NewRecipe(family.Id, "Молочное");
+        dairyHeavy.Ingredients.Add(Ingredient("Молоко", "dairy"));
+        dairyHeavy.Ingredients.Add(Ingredient("Молоко", "dairy"));
+        var drink = NewRecipe(family.Id, "Напиток");
+        drink.Ingredients.Add(Ingredient("Молоко", "drinks"));
+        db.Recipes.AddRange(dairyHeavy, drink);
+        await db.SaveChangesAsync();
+
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(family.Id, null);
+
+        Assert.Equal("dairy", Assert.Single(items).Category);
+    }
+
+    private static RecipeIngredient Ingredient(string name, string? category = null) => new()
     {
         Order = 0,
         Name = name,
         Amount = 1m,
-        Unit = "pcs"
+        Unit = "pcs",
+        Category = category
     };
 
     private static RecipeReader Reader(AppDbContext db) => new(

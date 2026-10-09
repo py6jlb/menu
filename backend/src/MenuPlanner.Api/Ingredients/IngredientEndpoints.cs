@@ -18,9 +18,12 @@ public static class IngredientEndpoints
     {
         var familyId = await currentUser.FamilyIdAsync(principal);
         if (familyId is null)
-            return Results.Json(new IngredientAutocompleteDto(Array.Empty<string>()));
+            return Results.Json(new IngredientAutocompleteDto(Array.Empty<IngredientSuggestionDto>()));
 
-        var items = await recipes.ReadIngredientSuggestionsAsync(familyId.Value, q);
+        var suggestions = await recipes.ReadIngredientSuggestionsAsync(familyId.Value, q);
+        var items = suggestions
+            .Select(s => new IngredientSuggestionDto(s.Name, s.Category))
+            .ToList();
         return Results.Json(new IngredientAutocompleteDto(items));
     }
 }

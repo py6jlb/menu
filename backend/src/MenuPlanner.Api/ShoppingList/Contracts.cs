@@ -4,7 +4,8 @@ public sealed record ShoppingListItemDto(
     string Name,
     decimal Amount,
     string Unit,
-    string Display);
+    string Display,
+    string? Category = null);
 
 /// <summary>
 /// Запись плана, которую нельзя посчитать в списке покупок: где стоит и почему исключена.

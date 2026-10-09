@@ -1,4 +1,5 @@
 using System.Globalization;
+using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.ShoppingList;
 
@@ -10,9 +11,10 @@ public enum UnitGroup
     Household
 }
 
-public sealed record IngredientLine(string Name, decimal Amount, string Unit);
+public sealed record IngredientLine(string Name, decimal Amount, string Unit, string? Category = null);
 
-public sealed record ShoppingListItem(string Name, decimal Amount, string Unit, string Display);
+public sealed record ShoppingListItem(
+    string Name, decimal Amount, string Unit, string Display, string? Category = null);
 
 public static class ShoppingListBuilder
 {
@@ -36,10 +38,12 @@ public static class ShoppingListBuilder
             }
 
             bucket.Amount += ToBase(line.Amount, line.Unit, group);
+            bucket.VoteCategory(line.Category);
         }
 
         return buckets.Values
-            .OrderBy(b => (int)b.Group)
+            .OrderBy(b => RecipeCatalog.IngredientCategoryRank(b.Category))
+            .ThenBy(b => (int)b.Group)
             .ThenBy(b => b.Normalized, StringComparer.Ordinal)
             .ThenBy(b => b.Unit, StringComparer.Ordinal)
             .Select(ToItem)
@@ -85,7 +89,7 @@ public static class ShoppingListBuilder
     };
 
     private static ShoppingListItem Item(Bucket bucket, decimal amount, string unit, string display) =>
-        new(bucket.Name, amount, unit, display);
+        new(bucket.Name, amount, unit, display, bucket.Category);
 
     private static string Format(decimal value)
     {
@@ -135,5 +139,17 @@ public static class ShoppingListBuilder
         public UnitGroup Group { get; }
         public string Unit { get; }
         public decimal Amount { get; set; }
+
+        private readonly Dictionary<string, int> _categoryVotes = new();
+
+        public string? Category => IngredientCategoryRules.ResolveMajority(_categoryVotes);
+
+        public void VoteCategory(string? category)
+        {
+            if (string.IsNullOrEmpty(category))
+                return;
+
+            _categoryVotes[category] = _categoryVotes.GetValueOrDefault(category) + 1;
+        }
     }
 }

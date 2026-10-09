@@ -10,6 +10,25 @@ export const UNITS = [
   { code: 'pinch', label: 'щепотка' }
 ]
 
+// Конечный справочник категорий продуктов. Коды должны совпадать с
+// RecipeCatalog.IngredientCategories на бэкенде; порядок задаёт порядок отделов.
+export const CATEGORIES = [
+  { code: 'vegetables', label: 'Овощи, фрукты, зелень', icon: '🥦' },
+  { code: 'meat', label: 'Мясо, птица', icon: '🥩' },
+  { code: 'fish', label: 'Рыба, морепродукты', icon: '🐟' },
+  { code: 'dairy', label: 'Молочные продукты, яйца', icon: '🥛' },
+  { code: 'bakery', label: 'Хлеб, выпечка', icon: '🍞' },
+  { code: 'groceries', label: 'Бакалея', icon: '🌾' },
+  { code: 'sauces_spices', label: 'Соусы, специи, приправы', icon: '🧂' },
+  { code: 'oils_vinegar', label: 'Масла, уксус', icon: '🫒' },
+  { code: 'frozen', label: 'Замороженные продукты', icon: '🧊' },
+  { code: 'sweets_snacks', label: 'Сладости, снеки, орехи', icon: '🍫' },
+  { code: 'drinks', label: 'Напитки', icon: '☕' }
+]
+
+// Пустая категория: не выбирается в форме, но группирует продукты в конце списка покупок.
+export const OTHER_CATEGORY = { code: '', label: 'Прочее', icon: '🧺' }
+
 export const SEASONS = [
   { code: 'winter', label: 'Зима' },
   { code: 'spring', label: 'Весна' },
@@ -79,6 +98,16 @@ export function seasonLabel(code) {
   return SEASONS.find((s) => s.code === code)?.label || code
 }
 
+/** Подпись категории продукта; пустая категория — «Прочее», неизвестный код — «Прочее». */
+export function categoryLabel(code) {
+  return CATEGORIES.find((c) => c.code === code)?.label || OTHER_CATEGORY.label
+}
+
+/** Иконка категории продукта; неизвестный код — иконка «Прочего». */
+export function categoryIcon(code) {
+  return CATEGORIES.find((c) => c.code === code)?.icon || OTHER_CATEGORY.icon
+}
+
 export const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 export const PHOTO_ACCEPT = PHOTO_TYPES.join(',')
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024
@@ -145,7 +174,8 @@ const INGREDIENT_FIELD_LABELS = {
   name: 'название',
   amount: 'количество',
   unit: 'единица измерения',
-  note: 'примечание'
+  note: 'примечание',
+  category: 'категория'
 }
 
 /**

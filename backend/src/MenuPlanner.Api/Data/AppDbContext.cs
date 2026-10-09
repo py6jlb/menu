@@ -98,6 +98,7 @@ public class AppDbContext : DbContext
         ingredient.Property(i => i.Amount).HasPrecision(10, 2);
         ingredient.Property(i => i.Unit).HasMaxLength(32).IsRequired();
         ingredient.Property(i => i.Note).HasMaxLength(500);
+        ingredient.Property(i => i.Category).HasMaxLength(RecipeCatalog.IngredientCategoryMaxLength);
         ingredient.HasIndex(i => new { i.RecipeId, i.Order });
         ingredient.HasOne(i => i.Recipe)
             .WithMany(r => r.Ingredients)

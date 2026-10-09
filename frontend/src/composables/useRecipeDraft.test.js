@@ -3,6 +3,7 @@ import {
   useRecipeDraft,
   newIngredientDraft,
   emptyDraft,
+  draftFromRecipe,
   serializeDraft,
   draftToPayload,
   photoIntentFromDraft,
@@ -1060,5 +1061,57 @@ describe('useRecipeDraft — стандартные диеты', () => {
     const first = { ...emptyDraft(), diets: ['vegetarian', 'lean'], dietText: 'моя диета' }
     const second = { ...emptyDraft(), diets: ['lean', 'vegetarian'], dietText: 'моя диета' }
     expect(serializeDraft(first)).toBe(serializeDraft(second))
+  })
+})
+
+describe('категория продукта в черновике', () => {
+  it('newIngredientDraft создаёт пустую категорию', () => {
+    expect(newIngredientDraft().category).toBe('')
+  })
+
+  it('draftFromRecipe переносит категорию, отсутствующую делает пустой', () => {
+    const draft = draftFromRecipe({
+      name: 'Каша',
+      cookTimeMinutes: 10,
+      servings: 1,
+      difficulty: 1,
+      steps: ['ш'],
+      ingredients: [
+        { name: 'молоко', amount: 200, unit: 'ml', note: null, category: 'dairy' },
+        { name: 'соль', amount: 1, unit: 'tsp', note: null }
+      ]
+    })
+
+    expect(draft.ingredients[0].category).toBe('dairy')
+    expect(draft.ingredients[1].category).toBe('')
+  })
+
+  it('draftToPayload отправляет код категории или null', () => {
+    const draft = {
+      name: 'Каша',
+      steps: ['ш'],
+      ingredients: [
+        { name: 'молоко', amount: 200, unit: 'ml', note: '', category: 'dairy' },
+        { name: 'соль', amount: 1, unit: 'tsp', note: '', category: '' }
+      ]
+    }
+
+    const payload = draftToPayload(draft)
+    expect(payload.ingredients[0].category).toBe('dairy')
+    expect(payload.ingredients[1].category).toBeNull()
+  })
+
+  it('serializeDraft отмечает смену категории как изменение', () => {
+    const base = {
+      name: 'a',
+      steps: [],
+      ingredients: [{ name: 'лук', amount: 1, unit: 'g', note: '', category: 'vegetables' }]
+    }
+    const changed = {
+      ...base,
+      ingredients: [{ ...base.ingredients[0], category: 'dairy' }]
+    }
+
+    expect(serializeDraft(changed)).not.toBe(serializeDraft(base))
   })
 })

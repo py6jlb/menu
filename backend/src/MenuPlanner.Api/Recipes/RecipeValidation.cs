@@ -100,6 +100,7 @@ public static class RecipeValidation
             var name = ing.Name?.Trim();
             var unit = ing.Unit?.Trim();
             var note = ing.Note?.Trim();
+            var category = NormalizeCategory(ing.Category);
 
             result.Add(new RecipeIngredient
             {
@@ -107,7 +108,8 @@ public static class RecipeValidation
                 Name = name!,
                 Amount = ing.Amount!.Value,
                 Unit = unit!,
-                Note = string.IsNullOrEmpty(note) ? null : note
+                Note = string.IsNullOrEmpty(note) ? null : note,
+                Category = category
             });
         }
 
@@ -262,6 +264,16 @@ public static class RecipeValidation
                 return new("ingredient_unit_required", $"Укажите единицу измерения ингредиента «{ingredientName}».", $"{field}.unit");
             if (unit.Length > RecipeCatalog.UnitMaxLength || !RecipeCatalog.Units.Contains(unit))
                 return new("ingredient_unit_invalid", $"Недопустимая единица измерения «{unit}».", $"{field}.unit");
+
+            var category = NormalizeCategory(ing.Category);
+            if (category is not null &&
+                (category.Length > RecipeCatalog.IngredientCategoryMaxLength
+                    || !RecipeCatalog.IngredientCategories.Contains(category)))
+                return new(
+                    "ingredient_category_invalid",
+                    $"Недопустимая категория продукта «{category}».",
+                    $"{field}.category");
+
             if (note?.Length > RecipeCatalog.NoteMaxLength)
                 return new(
                     "ingredient_note_too_long",
@@ -321,4 +333,11 @@ public static class RecipeValidation
     /// <summary>Сезоны — нормализованные строки в нижнем регистре.</summary>
     private static List<string> NormalizeSeasons(List<string>? source) =>
         NormalizeStrings(source).Select(s => s.ToLowerInvariant()).ToList();
+
+    /// <summary>Пустая строка формы — это «Прочее» (null), а не отдельный код категории.</summary>
+    private static string? NormalizeCategory(string? category)
+    {
+        var trimmed = category?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
 }

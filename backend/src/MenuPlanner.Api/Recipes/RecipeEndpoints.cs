@@ -338,7 +338,7 @@ public static class RecipeEndpoints
         recipe.Seasonality,
         DietCatalog.NormalizeAll(recipe.Diet),
         recipe.Ingredients.OrderBy(i => i.Order)
-            .Select(i => new RecipeIngredientDto(i.Id, i.Name, i.Amount, i.Unit, i.Note))
+            .Select(i => new RecipeIngredientDto(i.Id, i.Name, i.Amount, i.Unit, i.Note, i.Category))
             .ToList(),
         recipe.CreatedAt,
         recipe.UpdatedAt,
