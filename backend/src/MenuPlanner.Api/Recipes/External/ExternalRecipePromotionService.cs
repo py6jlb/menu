@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes.Documents;
 using MenuPlanner.Api.Recipes.Photos;
 
 namespace MenuPlanner.Api.Recipes.External;
@@ -39,6 +40,7 @@ public sealed class ExternalRecipePromotionService
     private readonly AppDbContext _db;
     private readonly SourceFamilyNameResolver _sourceNames;
     private readonly PhotoLifecycle _photos;
+    private readonly DocumentLifecycle _documents;
     private readonly TimeProvider _clock;
     private readonly RecipeRevisionReader _revisions;
 
@@ -46,12 +48,14 @@ public sealed class ExternalRecipePromotionService
         AppDbContext db,
         SourceFamilyNameResolver sourceNames,
         PhotoLifecycle photos,
+        DocumentLifecycle documents,
         TimeProvider clock,
         RecipeRevisionReader revisions)
     {
         _db = db;
         _sourceNames = sourceNames;
         _photos = photos;
+        _documents = documents;
         _clock = clock;
         _revisions = revisions;
     }
@@ -128,7 +132,9 @@ public sealed class ExternalRecipePromotionService
         }
 
         string? copiedPhoto = null;
-        string? previous = null;
+        string? copiedDocument = null;
+        string? previousPhoto = null;
+        string? previousDocument = null;
         Recipe? wrapper = null;
         try
         {
@@ -137,26 +143,30 @@ public sealed class ExternalRecipePromotionService
                 .Include(r => r.Ingredients)
                 .FirstAsync(r => r.Id == target.Id, cancellationToken);
 
-            previous = wrapper.PhotoPath;
+            previousPhoto = wrapper.PhotoPath;
+            previousDocument = wrapper.DocumentPath;
             copiedPhoto = await _photos.StageCopyAsync(target.Id, source.PhotoPath, cancellationToken);
+            copiedDocument = await _documents.StageCopyAsync(target.Id, source.DocumentPath, cancellationToken);
 
-            ApplyCopiedContent(wrapper, source, copiedFromFamilyName, copiedPhoto);
+            ApplyCopiedContent(wrapper, source, copiedFromFamilyName, copiedPhoto, copiedDocument);
             await _db.SaveChangesAsync(cancellationToken);
         }
         catch
         {
             // Ошибка до подтверждения: возвращаем строку внешнему состоянию и
-            // убираем уже скопированный файл, чтобы не оставить сироту.
+            // убираем уже скопированные файлы, чтобы не оставить сирот.
             await transaction.RollbackAsync(cancellationToken);
             _photos.Discard(copiedPhoto);
+            _documents.Discard(copiedDocument);
             throw;
         }
 
         // Commit отделён от подготовки: при неоднозначном сбое commit (ответ
-        // потерян после фактической записи) не удаляем ни новый, ни предыдущий
-        // файл — уборка разберётся по фактической ссылке БД.
+        // потерян после фактической записи) не удаляем ни новые, ни предыдущие
+        // файлы — уборка разберётся по фактической ссылке БД.
         await transaction.CommitAsync(cancellationToken);
-        _photos.Retire(previous);
+        _photos.Retire(previousPhoto);
+        _documents.Retire(previousDocument);
         return new(RecipePromotionOutcome.Promoted, wrapper, Revision: wrapper!.Revision);
     }
 
@@ -174,28 +184,49 @@ public sealed class ExternalRecipePromotionService
         if (wrapper.SourceRecipeId is null)
             return new(RecipePromotionOutcome.Conflict, Revision: wrapper.Revision);
 
-        var previous = wrapper.PhotoPath;
-        return await _photos.CopyFromAsync(
-            target.Id,
-            source.PhotoPath,
-            previous,
-            async copiedPhoto =>
+        var previousPhoto = wrapper.PhotoPath;
+        var previousDocument = wrapper.DocumentPath;
+        string? copiedDocument = null;
+        try
+        {
+            // Документ готовим заранее; фото копирует и согласует PhotoLifecycle.
+            copiedDocument = await _documents.StageCopyAsync(target.Id, source.DocumentPath, cancellationToken);
+            var result = await _photos.CopyFromAsync(
+                target.Id,
+                source.PhotoPath,
+                previousPhoto,
+                async copiedPhoto =>
+                {
+                    ApplyCopiedContent(wrapper, source, copiedFromFamilyName, copiedPhoto, copiedDocument);
+                    wrapper.SourceRecipeId = null;
+                    wrapper.SourceFamilyId = null;
+                    wrapper.SourceToken = null;
+                    wrapper.Revision = RecipeRevisionRules.Next(wrapper.Revision);
+                    await _db.SaveChangesAsync(cancellationToken);
+                    return new PhotoCommit<RecipePromotionResult>(
+                        true,
+                        new(RecipePromotionOutcome.Promoted, wrapper, Revision: wrapper.Revision));
+                },
+                cancellationToken);
+
+            if (result.Outcome != RecipePromotionOutcome.Promoted)
             {
-                ApplyCopiedContent(wrapper, source, copiedFromFamilyName, copiedPhoto);
-                wrapper.SourceRecipeId = null;
-                wrapper.SourceFamilyId = null;
-                wrapper.SourceToken = null;
-                wrapper.Revision = RecipeRevisionRules.Next(wrapper.Revision);
-                await _db.SaveChangesAsync(cancellationToken);
-                return new PhotoCommit<RecipePromotionResult>(
-                    true,
-                    new(RecipePromotionOutcome.Promoted, wrapper, Revision: wrapper.Revision));
-            },
-            cancellationToken);
+                _documents.Discard(copiedDocument);
+                return result;
+            }
+
+            _documents.Retire(previousDocument);
+            return result;
+        }
+        catch
+        {
+            _documents.Discard(copiedDocument);
+            throw;
+        }
     }
 
     private void ApplyCopiedContent(
-        Recipe wrapper, Recipe source, string? copiedFromFamilyName, string? copiedPhoto)
+        Recipe wrapper, Recipe source, string? copiedFromFamilyName, string? copiedPhoto, string? copiedDocument)
     {
         wrapper.Name = source.Name;
         wrapper.Description = source.Description;
@@ -207,6 +238,7 @@ public sealed class ExternalRecipePromotionService
         wrapper.Seasonality = new List<string>(source.Seasonality);
         wrapper.Diet = DietCatalog.NormalizeAll(source.Diet);
         wrapper.PhotoPath = copiedPhoto;
+        wrapper.DocumentPath = copiedDocument;
         wrapper.Steps = source.Steps
             .OrderBy(s => s.Order)
             .Select(s => new RecipeStep { Order = s.Order, Text = s.Text })

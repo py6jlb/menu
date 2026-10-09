@@ -45,8 +45,13 @@ class CompleteSetTests(BackupFixture):
             for name in (archive_names if archive_names is not None else photo_paths):
                 archive.add(payload, arcname=name)
         photos_bytes = photos_path.read_bytes()
+        documents_path = self.root / f"seed-documents-{set_id}.tar.gz"
+        with tarfile.open(documents_path, "w:gz") as archive:
+            archive.add(payload, arcname="document.pdf")
+        documents_bytes = documents_path.read_bytes()
         (self.remote / "db" / f"{set_id}.sql.gz").write_bytes(db_bytes)
         (self.remote / "photos" / f"{set_id}.tar.gz").write_bytes(photos_bytes)
+        (self.remote / "documents" / f"{set_id}.tar.gz").write_bytes(documents_bytes)
         manifest = {
             "id": set_id,
             "createdAt": "2026-01-01T00:00:00Z",
@@ -56,6 +61,8 @@ class CompleteSetTests(BackupFixture):
             "dbSha256": hashlib.sha256(db_bytes).hexdigest(),
             "photosName": f"{set_id}.tar.gz",
             "photosSha256": hashlib.sha256(photos_bytes).hexdigest(),
+            "documentsName": f"{set_id}.tar.gz",
+            "documentsSha256": hashlib.sha256(documents_bytes).hexdigest(),
             "recipes": recipes,
             "weekPlans": plans,
             "planEntries": entries,
@@ -86,6 +93,8 @@ class CompleteSetTests(BackupFixture):
             self.assertEqual(manifest["dbSha256"], hashlib.sha256(db).hexdigest())
             photos = (self.remote / "photos" / f"{set_id}.tar.gz").read_bytes()
             self.assertEqual(manifest["photosSha256"], hashlib.sha256(photos).hexdigest())
+            documents = (self.remote / "documents" / f"{set_id}.tar.gz").read_bytes()
+            self.assertEqual(manifest["documentsSha256"], hashlib.sha256(documents).hexdigest())
 
     def test_complete_marker_only_after_all_parts_delivered(self):
         result = self.run_script("backup.sh", {"RCLONE_COPYTO_NODATA": "1"})
@@ -131,8 +140,8 @@ class CompleteSetTests(BackupFixture):
         result = self.run_script("backup.sh")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-        for name in ("db", "photos", "manifests", "complete"):
-            suffix = ".sql.gz" if name == "db" else (".tar.gz" if name == "photos" else (".json" if name == "manifests" else ""))
+        for name in ("db", "photos", "documents", "manifests", "complete"):
+            suffix = ".sql.gz" if name == "db" else (".tar.gz" if name in ("photos", "documents") else (".json" if name == "manifests" else ""))
             self.assertTrue((self.remote / name / f"{verified}{suffix}").exists(),
                             f"проверенная точка {verified} удалена из {name}")
             for gone in (old_a, old_b):
@@ -180,6 +189,7 @@ sys.exit(subprocess.call(["/usr/bin/date", *args]))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         set_id = self.complete_ids()[0]
         for name, suffix in (("db", ".sql.gz"), ("photos", ".tar.gz"),
+                             ("documents", ".tar.gz"),
                              ("manifests", ".json"), ("complete", "")):
             self.assertTrue((self.remote / "weekly" / name / f"{set_id}{suffix}").exists(),
                             f"недельный набор неполный: {name}")

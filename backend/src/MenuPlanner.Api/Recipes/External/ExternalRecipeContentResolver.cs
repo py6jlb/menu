@@ -27,6 +27,7 @@ public static class ExternalRecipeContentResolver
             Name = source.Name,
             Description = source.Description,
             PhotoPath = source.PhotoPath,
+            DocumentPath = source.DocumentPath,
             CookTimeMinutes = source.CookTimeMinutes,
             Servings = source.Servings,
             Difficulty = source.Difficulty,

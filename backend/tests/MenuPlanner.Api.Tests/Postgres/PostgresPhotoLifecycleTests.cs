@@ -1,6 +1,7 @@
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes;
+using MenuPlanner.Api.Recipes.Documents;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Photos;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +36,7 @@ public sealed class PostgresPhotoLifecycleTests : PostgresTestBase
             var service = new RecipeMutationService(
                 db,
                 NewLifecycle(storage),
+                NewDocumentLifecycle(),
                 TimeProvider.System,
                 new RecipeRevisionReader(db));
             return await service.UploadPhotoAsync(
@@ -98,7 +100,7 @@ public sealed class PostgresPhotoLifecycleTests : PostgresTestBase
         {
             await using var db = new AppDbContext(uploadOptions);
             var service = new RecipeMutationService(
-                db, NewLifecycle(storage), TimeProvider.System, new RecipeRevisionReader(db));
+                db, NewLifecycle(storage), NewDocumentLifecycle(), TimeProvider.System, new RecipeRevisionReader(db));
             return await service.UploadPhotoAsync(
                 new RecipeTarget(recipe.Id, family.Id), revision, ".png", new MemoryStream(new byte[] { 0x02 }));
         }
@@ -107,7 +109,7 @@ public sealed class PostgresPhotoLifecycleTests : PostgresTestBase
         {
             await using var db = new AppDbContext(deleteOptions);
             var service = new RecipeMutationService(
-                db, NewLifecycle(storage), TimeProvider.System, new RecipeRevisionReader(db));
+                db, NewLifecycle(storage), NewDocumentLifecycle(), TimeProvider.System, new RecipeRevisionReader(db));
             return await service.DeleteAsync(new RecipeTarget(recipe.Id, family.Id), revision);
         }
 
@@ -157,6 +159,7 @@ public sealed class PostgresPhotoLifecycleTests : PostgresTestBase
                 db,
                 new SourceFamilyNameResolver(db),
                 NewLifecycle(storage),
+                NewDocumentLifecycle(),
                 TimeProvider.System,
                 new RecipeRevisionReader(db));
             var result = await promotion.PromoteAsync(
@@ -193,6 +196,9 @@ public sealed class PostgresPhotoLifecycleTests : PostgresTestBase
 
     private static PhotoLifecycle NewLifecycle(PhotoStorage store) =>
         new(store, NullLogger<PhotoLifecycle>.Instance);
+
+    private static DocumentLifecycle NewDocumentLifecycle() =>
+        new(new InMemoryDocumentStore(), NullLogger<DocumentLifecycle>.Instance);
 
     private static (PhotoStorage Storage, string Root) NewStorage()
     {

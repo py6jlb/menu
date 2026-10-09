@@ -16,10 +16,10 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /app/photos \
+    && mkdir -p /app/photos /app/documents \
     && chown -R app:app /app
 COPY --from=build --chown=app:app /app/publish .
-RUN chown -R app:app /app/photos
+RUN chown -R app:app /app/photos /app/documents
 USER app
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "MenuPlanner.Api.dll"]

@@ -68,7 +68,8 @@ public sealed record RecipeDto(
     Guid? SourceFamilyId = null,
     string? State = null,
     string? CopiedFromFamilyName = null,
-    int Revision = 1);
+    int Revision = 1,
+    string? DocumentUrl = null);
 
 /// <summary>
 /// Кандидат подбора. <c>RepetitionCount</c> — число различных недель окна (до

@@ -64,6 +64,7 @@ public class AppDbContext : DbContext
         recipe.Property(r => r.Name).HasMaxLength(200).IsRequired();
         recipe.Property(r => r.Description).HasMaxLength(2000);
         recipe.Property(r => r.PhotoPath).HasMaxLength(500);
+        recipe.Property(r => r.DocumentPath).HasMaxLength(500);
         recipe.Property(r => r.Calories);
         recipe.Property(r => r.CreatedAt).HasColumnType("timestamp with time zone");
         recipe.Property(r => r.UpdatedAt).HasColumnType("timestamp with time zone");

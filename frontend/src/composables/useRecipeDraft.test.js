@@ -7,6 +7,7 @@ import {
   serializeDraft,
   draftToPayload,
   photoIntentFromDraft,
+  documentIntentFromDraft,
   LOAD_ERROR_MESSAGE,
   SAVE_ERROR_MESSAGE,
   EMPTY_NAME_MESSAGE,
@@ -1112,6 +1113,100 @@ describe('категория продукта в черновике', () => {
       ingredients: [{ ...base.ingredients[0], category: 'dairy' }]
     }
 
+    expect(serializeDraft(changed)).not.toBe(serializeDraft(base))
+  })
+})
+
+describe('documentIntentFromDraft', () => {
+  it('различает оставить, загрузить и удалить PDF', () => {
+    const file = { name: 'r.pdf', size: 1, lastModified: 1 }
+    expect(
+      documentIntentFromDraft({ document: { existing: '/d.pdf', removed: false, selected: null } })
+    ).toEqual({ kind: 'keep' })
+    expect(
+      documentIntentFromDraft({ document: { existing: '/d.pdf', removed: false, selected: file } })
+    ).toEqual({ kind: 'upload', file })
+    expect(
+      documentIntentFromDraft({ document: { existing: '/d.pdf', removed: true, selected: null } })
+    ).toEqual({ kind: 'delete' })
+  })
+})
+
+describe('useRecipeDraft — действия с PDF', () => {
+  function documentOptions(overrides = {}) {
+    return {
+      initialId: 'A',
+      loadRecipe: vi.fn().mockResolvedValue(ok(recipeData('A'))),
+      updateRecipe: vi.fn().mockResolvedValue(ok(recipeData('A', { revision: 2 }))),
+      uploadDocument: vi.fn(),
+      deleteDocument: vi.fn(),
+      ...overrides
+    }
+  }
+
+  const file = { name: 'r.pdf', size: 1, lastModified: 1, type: 'application/pdf' }
+
+  it('сохранение без изменения PDF не отправляет запрос документа', async () => {
+    const uploadDocument = vi.fn()
+    const deleteDocument = vi.fn()
+    const state = make(documentOptions({ uploadDocument, deleteDocument }))
+    await state.load()
+    state.draft.value.name = 'Новое'
+
+    const result = await state.save()
+
+    expect(result).toMatchObject({ ok: true, id: 'A' })
+    expect(uploadDocument).not.toHaveBeenCalled()
+    expect(deleteDocument).not.toHaveBeenCalled()
+    expect(state.documentPartial.value).toBe(false)
+    expect(state.documentError.value).toBe('')
+  })
+
+  it('загрузка PDF после сохранения текста применяет серверный документ', async () => {
+    const uploadDocument = vi.fn().mockResolvedValue({
+      response: { status: 200 },
+      data: recipeData('A', { revision: 3, documentUrl: '/api/documents/new.pdf' })
+    })
+    const state = make(documentOptions({ uploadDocument }))
+    await state.load()
+    state.draft.value.name = 'Новое'
+    state.draft.value.document.selected = file
+
+    const result = await state.save()
+
+    expect(uploadDocument).toHaveBeenCalledWith('A', file, 2)
+    expect(result).toMatchObject({ ok: true, id: 'A' })
+    expect(state.draft.value.document.existing).toBe('/api/documents/new.pdf')
+    expect(state.draft.value.document.selected).toBeNull()
+    expect(state.dirty.value).toBe(false)
+    expect(state.documentPartial.value).toBe(false)
+  })
+
+  it('сбой PDF даёт частичный успех и не теряет текст', async () => {
+    const uploadDocument = vi
+      .fn()
+      .mockResolvedValue({ response: { status: 500 }, data: { error: 'Сбой.' } })
+    const state = make(documentOptions({ uploadDocument }))
+    await state.load()
+    state.draft.value.name = 'Новое'
+    state.draft.value.document.selected = file
+
+    const result = await state.save()
+
+    expect(result).toMatchObject({ ok: false, textSaved: true, documentFailed: true })
+    expect(state.documentPartial.value).toBe(true)
+    expect(state.documentError.value).toContain('PDF')
+  })
+
+  it('draftFromRecipe переносит documentUrl, отсутствие — пусто', () => {
+    expect(draftFromRecipe(recipeData('A', { documentUrl: '/api/documents/a.pdf' })).document.existing)
+      .toBe('/api/documents/a.pdf')
+    expect(draftFromRecipe(recipeData('A')).document.existing).toBeNull()
+  })
+
+  it('serializeDraft отмечает смену документа как изменение', () => {
+    const base = { ...emptyDraft(), document: { existing: '/a.pdf', removed: false, selected: null } }
+    const changed = { ...base, document: { existing: '/a.pdf', removed: true, selected: null } }
     expect(serializeDraft(changed)).not.toBe(serializeDraft(base))
   })
 })

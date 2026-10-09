@@ -92,6 +92,15 @@ resolve_photos_volume() {
   printf '%s' "$volume"
 }
 
+resolve_documents_volume() {
+  local backend_id volume
+  backend_id="$(menu_compose ps -q -a backend)"
+  [ -n "$backend_id" ] || die "Контейнер backend не запущен"
+  volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/documents"}}{{.Name}}{{end}}{{end}}' "$backend_id")"
+  [ -n "$volume" ] || die "Не найден volume с документами"
+  printf '%s' "$volume"
+}
+
 dump_database() {
   log "Дамп БД $POSTGRES_DB"
   menu_compose exec -T db \
@@ -107,6 +116,14 @@ archive_photos() {
   [ -s "$TMP/photos.tar.gz" ] || die "Архив фото пуст"
 }
 
+archive_documents() {
+  log "Архив PDF-документов"
+  docker run --rm --memory "$BACKUP_MEMORY_LIMIT" \
+    -v "$DOCUMENTS_VOLUME":/data:ro -v "$TMP":/backup alpine:3.20 \
+    tar czf /backup/documents.tar.gz -C /data .
+  [ -s "$TMP/documents.tar.gz" ] || die "Архив документов пуст"
+}
+
 # Согласованное снятие: backend (единственный писатель БД и фото) остановлен, БД
 # и архив относятся к одной точке. Короткое окно запрета изменений: пользователь
 # получает 5xx и может повторить запрос, данные не теряются.
@@ -115,8 +132,10 @@ snapshot() {
   menu_compose stop backend >/dev/null
   QUIESCED=1
   PHOTOS_VOLUME="$(resolve_photos_volume)"
+  DOCUMENTS_VOLUME="$(resolve_documents_volume)"
   dump_database
   archive_photos
+  archive_documents
   # Схема и контрольные объёмы читаются в том же окне, что и дамп: manifest
   # описывает ровно то состояние, которое попало в набор.
   read_db_state
@@ -141,13 +160,14 @@ upload() {
   log "Выгрузка набора $SET_ID в $BACKUP_REMOTE"
   rclone copyto "$TMP/db.gz" "$BACKUP_REMOTE/db/$SET_ID.sql.gz"
   rclone copyto "$TMP/photos.tar.gz" "$BACKUP_REMOTE/photos/$SET_ID.tar.gz"
+  rclone copyto "$TMP/documents.tar.gz" "$BACKUP_REMOTE/documents/$SET_ID.tar.gz"
   rclone copyto "$TMP/manifest.json" "$BACKUP_REMOTE/manifests/$SET_ID.json"
 }
 
 # Независимое подтверждение доставки: copyto мог завершиться успешно без объекта.
 verify_objects() {
   local spec dir file
-  for spec in "db:$SET_ID.sql.gz" "photos:$SET_ID.tar.gz" "manifests:$SET_ID.json"; do
+  for spec in "db:$SET_ID.sql.gz" "photos:$SET_ID.tar.gz" "documents:$SET_ID.tar.gz" "manifests:$SET_ID.json"; do
     dir="${spec%%:*}"
     file="${spec#*:}"
     if ! rclone lsf "$BACKUP_REMOTE/$dir/" --files-only 2>/dev/null | grep -qx "$file"; then
@@ -169,18 +189,22 @@ copy_weekly() {
   log "Недельный набор $SET_ID"
   rclone copyto "$BACKUP_REMOTE/db/$SET_ID.sql.gz" "$BACKUP_REMOTE/weekly/db/$SET_ID.sql.gz"
   rclone copyto "$BACKUP_REMOTE/photos/$SET_ID.tar.gz" "$BACKUP_REMOTE/weekly/photos/$SET_ID.tar.gz"
+  rclone copyto "$BACKUP_REMOTE/documents/$SET_ID.tar.gz" "$BACKUP_REMOTE/weekly/documents/$SET_ID.tar.gz"
   rclone copyto "$BACKUP_REMOTE/manifests/$SET_ID.json" "$BACKUP_REMOTE/weekly/manifests/$SET_ID.json"
   rclone copyto "$BACKUP_REMOTE/complete/$SET_ID" "$BACKUP_REMOTE/weekly/complete/$SET_ID"
 }
 
 PHOTOS_VOLUME=""
+DOCUMENTS_VOLUME=""
 snapshot
 
 DB_SHA="$(backup_sha256 "$TMP/db.gz")"
 PHOTOS_SHA="$(backup_sha256 "$TMP/photos.tar.gz")"
+DOCUMENTS_SHA="$(backup_sha256 "$TMP/documents.tar.gz")"
 
 backup_manifest_write "$TMP/manifest.json" "$SET_ID" "$CREATED_AT" "$RELEASE" "$SCHEMA" \
   "$SET_ID.sql.gz" "$DB_SHA" "$SET_ID.tar.gz" "$PHOTOS_SHA" \
+  "$SET_ID.tar.gz" "$DOCUMENTS_SHA" \
   "$RECIPES" "$WEEK_PLANS" "$PLAN_ENTRIES"
 
 upload

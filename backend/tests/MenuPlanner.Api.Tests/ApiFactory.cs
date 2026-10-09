@@ -21,6 +21,9 @@ public class ApiFactory : WebApplicationFactory<Program>
     public string PhotosDir { get; } =
         Path.Combine(Path.GetTempPath(), "menu_planner_photos_" + Guid.NewGuid().ToString("N"));
 
+    public string DocumentsDir { get; } =
+        Path.Combine(Path.GetTempPath(), "menu_planner_documents_" + Guid.NewGuid().ToString("N"));
+
     public bool AutoVerifyEmailsOnRegistration { get; set; } = true;
 
     /// <summary>Настройки конкретного теста поверх лабораторных defaults.</summary>
@@ -65,6 +68,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             var settings = new Dictionary<string, string?>
             {
                 ["PHOTOS_DIR"] = PhotosDir,
+                ["DOCUMENTS_DIR"] = DocumentsDir,
                 // Фоновая уборка фото в тестах выключена: проход запускают явно.
                 ["PHOTO_CLEANUP_ENABLED"] = "false",
                 ["SMTP_HOST"] = "",
@@ -106,11 +110,12 @@ public class ApiFactory : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (Directory.Exists(PhotosDir))
+        foreach (var dir in new[] { PhotosDir, DocumentsDir })
         {
+            if (!Directory.Exists(dir)) continue;
             try
             {
-                Directory.Delete(PhotosDir, recursive: true);
+                Directory.Delete(dir, recursive: true);
             }
             catch
             {

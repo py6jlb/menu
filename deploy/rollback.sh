@@ -137,15 +137,19 @@ cleanup() { rm -rf "$RBTMP"; }
 trap cleanup EXIT
 STARTED_AT="$(date +%s)"
 
+RECOVERY_DOCUMENTS=0
+
 rollback_download_verify() {
-  local set="$1" db_name photos_name db_sha photos_sha schema
+  local set="$1" db_name photos_name documents_name db_sha photos_sha documents_sha schema
   log "Скачивание recovery-набора $set"
   rclone copyto "$BACKUP_REMOTE/manifests/$set.json" "$RBTMP/manifest.json" 2>/dev/null \
     || die "Не найден manifest набора $set"
   db_name="$(backup_json_string "$RBTMP/manifest.json" dbName)"
   photos_name="$(backup_json_string "$RBTMP/manifest.json" photosName)"
+  documents_name="$(backup_json_string "$RBTMP/manifest.json" documentsName)"
   db_sha="$(backup_json_string "$RBTMP/manifest.json" dbSha256)"
   photos_sha="$(backup_json_string "$RBTMP/manifest.json" photosSha256)"
+  documents_sha="$(backup_json_string "$RBTMP/manifest.json" documentsSha256)"
   schema="$(backup_json_string "$RBTMP/manifest.json" schema)"
   backup_name_valid "$db_name" || die "Некорректное имя дампа в наборе"
   backup_name_valid "$photos_name" || die "Некорректное имя архива фото в наборе"
@@ -164,6 +168,18 @@ rollback_download_verify() {
     || die "Контрольная сумма архива фото не совпала"
   gunzip -t "$RBTMP/db.gz" || die "Дамп повреждён (не gzip)"
   tar tzf "$RBTMP/photos.tar.gz" >/dev/null || die "Архив фото нечитаем"
+  # Документы появились позже фото: набор без них (старый формат) не отвергается.
+  if [ -n "$documents_name" ]; then
+    backup_name_valid "$documents_name" || die "Некорректное имя архива документов в наборе"
+    backup_sha_valid "$documents_sha" || die "Некорректная контрольная сумма архива документов"
+    rclone copyto "$BACKUP_REMOTE/documents/$documents_name" "$RBTMP/documents.tar.gz" 2>/dev/null \
+      || die "Не найден архив документов набора $set"
+    [ -s "$RBTMP/documents.tar.gz" ] || die "Архив документов пуст"
+    [ "$(backup_sha256 "$RBTMP/documents.tar.gz")" = "$documents_sha" ] \
+      || die "Контрольная сумма архива документов не совпала"
+    tar tzf "$RBTMP/documents.tar.gz" >/dev/null || die "Архив документов нечитаем"
+    RECOVERY_DOCUMENTS=1
+  fi
 }
 
 rollback_photos_volume() {
@@ -172,6 +188,15 @@ rollback_photos_volume() {
   [ -n "$backend_id" ] || die "Контейнер backend не найден"
   volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/photos"}}{{.Name}}{{end}}{{end}}' "$backend_id")"
   [ -n "$volume" ] || die "Не найден volume с фото"
+  printf '%s' "$volume"
+}
+
+rollback_documents_volume() {
+  local backend_id volume
+  backend_id="$(menu_compose ps -q -a backend)"
+  [ -n "$backend_id" ] || die "Контейнер backend не найден"
+  volume="$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app/documents"}}{{.Name}}{{end}}{{end}}' "$backend_id")"
+  [ -n "$volume" ] || die "Не найден volume с документами"
   printf '%s' "$volume"
 }
 
@@ -194,6 +219,15 @@ rollback_restore_photos() {
   docker run --rm --memory "$ROLLBACK_MEMORY_LIMIT" \
     -v "$volume":/data -v "$RBTMP":/restore:ro alpine:3.20 \
     sh -c 'find /data -mindepth 1 -delete 2>/dev/null; tar xzf /restore/photos.tar.gz -C /data'
+}
+
+rollback_restore_documents() {
+  local volume
+  volume="$(rollback_documents_volume)"
+  log "Восстановление PDF-документов в volume $volume"
+  docker run --rm --memory "$ROLLBACK_MEMORY_LIMIT" \
+    -v "$volume":/data -v "$RBTMP":/restore:ro alpine:3.20 \
+    sh -c 'find /data -mindepth 1 -delete 2>/dev/null; tar xzf /restore/documents.tar.gz -C /data'
 }
 
 rollback_verify_access() {
@@ -226,6 +260,9 @@ menu_compose stop backend >/dev/null
 mark_stage restoring
 rollback_restore_database
 rollback_restore_photos
+if [ "$RECOVERY_DOCUMENTS" -eq 1 ]; then
+  rollback_restore_documents
+fi
 
 mark_stage switching
 switch_release

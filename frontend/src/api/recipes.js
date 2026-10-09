@@ -67,6 +67,21 @@ export async function deleteRecipePhoto(id, revision) {
   })
 }
 
+export async function uploadRecipeDocument(id, file, revision) {
+  const form = new FormData()
+  form.append('file', file)
+  return apiJson(`/api/recipes/${id}/document${revisionQuery(revision)}`, {
+    method: 'PUT',
+    body: form
+  })
+}
+
+export async function deleteRecipeDocument(id, revision) {
+  return apiJson(`/api/recipes/${id}/document${revisionQuery(revision)}`, {
+    method: 'DELETE'
+  })
+}
+
 export async function getSharedRecipe(token) {
   return apiJson(`/api/shared/${token}`)
 }

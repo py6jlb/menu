@@ -151,7 +151,6 @@ public sealed class RecipeFlowTests
 
     [Theory]
     [InlineData("name")]
-    [InlineData("steps")]
     [InlineData("unit")]
     [InlineData("difficulty")]
     [InlineData("amount")]
@@ -164,7 +163,6 @@ public sealed class RecipeFlowTests
         object body = field switch
         {
             "name" => FullRequest() with { Name = null },
-            "steps" => FullRequest() with { Steps = new List<RecipeStepRequest>() },
             "unit" => FullRequest() with
             {
                 Ingredients = new List<RecipeIngredientRequest> { new("Соль", 0.5m, "bucket", null) }

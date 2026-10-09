@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes.Documents;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Photos;
 using MenuPlanner.Api.Recipes.Repetition;
@@ -24,8 +25,11 @@ public static class RecipeEndpoints
         group.MapGet("/repetition", RepetitionAsync);
         group.MapPut("/{id:guid}/photo", UploadPhotoAsync).DisableAntiforgery().RequireVerifiedEmail();
         group.MapDelete("/{id:guid}/photo", DeletePhotoAsync).RequireVerifiedEmail();
+        group.MapPut("/{id:guid}/document", UploadDocumentAsync).DisableAntiforgery().RequireVerifiedEmail();
+        group.MapDelete("/{id:guid}/document", DeleteDocumentAsync).RequireVerifiedEmail();
 
         app.MapGet("/api/photos/{fileName}", GetPhotoFileAsync);
+        app.MapGet("/api/documents/{fileName}", GetDocumentFileAsync);
 
         return app;
     }
@@ -306,6 +310,57 @@ public static class RecipeEndpoints
         return MutationResult(result);
     }
 
+    private static async Task<IResult> UploadDocumentAsync(
+        Guid id,
+        IFormFile? file,
+        int? revision,
+        ClaimsPrincipal principal,
+        CurrentUserContext currentUser,
+        RecipeMutationService mutations)
+    {
+        var familyId = await currentUser.FamilyIdAsync(principal);
+        if (familyId is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+        if (file is null || file.Length == 0)
+            return Results.BadRequest(new RecipeErrorDto("Выберите PDF-файл."));
+
+        if (file.Length > RecipeCatalog.DocumentMaxBytes)
+            return Results.BadRequest(new RecipeErrorDto(
+                $"Размер PDF не должен превышать {RecipeCatalog.DocumentMaxBytes / (1024 * 1024)} МБ."));
+
+        byte[] bytes;
+        await using (var content = file.OpenReadStream())
+        {
+            using var buffer = new MemoryStream();
+            await content.CopyToAsync(buffer);
+            bytes = buffer.ToArray();
+        }
+
+        // Тип определяется по содержимому (сигнатура %PDF-), а не по ContentType/имени:
+        // поддельный MIME и произвольный файл отклоняются до записи в БД.
+        using var probe = new MemoryStream(bytes, writable: false);
+        if (!RecipePdfValidator.TryValidate(probe))
+            return Results.BadRequest(new RecipeErrorDto(RecipePdfValidator.NotPdfError));
+
+        using var upload = new MemoryStream(bytes, writable: false);
+        var result = await mutations.UploadDocumentAsync(
+            new RecipeTarget(id, familyId.Value), revision, ".pdf", upload);
+        return MutationResult(result, result.Recipe is null ? null : ToDto(result.Recipe));
+    }
+
+    private static async Task<IResult> DeleteDocumentAsync(
+        Guid id, int? revision, ClaimsPrincipal principal, CurrentUserContext currentUser,
+        RecipeMutationService mutations)
+    {
+        var familyId = await currentUser.FamilyIdAsync(principal);
+        if (familyId is null)
+            return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
+
+        var result = await mutations.DeleteDocumentAsync(new RecipeTarget(id, familyId.Value), revision);
+        return MutationResult(result);
+    }
+
     private static IResult GetPhotoFileAsync(string fileName, IPhotoStore storage)
     {
         var path = storage.ResolveReadPath(fileName);
@@ -317,6 +372,16 @@ public static class RecipeEndpoints
             return Results.NotFound();
 
         return Results.File(path, contentType);
+    }
+
+    private static IResult GetDocumentFileAsync(string fileName, IDocumentStore storage)
+    {
+        var path = storage.ResolveReadPath(fileName);
+        if (path is null)
+            return Results.NotFound();
+
+        // Просмотр встроенным вьюером: диапазонная отдача помогает большим PDF.
+        return Results.File(path, RecipeCatalog.DocumentContentType, enableRangeProcessing: true);
     }
 
     internal static RecipeDto ToDto(
@@ -349,10 +414,14 @@ public static class RecipeEndpoints
         sourceFamilyId,
         state,
         recipe.CopiedFromFamilyName,
-        recipe.Revision);
+        recipe.Revision,
+        DocumentUrl(recipe.DocumentPath));
 
     private static string? PhotoUrl(string? photoPath) =>
         photoPath is null ? null : $"/api/photos/{Path.GetFileName(photoPath)}";
+
+    private static string? DocumentUrl(string? documentPath) =>
+        documentPath is null ? null : $"/api/documents/{Path.GetFileName(documentPath)}";
 
     private static string? ContentTypeForExtension(string? extension) => extension?.ToLowerInvariant() switch
     {

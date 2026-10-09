@@ -38,12 +38,14 @@ services:
       SMTP_TIMEOUT_SECONDS: "${SMTP_TIMEOUT_SECONDS:-10}"
       EMAIL_TRANSPORT: "${EMAIL_TRANSPORT:-}"
       PHOTOS_DIR: /app/photos
+      DOCUMENTS_DIR: /app/documents
       SHARE_BASE_URL: "${SHARE_BASE_URL:-}"
       # X-Forwarded-* принимаются только от nginx-контейнера (172.28.0.10):
       # прямой запрос на 127.0.0.1:8080 идёт от docker-gateway и не доверяется.
       TRUSTED_PROXY_ADDRESSES: "172.28.0.10"
     volumes:
       - photos_data:/app/photos
+      - documents_data:/app/documents
     ports:
       - "127.0.0.1:8080:8080"
     cap_drop:
@@ -74,6 +76,7 @@ services:
 volumes:
   db_data:
   photos_data:
+  documents_data:
 
 networks:
   default:

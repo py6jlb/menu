@@ -42,6 +42,16 @@ defineProps({
   </div>
 
   <div v-else class="detail-columns">
+    <div v-if="recipe.documentUrl" class="card document-viewer">
+      <div class="document-head">
+        <h3>Документ рецепта</h3>
+        <a :href="recipe.documentUrl" target="_blank" rel="noopener" class="btn btn--ghost btn--small">
+          Открыть в новой вкладке
+        </a>
+      </div>
+      <iframe :src="recipe.documentUrl" title="PDF-документ рецепта" class="document-frame"></iframe>
+    </div>
+
     <div class="card column">
       <h3>Ингредиенты</h3>
       <ul class="ingredients">
@@ -148,6 +158,32 @@ defineProps({
     grid-template-columns: 1fr 1fr;
     align-items: start;
   }
+}
+
+.document-viewer {
+  grid-column: 1 / -1;
+}
+
+.document-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.document-head h3 {
+  margin: 0;
+}
+
+.document-frame {
+  width: 100%;
+  height: 70vh;
+  min-height: 320px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }
 
 .ingredients {
