@@ -96,13 +96,14 @@ backup_json_number() {
 }
 
 # backup_manifest_write <out> <id> <createdAt> <release> <schema> <dbName> <dbSha> \
-#   <photosName> <photosSha> <recipes> <weekPlans> <planEntries>
+#   <photosName> <photosSha> <documentsName> <documentsSha> <recipes> <weekPlans> <planEntries>
 # Все значения ограничены безопасным алфавитом, поэтому JSON собирается printf
 # без экранирования произвольного текста.
 backup_manifest_write() {
   local out="$1" id="$2" created="$3" release="$4" schema="$5" \
         db_name="$6" db_sha="$7" photos_name="$8" photos_sha="$9" \
-        recipes="${10}" week_plans="${11}" plan_entries="${12}"
+        documents_name="${10}" documents_sha="${11}" \
+        recipes="${12}" week_plans="${13}" plan_entries="${14}"
   {
     printf '{\n'
     printf '  "id": "%s",\n' "$id"
@@ -113,6 +114,8 @@ backup_manifest_write() {
     printf '  "dbSha256": "%s",\n' "$db_sha"
     printf '  "photosName": "%s",\n' "$photos_name"
     printf '  "photosSha256": "%s",\n' "$photos_sha"
+    printf '  "documentsName": "%s",\n' "$documents_name"
+    printf '  "documentsSha256": "%s",\n' "$documents_sha"
     printf '  "recipes": %s,\n' "$recipes"
     printf '  "weekPlans": %s,\n' "$week_plans"
     printf '  "planEntries": %s\n' "$plan_entries"
@@ -170,6 +173,7 @@ backup_delete_set() {
   }
   rclone deletefile "$remote$prefix/db/$id.sql.gz"
   rclone deletefile "$remote$prefix/photos/$id.tar.gz"
+  rclone deletefile "$remote$prefix/documents/$id.tar.gz"
   rclone deletefile "$remote$prefix/manifests/$id.json"
   rclone deletefile "$remote$prefix/complete/$id"
 }

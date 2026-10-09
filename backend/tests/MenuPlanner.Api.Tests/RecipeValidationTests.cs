@@ -123,9 +123,9 @@ public sealed class RecipeValidationTests
     }
 
     [Fact]
-    public void NullSteps_AreRejectedAsMissing()
+    public void NullSteps_AreAccepted_MethodMayLiveInDescriptionOrPdf()
     {
-        Assert.Equal("steps_required", RecipeValidation.Validate(Valid() with { Steps = null })!.Code);
+        Assert.Null(RecipeValidation.Validate(Valid() with { Steps = null }));
     }
 
     [Fact]
@@ -144,14 +144,14 @@ public sealed class RecipeValidationTests
     }
 
     [Fact]
-    public void StepsOfOnlyNulls_AreRejectedAsMissing()
+    public void StepsOfOnlyNulls_AreAccepted()
     {
         var request = Valid() with
         {
             Steps = new List<RecipeStepRequest> { null!, null! }
         };
 
-        Assert.Equal("steps_required", RecipeValidation.Validate(request)!.Code);
+        Assert.Null(RecipeValidation.Validate(request));
     }
 
     [Fact]

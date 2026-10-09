@@ -4,7 +4,9 @@ import {
   getRecipe,
   updateRecipe,
   uploadRecipePhoto,
-  deleteRecipePhoto
+  deleteRecipePhoto,
+  uploadRecipeDocument,
+  deleteRecipeDocument
 } from '../api/recipes'
 import { parseList, joinList, combineDiets, splitDiets } from '../constants/recipe'
 import { LEAVE_MESSAGE } from './draftMessages'
@@ -21,6 +23,8 @@ export const PHOTO_ERROR_MESSAGE =
   'Рецепт сохранён, но фото не удалось сохранить. Повторите действие с фото.'
 export const PHOTO_UNKNOWN_MESSAGE =
   'Рецепт сохранён, но результат действия с фото неизвестен из-за обрыва связи. Повторите — действие защищено от дубля.'
+export const DOCUMENT_ERROR_MESSAGE =
+  'Рецепт сохранён, но PDF-документ не удалось сохранить. Повторите действие с PDF.'
 
 let ingredientSequence = 0
 
@@ -43,6 +47,11 @@ export function emptyPhoto() {
   return { existing: null, removed: false, selected: null }
 }
 
+/** Пустое состояние PDF-документа черновика. */
+export function emptyDocument() {
+  return { existing: null, removed: false, selected: null }
+}
+
 /** Пустой черновик нового рецепта: только поля, значимые для сохранения. */
 export function emptyDraft() {
   return {
@@ -58,7 +67,8 @@ export function emptyDraft() {
     dietText: '',
     steps: [''],
     ingredients: [newIngredientDraft()],
-    photo: emptyPhoto()
+    photo: emptyPhoto(),
+    document: emptyDocument()
   }
 }
 
@@ -89,7 +99,8 @@ export function draftFromRecipe(data) {
             category: i.category || ''
           }))
         : [newIngredientDraft()],
-    photo: { existing: data.photoUrl || null, removed: false, selected: null }
+    photo: { existing: data.photoUrl || null, removed: false, selected: null },
+    document: { existing: data.documentUrl || null, removed: false, selected: null }
   }
 }
 
@@ -173,6 +184,11 @@ export function serializeDraft(draft) {
       existing: draft.photo?.existing || null,
       removed: Boolean(draft.photo?.removed),
       selected: photoIdentity(draft.photo?.selected)
+    },
+    document: {
+      existing: draft.document?.existing || null,
+      removed: Boolean(draft.document?.removed),
+      selected: photoIdentity(draft.document?.selected)
     }
   })
 }
@@ -194,6 +210,14 @@ export function photoIntentFromDraft(draft) {
   return { kind: 'keep' }
 }
 
+/** Намерение действия с PDF-документом: загрузить, удалить или не трогать. */
+export function documentIntentFromDraft(draft) {
+  const document = draft.document || {}
+  if (document.selected) return { kind: 'upload', file: document.selected }
+  if (document.removed && document.existing) return { kind: 'delete' }
+  return { kind: 'keep' }
+}
+
 /**
  * Черновик рецепта, привязанный к identity ресурса.
  *
@@ -209,6 +233,8 @@ export function useRecipeDraft(options = {}) {
   const updateRecipeRequest = options.updateRecipe || updateRecipe
   const uploadPhotoRequest = options.uploadPhoto || uploadRecipePhoto
   const deletePhotoRequest = options.deletePhoto || deleteRecipePhoto
+  const uploadDocumentRequest = options.uploadDocument || uploadRecipeDocument
+  const deleteDocumentRequest = options.deleteDocument || deleteRecipeDocument
   const confirmLeave = options.confirm || ((message) => window.confirm(message))
 
   const editingId = ref(options.initialId ?? null)
@@ -223,6 +249,8 @@ export function useRecipeDraft(options = {}) {
   // файл/намерение. Живёт вне ref — это не состояние формы, а замороженная
   // команда. Поздний выбор файла её не подменяет.
   let pendingPhoto = null
+  // Замороженное действие с PDF-документом, аналогично фото.
+  let pendingDocument = null
   // Серверный текст, сохранённый последним успешным PUT/POST (без применённого
   // фото). База для подтверждённого снимка, когда ответ фото без тела (DELETE).
   let lastServerTextDraft = null
@@ -234,6 +262,10 @@ export function useRecipeDraft(options = {}) {
   // повтор сначала проверяет актуальное фото, а не отправляет слепой дубль.
   const photoUnknown = ref(false)
   const photoError = ref('')
+
+  const documentSaving = ref(false)
+  const documentPartial = ref(false)
+  const documentError = ref('')
 
   const loading = ref(false)
   const saving = ref(false)
@@ -257,6 +289,7 @@ export function useRecipeDraft(options = {}) {
     conflictMessage.value = ''
     conflictRevision.value = null
     clearPhotoState()
+    clearDocumentState()
   }
 
   function clearPhotoResult() {
@@ -272,6 +305,17 @@ export function useRecipeDraft(options = {}) {
     clearPhotoResult()
   }
 
+  function clearDocumentResult() {
+    documentPartial.value = false
+    documentError.value = ''
+  }
+
+  function clearDocumentState() {
+    pendingDocument = null
+    documentSaving.value = false
+    clearDocumentResult()
+  }
+
   function clearMessages() {
     loadError.value = ''
     saveError.value = ''
@@ -281,6 +325,7 @@ export function useRecipeDraft(options = {}) {
     conflictMessage.value = ''
     conflictRevision.value = null
     clearPhotoState()
+    clearDocumentState()
   }
 
   /**
@@ -315,6 +360,7 @@ export function useRecipeDraft(options = {}) {
     conflictMessage.value = ''
     conflictRevision.value = null
     clearPhotoState()
+    clearDocumentState()
 
     if (requestedId == null) {
       resetDraft()
@@ -453,6 +499,7 @@ export function useRecipeDraft(options = {}) {
     const sentSnapshot = serializeDraft(draft.value)
     const sentPayload = draftToPayload(draft.value, revision.value)
     const intent = photoIntentFromDraft(draft.value)
+    const documentIntent = documentIntentFromDraft(draft.value)
     const requestId = ++saveRequestId
     saving.value = true
     saveError.value = ''
@@ -487,25 +534,44 @@ export function useRecipeDraft(options = {}) {
         if (targetId == null && savedId) editingId.value = savedId
         savedMessage.value = 'Рецепт сохранён.'
 
-        if (intent.kind === 'keep') return { ok: true, id: savedId, data }
+        let resultData = data
 
-        // Текст уже сохранён: фото — отдельное действие, его сбой не создаёт
+        // Текст уже сохранён: фото и PDF — отдельные действия, их сбой не создаёт
         // второй рецепт и не теряет сохранённые поля.
-        pendingPhoto = {
-          kind: intent.kind,
-          file: intent.file,
-          id: savedId,
-          revision: revision.value
+        if (intent.kind !== 'keep') {
+          pendingPhoto = {
+            kind: intent.kind,
+            file: intent.file,
+            id: savedId,
+            revision: revision.value
+          }
+          photoPartial.value = true
+          const photoResult = await performPhoto()
+          if (!photoResult.ok) {
+            return {
+              ok: false,
+              textSaved: true,
+              id: savedId,
+              photoFailed: true,
+              conflict: Boolean(photoResult.conflict)
+            }
+          }
+          if (photoResult.data) resultData = photoResult.data
         }
-        photoPartial.value = true
-        const photoResult = await performPhoto()
-        if (photoResult.ok) return { ok: true, id: savedId, data: photoResult.data }
+
+        if (documentIntent.kind === 'keep') return { ok: true, id: savedId, data: resultData }
+
+        documentPartial.value = true
+        const documentResult = await performDocument(savedId, documentIntent)
+        if (documentResult.ok) {
+          return { ok: true, id: savedId, data: documentResult.data ?? resultData }
+        }
         return {
           ok: false,
           textSaved: true,
           id: savedId,
-          photoFailed: true,
-          conflict: Boolean(photoResult.conflict)
+          documentFailed: true,
+          conflict: Boolean(documentResult.conflict)
         }
       }
 
@@ -590,6 +656,59 @@ export function useRecipeDraft(options = {}) {
   }
 
   /**
+   * Применить действие с PDF-документом к уже сохранённому рецепту. Повтор при
+   * отказе — обычный повтор сохранения: текст идемпотентен, документ перезапишется.
+   */
+  async function performDocument(id, intent) {
+    documentSaving.value = true
+    documentError.value = ''
+    try {
+      const result =
+        intent.kind === 'delete'
+          ? await deleteDocumentRequest(id, revision.value)
+          : await uploadDocumentRequest(id, intent.file, revision.value)
+      const status = result.response.status
+      if (status === 204 || status === 200) {
+        const serverDraft = result.data ? draftFromRecipe(result.data) : null
+        if (serverDraft) {
+          draft.value = { ...draft.value, document: { ...serverDraft.document } }
+          lastServerTextDraft = serverDraft
+          confirmedSnapshot.value = serializeDraft(serverDraft)
+        } else {
+          draft.value = { ...draft.value, document: emptyDocument() }
+          confirmedSnapshot.value = serializeDraft({
+            ...(lastServerTextDraft || draft.value),
+            document: emptyDocument()
+          })
+        }
+        revision.value = Number.isInteger(result.data?.revision)
+          ? result.data.revision
+          : revision.value + 1
+        documentPartial.value = false
+        return { ok: true, data: result.data }
+      }
+      if (status === 409) {
+        conflictRevision.value = Number.isInteger(result.data?.revision)
+          ? result.data.revision
+          : null
+        conflictMessage.value = result.data?.error || CONFLICT_MESSAGE
+        documentPartial.value = true
+        return { ok: false, conflict: true }
+      }
+      const serverError = result.data?.error
+      documentError.value = serverError ? `${DOCUMENT_ERROR_MESSAGE} ${serverError}` : DOCUMENT_ERROR_MESSAGE
+      documentPartial.value = true
+      return { ok: false }
+    } catch {
+      documentError.value = DOCUMENT_ERROR_MESSAGE
+      documentPartial.value = true
+      return { ok: false }
+    } finally {
+      documentSaving.value = false
+    }
+  }
+
+  /**
    * Защищённое повторение после неизвестного результата: сначала читаем актуальное
    * фото. Удаление видно однозначно (фото уже нет) — повтор не нужен; для загрузки
    * обновляем ожидаемую ревизию и повторяем идемпотентный PUT.
@@ -662,6 +781,9 @@ export function useRecipeDraft(options = {}) {
     photoPartial,
     photoUnknown,
     photoError,
+    documentSaving,
+    documentPartial,
+    documentError,
     loadError,
     saveError,
     saveErrorCode,

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes.Documents;
 using MenuPlanner.Api.Recipes.Photos;
 
 namespace MenuPlanner.Api.Recipes;
@@ -39,14 +40,20 @@ public sealed class RecipeMutationService
 {
     private readonly AppDbContext _db;
     private readonly PhotoLifecycle _photos;
+    private readonly DocumentLifecycle _documents;
     private readonly TimeProvider _clock;
     private readonly RecipeRevisionReader _revisions;
 
     public RecipeMutationService(
-        AppDbContext db, PhotoLifecycle photos, TimeProvider clock, RecipeRevisionReader revisions)
+        AppDbContext db,
+        PhotoLifecycle photos,
+        DocumentLifecycle documents,
+        TimeProvider clock,
+        RecipeRevisionReader revisions)
     {
         _db = db;
         _photos = photos;
+        _documents = documents;
         _clock = clock;
         _revisions = revisions;
     }
@@ -230,6 +237,97 @@ public sealed class RecipeMutationService
     }
 
     /// <summary>
+    /// Замена PDF-документа: файл сохраняется, ревизия растёт атомарно. При любом
+    /// неуспехе записи БД новый файл убирается компенсацией; при гонке чужой файл
+    /// не затрагивается, а клиент получает конфликт.
+    /// </summary>
+    public async Task<RecipeMutationResult> UploadDocumentAsync(
+        RecipeTarget target,
+        int? revision,
+        string extension,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        var (recipe, failure) = await FindAsync(
+            target, requireOwn: true, includeContent: false, cancellationToken);
+        if (failure is not null)
+            return failure;
+
+        var stale = RevisionProblem(revision, recipe.Revision);
+        if (stale is not null)
+            return stale;
+
+        var previous = recipe.DocumentPath;
+        return await _documents.ReplaceAsync(
+            recipe.Id,
+            extension,
+            content,
+            previous,
+            async staged =>
+            {
+                recipe.DocumentPath = staged;
+                recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
+                recipe.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
+
+                try
+                {
+                    await _db.SaveChangesAsync(cancellationToken);
+                    return new DocumentCommit<RecipeMutationResult>(
+                        true,
+                        new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision));
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    // Правка проиграла гонку: БД не изменилась, новый файл убирается
+                    // компенсацией, чужой актуальный файл не трогается.
+                    return new DocumentCommit<RecipeMutationResult>(
+                        false,
+                        new(RecipeMutationOutcome.Conflict,
+                            Revision: await _revisions.CurrentAsync(target.Id, cancellationToken)));
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Удаление PDF-документа. Если документа нет, это no-op: ревизия не растёт и
+    /// не делает ожидаемые версии других клиентов устаревшими.
+    /// </summary>
+    public async Task<RecipeMutationResult> DeleteDocumentAsync(
+        RecipeTarget target, int? revision, CancellationToken cancellationToken = default)
+    {
+        var (recipe, failure) = await FindAsync(
+            target, requireOwn: true, includeContent: false, cancellationToken);
+        if (failure is not null)
+            return failure;
+
+        if (recipe.DocumentPath is null)
+            return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
+
+        var stale = RevisionProblem(revision, recipe.Revision);
+        if (stale is not null)
+            return stale;
+
+        var previous = recipe.DocumentPath;
+        recipe.DocumentPath = null;
+        recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
+        recipe.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
+
+        try
+        {
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
+        }
+
+        _documents.Retire(previous);
+
+        return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
+    }
+
+    /// <summary>
     /// Общий шаг удаления с проверкой ревизии: и собственный, и внешний рецепт
     /// проходят одну и ту же защиту от устаревшего удаления.
     /// </summary>
@@ -241,8 +339,9 @@ public sealed class RecipeMutationService
         if (!RecipeRevisionRules.IsCurrent(revision, recipe.Revision))
             return new(RecipeMutationOutcome.Conflict, Revision: recipe.Revision);
 
-        // У внешнего рецепта фото нет: удаление файла — no-op.
+        // У внешнего рецепта фото и документа нет: удаление файлов — no-op.
         var photoPath = recipe.PhotoPath;
+        var documentPath = recipe.DocumentPath;
         _db.Recipes.Remove(recipe);
 
         try
@@ -255,6 +354,7 @@ public sealed class RecipeMutationService
         }
 
         _photos.Retire(photoPath);
+        _documents.Retire(documentPath);
         return new(RecipeMutationOutcome.Ok, Revision: RecipeRevisionRules.Next(revision.Value));
     }
 

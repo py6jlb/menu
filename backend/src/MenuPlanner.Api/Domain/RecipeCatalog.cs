@@ -31,6 +31,9 @@ public static class RecipeCatalog
     public const int DietsMax = 100;
 
     public const int PhotoMaxBytes = 5 * 1024 * 1024;
+    // PDF-документ с рецептом: сканы бывают крупными, поэтому лимит выше фото.
+    public const int DocumentMaxBytes = 20 * 1024 * 1024;
+    public const string DocumentContentType = "application/pdf";
     // Защита от «бомбы»: маленький файл с огромными размерами не должен
     // исчерпать память при декодировании.
     public const int PhotoMaxDimension = 8000;

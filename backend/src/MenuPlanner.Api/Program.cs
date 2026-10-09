@@ -20,6 +20,7 @@ using MenuPlanner.Api.Ingredients;
 using MenuPlanner.Api.Observability;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes;
+using MenuPlanner.Api.Recipes.Documents;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Photos;
 using MenuPlanner.Api.Recipes.Repetition;
@@ -37,6 +38,9 @@ builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddSingleton<IPhotoStore, PhotoStorage>();
 builder.Services.AddScoped<PhotoLifecycle>();
 builder.Services.AddScoped<PhotoGarbageCollector>();
+builder.Services.AddSingleton<IDocumentStore, DocumentStorage>();
+builder.Services.AddScoped<DocumentLifecycle>();
+builder.Services.AddScoped<DocumentGarbageCollector>();
 builder.Services.AddSingleton(PhotoCleanupOptions.Read(builder.Configuration));
 builder.Services.AddHostedService<PhotoCleanupWorker>();
 
@@ -208,6 +212,7 @@ if (!observability.Release.IsKnown)
         observability.Release.Id);
 
 app.Services.GetRequiredService<IPhotoStore>();
+app.Services.GetRequiredService<IDocumentStore>();
 
 app.MapGet("/health", () => Results.Json(
     new { status = "ok", service = "menu-planner-api", release = observability.Release.Id }));

@@ -117,6 +117,23 @@ export const PHOTO_MAX_DIMENSION = 8000
 export const PHOTO_MAX_PIXELS = 25000000
 export const PHOTO_DIMENSIONS_LABEL = '8000 пикселей по стороне и 25 мегапикселей'
 
+export const DOCUMENT_TYPE = 'application/pdf'
+export const DOCUMENT_ACCEPT = DOCUMENT_TYPE
+export const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
+export const DOCUMENT_MAX_LABEL = '20 МБ'
+
+/** Проверка PDF-документа до отправки; серверная проверка по сигнатуре остаётся окончательной. */
+export function validateDocumentFile(file) {
+  if (!file) return ''
+  if (file.type !== DOCUMENT_TYPE) {
+    return 'Файл должен быть PDF-документом.'
+  }
+  if (file.size > DOCUMENT_MAX_BYTES) {
+    return `Размер PDF не должен превышать ${DOCUMENT_MAX_LABEL}.`
+  }
+  return ''
+}
+
 /** Проверка файла до отправки; серверная валидация остаётся окончательной. */
 export function validatePhotoFile(file) {
   if (!file) return ''

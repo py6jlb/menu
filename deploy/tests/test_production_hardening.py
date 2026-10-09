@@ -129,6 +129,10 @@ class BackendImageHardeningTests(unittest.TestCase):
         self.assertRegex(self.dockerfile, r"chown[^\n]*/app/photos")
         self.assertRegex(self.dockerfile, r"COPY --from=build --chown=")
 
+    def test_documents_dir_prepared_for_service_user(self):
+        self.assertIn("/app/documents", self.dockerfile)
+        self.assertRegex(self.dockerfile, r"chown[^\n]*/app/documents")
+
 
 class ResourceBudgetTests(unittest.TestCase):
     def test_backup_service_bounds_auxiliary_operation(self):

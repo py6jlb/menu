@@ -7,6 +7,11 @@ public sealed class Recipe
     public required string Name { get; set; }
     public string? Description { get; set; }
     public string? PhotoPath { get; set; }
+
+    // Необязательный PDF-документ с описанием рецепта. Позволяет хранить рецепт
+    // без структурированных шагов и ингредиентов — их может не быть, а метод
+    // бывает описан в самом документе. Читается живьём у внешнего источника.
+    public string? DocumentPath { get; set; }
     public int CookTimeMinutes { get; set; }
     public int Servings { get; set; }
     public int Difficulty { get; set; }

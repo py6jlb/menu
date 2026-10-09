@@ -10,8 +10,11 @@ import {
   PHOTO_MAX_LABEL,
   PHOTO_TYPES_LABEL,
   PHOTO_DIMENSIONS_LABEL,
+  DOCUMENT_ACCEPT,
+  DOCUMENT_MAX_LABEL,
   validatePhotoFile,
   validatePhotoDimensions,
+  validateDocumentFile,
   recipeFieldLabel
 } from '../constants/recipe'
 import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
@@ -33,6 +36,9 @@ const {
   photoPartial,
   photoUnknown,
   photoError,
+  documentSaving,
+  documentPartial,
+  documentError,
   loadError,
   saveError,
   saveErrorField,
@@ -139,6 +145,42 @@ function removeExistingPhoto() {
 
 function undoPhotoRemoval() {
   draft.value.photo.removed = false
+}
+
+const documentValidationError = ref('')
+
+const documentActionLabel = computed(() =>
+  draft.value.document.selected || (draft.value.document.existing && !draft.value.document.removed)
+    ? 'Заменить PDF'
+    : 'Выбрать PDF'
+)
+
+function onDocumentSelected(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  const validationError = validateDocumentFile(file)
+  if (validationError) {
+    documentValidationError.value = validationError
+    return
+  }
+  documentValidationError.value = ''
+  draft.value.document.selected = file
+  draft.value.document.removed = false
+}
+
+function clearSelectedDocument() {
+  draft.value.document.selected = null
+  documentValidationError.value = ''
+}
+
+function removeExistingDocument() {
+  draft.value.document.selected = null
+  draft.value.document.removed = true
+}
+
+function undoDocumentRemoval() {
+  draft.value.document.removed = false
 }
 
 function addStep() {
@@ -304,6 +346,7 @@ onBeforeUnmount(() => {
     <div class="page-heading">
       <h2>{{ isEdit ? 'Редактирование рецепта' : 'Новый рецепт' }}</h2>
       <span v-if="photoPartial" class="dirty-badge" role="status">● текст сохранён, фото — нет</span>
+      <span v-else-if="documentPartial" class="dirty-badge" role="status">● текст сохранён, PDF — нет</span>
       <span v-else-if="dirty" class="dirty-badge">● есть изменения</span>
     </div>
 
@@ -385,6 +428,38 @@ onBeforeUnmount(() => {
           {{ PHOTO_DIMENSIONS_LABEL }}. Проверка на сервере остаётся окончательной.
         </p>
         <p v-if="photoValidationError" class="error" role="alert">{{ photoValidationError }}</p>
+      </fieldset>
+
+      <fieldset class="card fieldset">
+        <legend>PDF-рецепт</legend>
+        <div v-if="draft.document.selected" class="photo-preview">
+          <div class="photo-actions">
+            <span class="hint">Выбран файл: {{ draft.document.selected.name }}</span>
+            <span class="hint">Будет загружен после сохранения.</span>
+            <button type="button" class="btn btn--ghost" @click="clearSelectedDocument">Убрать</button>
+          </div>
+        </div>
+        <div v-else-if="draft.document.existing && !draft.document.removed" class="photo-actions">
+          <a :href="draft.document.existing" target="_blank" rel="noopener" class="btn btn--ghost">
+            Открыть PDF
+          </a>
+          <button type="button" class="btn btn--ghost text-danger" @click="removeExistingDocument">
+            Удалить PDF
+          </button>
+        </div>
+        <p v-else-if="draft.document.removed" class="hint">
+          PDF будет удалён после сохранения.
+          <button type="button" class="btn btn--subtle" @click="undoDocumentRemoval">Отменить удаление</button>
+        </p>
+        <label class="file-label btn btn--ghost">
+          {{ documentActionLabel }}
+          <input type="file" :accept="DOCUMENT_ACCEPT" class="file-input" @change="onDocumentSelected" />
+        </label>
+        <p class="hint">
+          Один PDF-документ до {{ DOCUMENT_MAX_LABEL }}. Пригодится, когда рецепт уже есть готовым файлом —
+          шаги и ингредиенты при этом необязательны.
+        </p>
+        <p v-if="documentValidationError" class="error" role="alert">{{ documentValidationError }}</p>
       </fieldset>
 
       <div class="card form-section">
@@ -536,8 +611,11 @@ onBeforeUnmount(() => {
       </fieldset>
 
       <fieldset class="card fieldset">
-        <legend>Шаги приготовления *</legend>
-        <p class="hint">Порядок шагов соответствует порядку в списке.</p>
+        <legend>Шаги приготовления</legend>
+        <p class="hint">
+          Необязательно: способ можно описать в описании или вложить PDF. Порядок шагов соответствует
+          порядку в списке.
+        </p>
         <div v-for="(step, index) in draft.steps" :key="index" class="step-row">
           <textarea
             v-model="draft.steps[index]"
@@ -591,6 +669,13 @@ onBeforeUnmount(() => {
         <p>{{ photoError }}</p>
         <button type="button" class="btn btn--ghost" :disabled="photoSaving" @click="onRetryPhoto">
           {{ photoSaving ? 'Повтор…' : photoUnknown ? 'Проверить и повторить' : 'Повторить фото' }}
+        </button>
+      </div>
+
+      <div v-if="documentError" class="error conflict-box" role="alert">
+        <p>{{ documentError }}</p>
+        <button type="button" class="btn btn--ghost" :disabled="documentSaving || saving" @click="submit">
+          {{ documentSaving ? 'Повтор…' : 'Повторить сохранение' }}
         </button>
       </div>
 

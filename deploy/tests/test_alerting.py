@@ -155,7 +155,7 @@ class AlertFixture(unittest.TestCase):
         self.healthy_edge()
 
         self.remote = self.root / "remote"
-        for name in ("db", "photos", "manifests", "complete"):
+        for name in ("db", "photos", "documents", "manifests", "complete"):
             (self.remote / name).mkdir(parents=True)
         self.seed_complete(hours_ago=1)
 

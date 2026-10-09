@@ -127,6 +127,7 @@ services:
       SMTP_TIMEOUT_SECONDS: "${SMTP_TIMEOUT_SECONDS-10}"
       EMAIL_TRANSPORT: "${EMAIL_TRANSPORT-smtp}"
       PHOTOS_DIR: /app/photos
+      DOCUMENTS_DIR: /app/documents
       SHARE_BASE_URL: "${SHARE_BASE_URL-}"
       # Release-id для корреляции журналов: закреплённый тег релиза.
       RELEASE_ID: "${IMAGE_TAG-latest}"
@@ -138,6 +139,7 @@ services:
       TRUSTED_PROXY_ADDRESSES: "172.29.0.10"
     volumes:
       - photos_data:/app/photos
+      - documents_data:/app/documents
     cap_drop:
       - ALL
     security_opt:
@@ -187,6 +189,7 @@ services:
 volumes:
   db_data:
   photos_data:
+  documents_data:
   caddy_data:
   caddy_config:
   otel_logs:

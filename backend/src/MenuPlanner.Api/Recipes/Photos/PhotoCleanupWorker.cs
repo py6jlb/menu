@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using MenuPlanner.Api.Recipes.Documents;
 
 namespace MenuPlanner.Api.Recipes.Photos;
 
@@ -43,6 +44,13 @@ public sealed class PhotoCleanupWorker : BackgroundService
                     _logger.LogInformation(
                         "Фото: уборка — удалено {Deleted}, ошибок {Failed}, пропущено свежих {Fresh}.",
                         result.Deleted, result.Failed, result.KeptFresh);
+
+                var documents = scope.ServiceProvider.GetRequiredService<DocumentGarbageCollector>();
+                var documentsResult = await documents.CollectAsync(_options.MinimumAge, stoppingToken);
+                if (documentsResult.Deleted > 0 || documentsResult.Failed > 0)
+                    _logger.LogInformation(
+                        "Документ: уборка — удалено {Deleted}, ошибок {Failed}, пропущено свежих {Fresh}.",
+                        documentsResult.Deleted, documentsResult.Failed, documentsResult.KeptFresh);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

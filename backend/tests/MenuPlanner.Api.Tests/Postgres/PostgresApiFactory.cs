@@ -22,6 +22,9 @@ public sealed class PostgresApiFactory : WebApplicationFactory<Program>
     public string PhotosDir { get; } =
         Path.Combine(Path.GetTempPath(), "menu_planner_pgt_photos_" + Guid.NewGuid().ToString("N"));
 
+    public string DocumentsDir { get; } =
+        Path.Combine(Path.GetTempPath(), "menu_planner_pgt_documents_" + Guid.NewGuid().ToString("N"));
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
@@ -31,6 +34,7 @@ public sealed class PostgresApiFactory : WebApplicationFactory<Program>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["PHOTOS_DIR"] = PhotosDir,
+                ["DOCUMENTS_DIR"] = DocumentsDir,
                 ["SMTP_HOST"] = "",
                 ["SHARE_BASE_URL"] = "https://menu.example.com",
                 ["DEPLOYMENT_MODE"] = "lab"
@@ -58,11 +62,12 @@ public sealed class PostgresApiFactory : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (Directory.Exists(PhotosDir))
+        foreach (var dir in new[] { PhotosDir, DocumentsDir })
         {
+            if (!Directory.Exists(dir)) continue;
             try
             {
-                Directory.Delete(PhotosDir, recursive: true);
+                Directory.Delete(dir, recursive: true);
             }
             catch
             {

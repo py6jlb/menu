@@ -183,13 +183,13 @@ public static class RecipeValidation
                 $"Слишком много шагов (максимум {RecipeCatalog.StepsMax}).",
                 "steps");
 
+        // Шаги необязательны: метод может быть описан в описании рецепта или в
+        // приложенном PDF-документе. Проверяем только длину уже введённых шагов.
         var steps = NonNullElements(request.Steps).ToList();
         var stepTexts = steps
             .Select(s => s.Text?.Trim())
             .Where(t => !string.IsNullOrEmpty(t))
             .ToList();
-        if (stepTexts.Count == 0)
-            return new("steps_required", "Добавьте хотя бы один шаг приготовления.", "steps");
         if (stepTexts.Any(s => s!.Length > RecipeCatalog.TextMaxLength))
             return new(
                 "step_too_long",

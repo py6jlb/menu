@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   CATEGORIES,
   DIETS,
+  DOCUMENT_MAX_BYTES,
+  DOCUMENT_TYPE,
   OTHER_CATEGORY,
   PHOTO_MAX_BYTES,
   PHOTO_MAX_DIMENSION,
@@ -12,6 +14,7 @@ import {
   dietLabel,
   recipeFieldLabel,
   splitDiets,
+  validateDocumentFile,
   validatePhotoDimensions,
   validatePhotoFile
 } from './recipe'
@@ -55,6 +58,24 @@ describe('validatePhotoDimensions', () => {
   it('неизвестные размеры считаются ошибкой', () => {
     expect(validatePhotoDimensions(0, 100)).toMatch(/размер/i)
     expect(validatePhotoDimensions(undefined, 100)).toMatch(/размер/i)
+  })
+})
+
+describe('validateDocumentFile', () => {
+  it('принимает PDF в пределах размера', () => {
+    expect(validateDocumentFile({ type: DOCUMENT_TYPE, size: 1024 })).toBe('')
+  })
+
+  it('отклоняет не-PDF тип', () => {
+    expect(validateDocumentFile({ type: 'image/png', size: 1024 })).toMatch(/PDF/i)
+  })
+
+  it('отклоняет файл больше допустимого размера', () => {
+    expect(validateDocumentFile({ type: DOCUMENT_TYPE, size: DOCUMENT_MAX_BYTES + 1 })).toMatch(/размер/i)
+  })
+
+  it('пустое значение не считается ошибкой', () => {
+    expect(validateDocumentFile(null)).toBe('')
   })
 })
 

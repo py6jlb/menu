@@ -94,8 +94,10 @@ rclone copyto "$BACKUP_REMOTE/manifests/$SET_ID.json" "$TMP/manifest.json" 2>/de
 
 DB_NAME="$(backup_json_string "$TMP/manifest.json" dbName)"
 PHOTOS_NAME="$(backup_json_string "$TMP/manifest.json" photosName)"
+DOCUMENTS_NAME="$(backup_json_string "$TMP/manifest.json" documentsName)"
 DB_SHA="$(backup_json_string "$TMP/manifest.json" dbSha256)"
 PHOTOS_SHA="$(backup_json_string "$TMP/manifest.json" photosSha256)"
+DOCUMENTS_SHA="$(backup_json_string "$TMP/manifest.json" documentsSha256)"
 SCHEMA="$(backup_json_string "$TMP/manifest.json" schema)"
 RELEASE="$(backup_json_string "$TMP/manifest.json" release)"
 RECIPES="$(backup_json_number "$TMP/manifest.json" recipes)"
@@ -107,6 +109,11 @@ backup_name_valid "$DB_NAME" || die "Некорректное имя дампа 
 backup_name_valid "$PHOTOS_NAME" || die "Некорректное имя архива фото в наборе"
 backup_sha_valid "$DB_SHA" || die "Некорректная контрольная сумма дампа в наборе"
 backup_sha_valid "$PHOTOS_SHA" || die "Некорректная контрольная сумма архива фото в наборе"
+# Документы появились позже фото: набор без них (старый формат) не отвергается.
+if [ -n "$DOCUMENTS_NAME" ]; then
+  backup_name_valid "$DOCUMENTS_NAME" || die "Некорректное имя архива документов в наборе"
+  backup_sha_valid "$DOCUMENTS_SHA" || die "Некорректная контрольная сумма архива документов в наборе"
+fi
 [[ "$SCHEMA" =~ ^[A-Za-z0-9_]+$ ]] || die "Некорректная схема в наборе"
 for value in "$RECIPES" "$WEEK_PLANS" "$PLAN_ENTRIES"; do
   backup_number_valid "$value" || die "Некорректные контрольные объёмы в наборе"
@@ -130,6 +137,20 @@ tar tzf "$TMP/photos.tar.gz" >/dev/null || die "Архив фото нечита
 mkdir -p "$TMP/photos"
 tar xzf "$TMP/photos.tar.gz" -C "$TMP/photos"
 photos_listing="$(tar tzf "$TMP/photos.tar.gz" | sed -e 's|^\./||' -e 's|/$||' | grep -v '^$' || true)"
+
+DOCUMENTS_PRESENT=0
+if [ -n "$DOCUMENTS_NAME" ]; then
+  rclone copyto "$BACKUP_REMOTE/documents/$DOCUMENTS_NAME" "$TMP/documents.tar.gz" 2>/dev/null \
+    || die "Не найден архив документов — набор $SET_ID неполный"
+  [ -s "$TMP/documents.tar.gz" ] || die "Архив документов пуст"
+  [ "$(backup_sha256 "$TMP/documents.tar.gz")" = "$DOCUMENTS_SHA" ] \
+    || die "Контрольная сумма архива документов не совпадает"
+  tar tzf "$TMP/documents.tar.gz" >/dev/null || die "Архив документов нечитаем"
+  mkdir -p "$TMP/documents"
+  tar xzf "$TMP/documents.tar.gz" -C "$TMP/documents"
+  documents_listing="$(tar tzf "$TMP/documents.tar.gz" | sed -e 's|^\./||' -e 's|/$||' | grep -v '^$' || true)"
+  DOCUMENTS_PRESENT=1
+fi
 
 log "Изолированная сеть $DRILL_NET и временная Postgres $DRILL_CONTAINER"
 docker network create --internal "$DRILL_NET" >/dev/null
@@ -191,19 +212,39 @@ while IFS= read -r path; do
     || die "Фото '$name' из восстановленной БД отсутствует в архиве"
 done <<< "$photo_paths"
 
+# Каждый путь документа из восстановленной БД должен разрешаться в архиве.
+if [ "$DOCUMENTS_PRESENT" -eq 1 ]; then
+  document_paths="$(docker exec "$DRILL_CONTAINER" psql -tA -v ON_ERROR_STOP=1 \
+    -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+    -c 'select "DocumentPath" from "Recipes" where "DocumentPath" is not null;')"
+  while IFS= read -r path; do
+    path="$(printf '%s' "$path" | tr -d '\r')"
+    [ -n "$path" ] || continue
+    name="$(basename "$path")"
+    printf '%s\n' "$documents_listing" | grep -qx "$name" \
+      || die "Документ '$name' из восстановленной БД отсутствует в архиве"
+  done <<< "$document_paths"
+fi
+
 # Закреплённый релиз запускается против восстановленной БД: startup-миграции
 # должны быть no-op, приложение должно ответить на health.
 log "Запуск закреплённого релиза $RELEASE"
+release_mounts=(-v "$TMP/photos":/app/photos:ro)
+release_env=(-e PHOTOS_DIR=/app/photos)
+if [ "$DOCUMENTS_PRESENT" -eq 1 ]; then
+  release_mounts+=(-v "$TMP/documents":/app/documents:ro)
+  release_env+=(-e DOCUMENTS_DIR=/app/documents)
+fi
 docker run -d --name "$RELEASE_CONTAINER" --network "$DRILL_NET" \
   --memory "$DRILL_MEMORY_LIMIT" \
-  -v "$TMP/photos":/app/photos:ro \
+  "${release_mounts[@]}" \
   -e DB_HOST="$DRILL_CONTAINER" \
   -e DB_PORT=5432 \
   -e DB_NAME="$POSTGRES_DB" \
   -e DB_USER="$POSTGRES_USER" \
   -e DB_PASSWORD="$DRILL_PASSWORD" \
   -e JWT_SECRET="$DRILL_JWT_SECRET" \
-  -e PHOTOS_DIR=/app/photos \
+  "${release_env[@]}" \
   -e DEPLOYMENT_MODE=lab \
   "$DOCKERHUB_USER/menu-backend:$RELEASE" >/dev/null
 

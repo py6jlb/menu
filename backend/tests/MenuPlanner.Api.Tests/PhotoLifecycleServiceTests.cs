@@ -2,6 +2,7 @@ using System.Text;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes;
+using MenuPlanner.Api.Recipes.Documents;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Photos;
 using Microsoft.EntityFrameworkCore;
@@ -130,6 +131,7 @@ public sealed class PhotoLifecycleServiceTests
             db,
             new SourceFamilyNameResolver(db),
             new PhotoLifecycle(store, NullLogger<PhotoLifecycle>.Instance),
+            NewDocumentLifecycle(),
             TimeProvider.System,
             new RecipeRevisionReader(db));
 
@@ -188,8 +190,12 @@ public sealed class PhotoLifecycleServiceTests
     private static RecipeMutationService NewService(AppDbContext db, IPhotoStore store) =>
         new(db,
             new PhotoLifecycle(store, NullLogger<PhotoLifecycle>.Instance),
+            NewDocumentLifecycle(),
             TimeProvider.System,
             new RecipeRevisionReader(db));
+
+    private static DocumentLifecycle NewDocumentLifecycle() =>
+        new(new InMemoryDocumentStore(), NullLogger<DocumentLifecycle>.Instance);
 
     private static AppDbContext NewDb(string name, params IInterceptor[] interceptors)
     {

@@ -50,6 +50,8 @@ def sql_output(sql):
         return schema + "|" + counts
     if "MigrationId" in sql:
         return schema
+    if "DocumentPath" in sql:
+        return os.environ.get("DOCKER_DOCUMENT_PATHS", "")
     if "PhotoPath" in sql:
         return os.environ.get("DOCKER_PHOTO_PATHS", "")
     if "left join" in sql:
@@ -217,7 +219,7 @@ class BackupFixture(unittest.TestCase):
         self._adapter("systemctl", SYSTEMCTL_ADAPTER)
 
         self.remote = self.root / "remote"
-        for name in ("db", "photos", "manifests", "complete"):
+        for name in ("db", "photos", "documents", "manifests", "complete"):
             (self.remote / name).mkdir(parents=True)
         self.env = {
             "PATH": f"{self.bin}:{os.environ['PATH']}",
@@ -304,6 +306,7 @@ class BackupFailureTests(BackupFixture):
         copyto = [call for call in self.calls_of("rclone") if call and call[0] == "copyto"]
         self.assertTrue(any("db/" in " ".join(call) for call in copyto))
         self.assertTrue(any("photos/" in " ".join(call) for call in copyto))
+        self.assertTrue(any("documents/" in " ".join(call) for call in copyto))
         self.assertTrue(any("manifests/" in " ".join(call) for call in copyto))
 
     def test_dump_failure_is_nonzero_without_success_log(self):

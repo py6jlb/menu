@@ -28,8 +28,10 @@ REASONS = {200: "OK", 301: "Moved Permanently", 401: "Unauthorized", 404: "Not F
            500: "Internal Server Error", 502: "Bad Gateway", 503: "Service Unavailable"}
 
 
-def emit(status, body):
+def emit(status, body, headers=""):
     sys.stderr.write("  HTTP/1.1 %d %s\n" % (status, REASONS.get(status, "Status")))
+    if headers:
+        sys.stderr.write(headers)
     if body:
         sys.stdout.write(body)
     return 0 if status < 400 else 1
@@ -77,7 +79,9 @@ if sub[:1] == ["exec"]:
     else:
         status = 200 if body_file.exists() else 404
     body = body_file.read_text() if body_file.exists() else ""
-    sys.exit(emit(status, None if discard else body))
+    # sw.js/manifest/index отдаются с no-cache — smoke проверяет этот заголовок.
+    headers = "  Cache-Control: no-cache\n" if key in ("sw.js", "manifest.webmanifest", "index.html") else ""
+    sys.exit(emit(status, None if discard else body, headers))
 
 sys.exit(0)
 '''
@@ -143,6 +147,8 @@ class SmokeHarness(unittest.TestCase):
                  '</head><body></body></html>')
         self.set_edge("index.html", index)
         self.set_edge("assets/index-abc123.js", "console.log('ok')\n")
+        self.set_edge("manifest.webmanifest", '{"name":"Меню","short_name":"Меню"}\n')
+        self.set_edge("sw.js", "self.addEventListener('install', () => {})\n")
         self.set_edge("ready", '{"status":"ready","service":"menu-planner-api"}\n')
         self.set_edge("api/recipes", '{"error":"unauthorized"}\n', status=401)
 
