@@ -8,6 +8,7 @@ import {
   copyRecipe
 } from '../api/recipes'
 import { getMyFamily } from '../api/families'
+import { revisionOf } from '../api/revision'
 import { useAuth } from '../stores/auth'
 import { useRouteResource } from '../composables/useRouteResource'
 import { useRecipeShare } from '../composables/useRecipeShare'
@@ -67,7 +68,7 @@ function resetResourceState() {
 /** Конфликт ревизии действия: показать актуальную версию и предложить перечитать. */
 function markActionConflict(data) {
   actionConflict.value = true
-  actionRevision.value = Number.isInteger(data?.revision) ? data.revision : null
+  actionRevision.value = revisionOf(data)
   return data?.error || 'Кто-то уже изменил рецепт. Загрузите актуальную версию и повторите.'
 }
 

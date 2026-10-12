@@ -1,10 +1,8 @@
 import { ref, computed } from 'vue'
 import { mondayOf, addDays, toIso, parseIso } from '../constants/plan'
 import { getShoppingList } from '../api/shopping'
-
-export const SHOPPING_LOAD_ERROR_MESSAGE =
-  'Не удалось загрузить список покупок. Проверьте соединение и попробуйте снова.'
-export const SHOPPING_FAMILY_ERROR_MESSAGE = 'Вы пока не состоите в семье.'
+import { LOAD_FAILED, NOT_IN_FAMILY } from '../constants/messages'
+import { useRequestTracker } from './useRequestTracker'
 
 /**
  * Список покупок выбранной недели, устойчивый к поздним ответам и сетевым ошибкам.
@@ -26,26 +24,23 @@ export function useShoppingList(options = {}) {
   const error = ref('')
   const resultWeek = ref(null)
 
-  let requestId = 0
+  const tracker = useRequestTracker()
 
   const selectedWeek = computed(() => toIso(weekStart.value))
   const resultIsCurrent = computed(() => resultWeek.value === selectedWeek.value)
   const resultWeekDate = computed(() => (resultWeek.value ? parseIso(resultWeek.value) : null))
 
-  function isCurrent(id, requestedWeek) {
-    return id === requestId && requestedWeek === selectedWeek.value
-  }
-
   async function load({ refresh = false } = {}) {
     const requestedWeek = selectedWeek.value
-    const id = ++requestId
+    const token = tracker.begin(requestedWeek)
+    const current = () => tracker.isCurrent(token) && requestedWeek === selectedWeek.value
     if (refresh) refreshing.value = true
     else loading.value = true
     error.value = ''
 
     try {
       const { response, data } = await fetchList(requestedWeek)
-      if (!isCurrent(id, requestedWeek)) return
+      if (!current()) return
 
       if (response.status === 200 && data) {
         items.value = data.items || []
@@ -57,16 +52,16 @@ export function useShoppingList(options = {}) {
         excluded.value = []
         hasPlan.value = false
         resultWeek.value = null
-        error.value = data?.error || SHOPPING_FAMILY_ERROR_MESSAGE
+        error.value = data?.error || NOT_IN_FAMILY
       } else {
         // Определённая ошибка сервера: предыдущий результат сохраняем.
-        error.value = data?.error || SHOPPING_LOAD_ERROR_MESSAGE
+        error.value = data?.error || LOAD_FAILED
       }
     } catch {
       // Сеть недоступна: pending снимаем, показываем прежний результат за его неделю.
-      if (isCurrent(id, requestedWeek)) error.value = SHOPPING_LOAD_ERROR_MESSAGE
+      if (current()) error.value = LOAD_FAILED
     } finally {
-      if (isCurrent(id, requestedWeek)) {
+      if (current()) {
         loading.value = false
         refreshing.value = false
       }

@@ -8,17 +8,13 @@ import {
   uploadRecipeDocument,
   deleteRecipeDocument
 } from '../api/recipes'
+import { revisionOf } from '../api/revision'
 import { parseList, joinList, combineDiets, splitDiets } from '../constants/recipe'
+import { LOAD_FAILED, SAVE_FAILED, NOT_FOUND, CONFLICT } from '../constants/messages'
+import { useRequestTracker } from './useRequestTracker'
 import { LEAVE_MESSAGE } from './draftMessages'
 
-export const LOAD_ERROR_MESSAGE =
-  'Не удалось загрузить рецепт. Проверьте соединение и попробуйте снова.'
-export const SAVE_ERROR_MESSAGE =
-  'Не удалось сохранить рецепт. Проверьте соединение и повторите.'
-export const NOT_FOUND_MESSAGE = 'Рецепт не найден.'
 export const EMPTY_NAME_MESSAGE = 'Укажите название рецепта.'
-export const CONFLICT_MESSAGE =
-  'Рецепт изменён другим участником. Ваш черновик сохранён — загрузите актуальную версию, сравните изменения и сохраните снова.'
 export const PHOTO_ERROR_MESSAGE =
   'Рецепт сохранён, но фото не удалось сохранить. Повторите действие с фото.'
 export const PHOTO_UNKNOWN_MESSAGE =
@@ -276,8 +272,7 @@ export function useRecipeDraft(options = {}) {
   const saveErrorField = ref('')
   const savedMessage = ref('')
 
-  let loadRequestId = 0
-  let saveRequestId = 0
+  const tracker = useRequestTracker()
 
   const isEdit = computed(() => Boolean(editingId.value))
   const dirty = computed(() => confirmedSnapshot.value !== serializeDraft(draft.value))
@@ -336,8 +331,7 @@ export function useRecipeDraft(options = {}) {
     const next = id ?? null
     if (next === editingId.value) return false
     editingId.value = next
-    loadRequestId += 1
-    saveRequestId += 1
+    tracker.reset()
     loading.value = false
     saving.value = false
     clearMessages()
@@ -345,13 +339,9 @@ export function useRecipeDraft(options = {}) {
     return true
   }
 
-  function isCurrentLoad(requestId, requestedId) {
-    return requestId === loadRequestId && requestedId === editingId.value
-  }
-
   async function load() {
     const requestedId = editingId.value
-    const requestId = ++loadRequestId
+    const token = tracker.begin('load')
     loadError.value = ''
     savedMessage.value = ''
     saveError.value = ''
@@ -371,25 +361,25 @@ export function useRecipeDraft(options = {}) {
     loading.value = true
     try {
       const { response, data } = await loadRecipe(requestedId)
-      if (!isCurrentLoad(requestId, requestedId)) return
+      if (!tracker.isCurrent(token)) return
       if (response.status === 200) {
         if (data == null) {
           // Тело ответа не разобралось — черновик не трогаем.
-          loadError.value = LOAD_ERROR_MESSAGE
+          loadError.value = LOAD_FAILED
           return
         }
         draft.value = draftFromRecipe(data)
         confirmedSnapshot.value = serializeDraft(draft.value)
-        revision.value = Number.isInteger(data.revision) ? data.revision : null
+        revision.value = revisionOf(data)
       } else if (response.status === 404) {
-        loadError.value = data?.error || NOT_FOUND_MESSAGE
+        loadError.value = data?.error || NOT_FOUND
       } else {
-        loadError.value = data?.error || LOAD_ERROR_MESSAGE
+        loadError.value = data?.error || LOAD_FAILED
       }
     } catch {
-      if (isCurrentLoad(requestId, requestedId)) loadError.value = LOAD_ERROR_MESSAGE
+      if (tracker.isCurrent(token)) loadError.value = LOAD_FAILED
     } finally {
-      if (isCurrentLoad(requestId, requestedId)) loading.value = false
+      if (tracker.isCurrent(token)) loading.value = false
     }
   }
 
@@ -419,7 +409,7 @@ export function useRecipeDraft(options = {}) {
   }
 
   /** Фото-запрос всё ещё принадлежит текущему ресурсу (не устарел после ухода). */
-  function isCurrentPhoto(target) {
+  function photoCurrent(target) {
     return pendingPhoto === target && target.id === editingId.value
   }
 
@@ -500,7 +490,7 @@ export function useRecipeDraft(options = {}) {
     const sentPayload = draftToPayload(draft.value, revision.value)
     const intent = photoIntentFromDraft(draft.value)
     const documentIntent = documentIntentFromDraft(draft.value)
-    const requestId = ++saveRequestId
+    const token = tracker.begin('save')
     saving.value = true
     saveError.value = ''
     saveErrorCode.value = ''
@@ -514,21 +504,21 @@ export function useRecipeDraft(options = {}) {
         ? await updateRecipeRequest(targetId, sentPayload)
         : await createRecipeRequest(sentPayload)
 
-      if (requestId !== saveRequestId || targetId !== editingId.value) {
+      if (!tracker.isCurrent(token) || targetId !== editingId.value) {
         return { ok: false, stale: true }
       }
 
       if (response.status === 200 || response.status === 201) {
         if (data == null) {
           // Ответ не разобрался: результат мутации неизвестен, черновик остаётся dirty.
-          saveError.value = SAVE_ERROR_MESSAGE
+          saveError.value = SAVE_FAILED
           return { ok: false }
         }
         const savedId = data.id ?? targetId
         const editedDuringSave = serializeDraft(draft.value) !== sentSnapshot
         lastServerTextDraft = draftFromRecipe(data)
         applySavedText(editedDuringSave)
-        revision.value = Number.isInteger(data.revision) ? data.revision : revision.value
+        revision.value = revisionOf(data) ?? revision.value
         // Новый рецепт теперь существует: привязываем черновик к его id, чтобы
         // повтор фото обновлял его, а не создавал второй.
         if (targetId == null && savedId) editingId.value = savedId
@@ -577,23 +567,23 @@ export function useRecipeDraft(options = {}) {
 
       if (response.status === 409) {
         // Конфликт ревизий: локальный черновик не трогаем, даём сравнить с актуальным.
-        conflictRevision.value = Number.isInteger(data?.revision) ? data.revision : null
-        conflictMessage.value = data?.error || CONFLICT_MESSAGE
+        conflictRevision.value = revisionOf(data)
+        conflictMessage.value = data?.error || CONFLICT
         return { ok: false, conflict: true }
       }
 
       // Ошибка ввода: причина и привязка к полю сохраняются, черновик остаётся dirty.
-      saveError.value = data?.error || SAVE_ERROR_MESSAGE
+      saveError.value = data?.error || SAVE_FAILED
       saveErrorCode.value = data?.code || ''
       saveErrorField.value = data?.field || ''
       return { ok: false }
     } catch {
-      if (requestId === saveRequestId && targetId === editingId.value) {
-        saveError.value = SAVE_ERROR_MESSAGE
+      if (tracker.isCurrent(token) && targetId === editingId.value) {
+        saveError.value = SAVE_FAILED
       }
       return { ok: false }
     } finally {
-      if (requestId === saveRequestId) saving.value = false
+      if (tracker.isCurrent(token)) saving.value = false
     }
   }
 
@@ -614,7 +604,7 @@ export function useRecipeDraft(options = {}) {
         target.kind === 'delete'
           ? await deletePhotoRequest(target.id, target.revision)
           : await uploadPhotoRequest(target.id, target.file, target.revision)
-      if (!isCurrentPhoto(target)) return { ok: false, stale: true }
+      if (!photoCurrent(target)) return { ok: false, stale: true }
       const status = result.response.status
       if (status === 204 || status === 200) {
         if (target.kind === 'upload' && result.data == null) {
@@ -625,18 +615,14 @@ export function useRecipeDraft(options = {}) {
         }
         applySavedPhoto(result.data)
         // Успешное фото подняло ревизию: без тела ответа (DELETE) она ровно на шаг.
-        revision.value = Number.isInteger(result.data?.revision)
-          ? result.data.revision
-          : target.revision + 1
+        revision.value = revisionOf(result.data) ?? target.revision + 1
         pendingPhoto = null
         photoPartial.value = false
         return { ok: true, data: result.data }
       }
       if (status === 409) {
-        conflictRevision.value = Number.isInteger(result.data?.revision)
-          ? result.data.revision
-          : null
-        conflictMessage.value = result.data?.error || CONFLICT_MESSAGE
+        conflictRevision.value = revisionOf(result.data)
+        conflictMessage.value = result.data?.error || CONFLICT
         photoPartial.value = true
         return { ok: false, conflict: true }
       }
@@ -645,13 +631,13 @@ export function useRecipeDraft(options = {}) {
       photoPartial.value = true
       return { ok: false }
     } catch {
-      if (!isCurrentPhoto(target)) return { ok: false, stale: true }
+      if (!photoCurrent(target)) return { ok: false, stale: true }
       photoUnknown.value = true
       photoError.value = PHOTO_UNKNOWN_MESSAGE
       photoPartial.value = true
       return { ok: false, unknown: true }
     } finally {
-      if (isCurrentPhoto(target)) photoSaving.value = false
+      if (photoCurrent(target)) photoSaving.value = false
     }
   }
 
@@ -681,17 +667,13 @@ export function useRecipeDraft(options = {}) {
             document: emptyDocument()
           })
         }
-        revision.value = Number.isInteger(result.data?.revision)
-          ? result.data.revision
-          : revision.value + 1
+        revision.value = revisionOf(result.data) ?? revision.value + 1
         documentPartial.value = false
         return { ok: true, data: result.data }
       }
       if (status === 409) {
-        conflictRevision.value = Number.isInteger(result.data?.revision)
-          ? result.data.revision
-          : null
-        conflictMessage.value = result.data?.error || CONFLICT_MESSAGE
+        conflictRevision.value = revisionOf(result.data)
+        conflictMessage.value = result.data?.error || CONFLICT
         documentPartial.value = true
         return { ok: false, conflict: true }
       }
@@ -718,19 +700,19 @@ export function useRecipeDraft(options = {}) {
     if (!target) return { ok: true }
     try {
       const { response, data } = await loadRecipe(target.id)
-      if (!isCurrentPhoto(target)) return { ok: false, stale: true }
+      if (!photoCurrent(target)) return { ok: false, stale: true }
       if (response.status !== 200 || data == null) return { ok: false }
       if (target.kind === 'delete' && !data.photoUrl) {
         lastServerTextDraft = draftFromRecipe(data)
         applySavedPhoto(data)
         // DELETE без тела: сервер уже поднял ревизию — фиксируем её для следующего сохранения.
-        revision.value = Number.isInteger(data.revision) ? data.revision : revision.value
+        revision.value = revisionOf(data) ?? revision.value
         pendingPhoto = null
         photoPartial.value = false
         photoUnknown.value = false
         return { ok: true, data }
       }
-      target.revision = Number.isInteger(data.revision) ? data.revision : target.revision
+      target.revision = revisionOf(data) ?? target.revision
       return { ok: false }
     } catch {
       return { ok: false }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { useRouteResource, RESOURCE_LOAD_ERROR } from './useRouteResource'
+import { useRouteResource } from './useRouteResource'
+import { LOAD_FAILED } from '../constants/messages'
 
 function deferred() {
   let resolve
@@ -66,7 +67,7 @@ describe('useRouteResource — сетевые отказы', () => {
 
     expect(state.loading.value).toBe(false)
     expect(state.resource.value).toBeNull()
-    expect(state.error.value).toBe(RESOURCE_LOAD_ERROR)
+    expect(state.error.value).toBe(LOAD_FAILED)
 
     await state.reload()
 
@@ -81,7 +82,7 @@ describe('useRouteResource — сетевые отказы', () => {
     await state.load('t1')
 
     expect(state.resource.value).toBeNull()
-    expect(state.error.value).toBe(RESOURCE_LOAD_ERROR)
+    expect(state.error.value).toBe(LOAD_FAILED)
   })
 
   it('404 использует понятное сообщение', async () => {

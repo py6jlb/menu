@@ -1,13 +1,10 @@
 import { ref, computed } from 'vue'
 import { addDays, toIso } from '../constants/plan'
 import { getWeekPlan, saveWeekPlan } from '../api/plans'
+import { LOAD_FAILED, SAVE_FAILED, NOT_IN_FAMILY, CONFLICT } from '../constants/messages'
+import { useRequestTracker } from './useRequestTracker'
 import { LEAVE_MESSAGE } from './draftMessages'
 
-export const LOAD_ERROR_MESSAGE = 'Не удалось загрузить план. Проверьте соединение и попробуйте снова.'
-export const SAVE_ERROR_MESSAGE = 'Не удалось сохранить план. Проверьте соединение и повторите.'
-export const FAMILY_ERROR_MESSAGE = 'Вы пока не состоите в семье.'
-export const CONFLICT_MESSAGE =
-  'План на этой неделе изменил другой участник. Ваш черновик сохранён. Загрузите актуальную версию, чтобы сравнить и повторить.'
 export const RELOAD_CONFIRM_MESSAGE =
   'На сервере более новая версия плана. Загрузить её и заменить текущий черновик?'
 
@@ -69,8 +66,7 @@ export function useWeekDraft(options = {}) {
   const saveError = ref('')
   const savedMessage = ref('')
 
-  let loadRequestId = 0
-  let saveRequestId = 0
+  const tracker = useRequestTracker()
 
   const dirty = computed(() => confirmedSnapshot.value !== serializeDraft(draft.value))
 
@@ -126,24 +122,21 @@ export function useWeekDraft(options = {}) {
     draft.value = next
   }
 
-  function isCurrentLoad(requestId, requestedWeek) {
-    return requestId === loadRequestId && requestedWeek === toIso(weekStart.value)
-  }
-
   async function loadWeek() {
     const requestedWeek = toIso(weekStart.value)
-    const requestId = ++loadRequestId
+    const token = tracker.begin('load')
+    const current = () => tracker.isCurrent(token) && requestedWeek === toIso(weekStart.value)
     loading.value = true
     loadError.value = ''
     savedMessage.value = ''
     saveError.value = ''
     try {
       const { response, data } = await loadWeekPlan(requestedWeek)
-      if (!isCurrentLoad(requestId, requestedWeek)) return
+      if (!current()) return
       if (response.status === 200) {
         if (data == null) {
           // Тело ответа не разобралось — черновик не трогаем.
-          loadError.value = LOAD_ERROR_MESSAGE
+          loadError.value = LOAD_FAILED
         } else {
           draft.value = draftFromEntries(data.entries)
           confirmedSnapshot.value = serializeDraft(draft.value)
@@ -155,14 +148,14 @@ export function useWeekDraft(options = {}) {
         confirmedSnapshot.value = serializeDraft({})
         revision.value = 0
         conflict.value = null
-        loadError.value = data?.error || FAMILY_ERROR_MESSAGE
+        loadError.value = data?.error || NOT_IN_FAMILY
       } else {
-        loadError.value = data?.error || LOAD_ERROR_MESSAGE
+        loadError.value = data?.error || LOAD_FAILED
       }
     } catch {
-      if (isCurrentLoad(requestId, requestedWeek)) loadError.value = LOAD_ERROR_MESSAGE
+      if (current()) loadError.value = LOAD_FAILED
     } finally {
-      if (isCurrentLoad(requestId, requestedWeek)) loading.value = false
+      if (current()) loading.value = false
     }
   }
 
@@ -181,7 +174,7 @@ export function useWeekDraft(options = {}) {
     const savedWeek = toIso(weekStart.value)
     const sentSnapshot = serializeDraft(draft.value)
     const sentRevision = revision.value
-    const requestId = ++saveRequestId
+    const token = tracker.begin('save')
     saving.value = true
     savedMessage.value = ''
     saveError.value = ''
@@ -192,7 +185,7 @@ export function useWeekDraft(options = {}) {
         entriesFromDraft(draft.value),
         sentRevision
       )
-      if (requestId !== saveRequestId) return
+      if (!tracker.isCurrent(token)) return
       if (response.status === 409) {
         // Устаревшая ревизия: черновик не трогаем, показываем серверную версию.
         if (savedWeek === toIso(weekStart.value)) {
@@ -200,17 +193,17 @@ export function useWeekDraft(options = {}) {
             revision: data?.revision ?? null,
             entries: data?.entries ?? []
           }
-          saveError.value = data?.error || CONFLICT_MESSAGE
+          saveError.value = data?.error || CONFLICT
         }
         return
       }
       if (response.status !== 200) {
-        saveError.value = data?.error || SAVE_ERROR_MESSAGE
+        saveError.value = data?.error || SAVE_FAILED
         return
       }
       if (data == null) {
         // Ответ не разобрался: результат мутации неизвестен, черновик остаётся dirty.
-        saveError.value = SAVE_ERROR_MESSAGE
+        saveError.value = SAVE_FAILED
         return
       }
       // Ответ относится к другой неделе — не отмечаем текущую сохранённой.
@@ -227,9 +220,9 @@ export function useWeekDraft(options = {}) {
     } catch {
       // Результат мутации неизвестен — ревизию не двигаем и черновик не чистим:
       // повторная отправка снова проверит ту же ожидаемую ревизию.
-      if (requestId === saveRequestId) saveError.value = SAVE_ERROR_MESSAGE
+      if (tracker.isCurrent(token)) saveError.value = SAVE_FAILED
     } finally {
-      if (requestId === saveRequestId) saving.value = false
+      if (tracker.isCurrent(token)) saving.value = false
     }
   }
 
