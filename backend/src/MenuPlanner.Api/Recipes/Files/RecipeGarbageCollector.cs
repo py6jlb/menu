@@ -2,10 +2,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
 
-namespace MenuPlanner.Api.Recipes.Documents;
+namespace MenuPlanner.Api.Recipes.Files;
 
-/// <summary>Итог прохода уборки документов: что проверено и что с этим сделано.</summary>
-public sealed record DocumentCleanupResult(
+/// <summary>Итог прохода уборки одного вида: что проверено и что с этим сделано.</summary>
+public sealed record RecipeFileCleanupResult(
     int Scanned,
     int Deleted,
     int KeptReferenced,
@@ -13,22 +13,22 @@ public sealed record DocumentCleanupResult(
     int Failed);
 
 /// <summary>
-/// Безопасная уборка бесхозных PDF-документов. Удаляет только управляемые имена
-/// (см. <see cref="DocumentFileNames"/>), не упомянутые ни одним рецептом и старше
-/// безопасного возраста. Возраст защищает незавершённую загрузку/копирование
+/// Безопасная уборка бесхозных файлов рецепта. Удаляет только управляемые имена
+/// вида (см. <see cref="RecipeFileNames"/>), не упомянутые ни одним рецептом и
+/// старше безопасного возраста. Возраст защищает незавершённую загрузку/копирование
 /// (файл пишется до commit) и файлы, уже снятые в backup-набор. Уборка выполняется
 /// в backend, а backup кратко останавливает backend, поэтому уборка и снятие
 /// набора не пересекаются. Scoped-сервис, читает БД и файлы.
 /// </summary>
-public sealed class DocumentGarbageCollector
+public sealed class RecipeGarbageCollector
 {
     private readonly AppDbContext _db;
-    private readonly IDocumentStore _store;
+    private readonly IRecipeFileStore _store;
     private readonly TimeProvider _clock;
-    private readonly ILogger<DocumentGarbageCollector> _logger;
+    private readonly ILogger<RecipeGarbageCollector> _logger;
 
-    public DocumentGarbageCollector(
-        AppDbContext db, IDocumentStore store, TimeProvider clock, ILogger<DocumentGarbageCollector> logger)
+    public RecipeGarbageCollector(
+        AppDbContext db, IRecipeFileStore store, TimeProvider clock, ILogger<RecipeGarbageCollector> logger)
     {
         _db = db;
         _store = store;
@@ -36,17 +36,17 @@ public sealed class DocumentGarbageCollector
         _logger = logger;
     }
 
-    public async Task<DocumentCleanupResult> CollectAsync(
-        TimeSpan minimumAge, CancellationToken cancellationToken = default)
+    public async Task<RecipeFileCleanupResult> CollectAsync(
+        RecipeFileKind kind, TimeSpan minimumAge, CancellationToken cancellationToken = default)
     {
+        var catalog = RecipeFileCatalog.For(kind);
         var referenced = await _db.Recipes
             .AsNoTracking()
-            .Where(r => r.DocumentPath != null)
-            .Select(r => r.DocumentPath!)
+            .Select(catalog.Link)
             .ToListAsync(cancellationToken);
         var referencedNames = referenced
-            .Select(Path.GetFileName)
             .Where(name => !string.IsNullOrEmpty(name))
+            .Select(name => Path.GetFileName(name!))
             .ToHashSet(StringComparer.Ordinal);
 
         var cutoff = _clock.GetUtcNow().UtcDateTime - minimumAge;
@@ -56,9 +56,9 @@ public sealed class DocumentGarbageCollector
         var keptFresh = 0;
         var failed = 0;
 
-        foreach (var file in _store.List())
+        foreach (var file in _store.List(kind))
         {
-            if (!DocumentFileNames.IsManaged(file.Name)) continue;
+            if (!RecipeFileNames.IsManaged(kind, file.Name)) continue;
             scanned++;
             if (referencedNames.Contains(file.Name))
             {
@@ -74,16 +74,17 @@ public sealed class DocumentGarbageCollector
 
             try
             {
-                _store.Delete(file.Name);
+                _store.Delete(kind, file.Name);
                 deleted++;
             }
             catch (Exception exception)
             {
                 failed++;
-                _logger.LogError(exception, "Документ: не удалось убрать бесхозный файл {File}.", file.Name);
+                _logger.LogError(
+                    exception, catalog.LogPrefix + " не удалось убрать бесхозный файл {File}.", file.Name);
             }
         }
 
-        return new DocumentCleanupResult(scanned, deleted, keptReferenced, keptFresh, failed);
+        return new RecipeFileCleanupResult(scanned, deleted, keptReferenced, keptFresh, failed);
     }
 }

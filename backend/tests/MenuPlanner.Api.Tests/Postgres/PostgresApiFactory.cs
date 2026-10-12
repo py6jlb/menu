@@ -33,8 +33,8 @@ public sealed class PostgresApiFactory : WebApplicationFactory<Program>
         builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["PHOTOS_DIR"] = PhotosDir,
-                ["DOCUMENTS_DIR"] = DocumentsDir,
+                ["RECIPE_FILES_PHOTOS_DIR"] = PhotosDir,
+                ["RECIPE_FILES_DOCUMENTS_DIR"] = DocumentsDir,
                 ["SMTP_HOST"] = "",
                 ["SHARE_BASE_URL"] = "https://menu.example.com",
                 ["DEPLOYMENT_MODE"] = "lab"

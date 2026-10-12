@@ -126,8 +126,8 @@ services:
       SMTP_SECURITY: "${SMTP_SECURITY-starttls}"
       SMTP_TIMEOUT_SECONDS: "${SMTP_TIMEOUT_SECONDS-10}"
       EMAIL_TRANSPORT: "${EMAIL_TRANSPORT-smtp}"
-      PHOTOS_DIR: /app/photos
-      DOCUMENTS_DIR: /app/documents
+      RECIPE_FILES_PHOTOS_DIR: /app/photos
+      RECIPE_FILES_DOCUMENTS_DIR: /app/documents
       SHARE_BASE_URL: "${SHARE_BASE_URL-}"
       # Release-id для корреляции журналов: закреплённый тег релиза.
       RELEASE_ID: "${IMAGE_TAG-latest}"

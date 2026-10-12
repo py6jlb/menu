@@ -1,9 +1,8 @@
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Domain;
-using MenuPlanner.Api.Recipes.Documents;
 using MenuPlanner.Api.Recipes.External;
-using MenuPlanner.Api.Recipes.Photos;
+using MenuPlanner.Api.Recipes.Files;
 using MenuPlanner.Api.Recipes.Repetition;
 
 namespace MenuPlanner.Api.Recipes;
@@ -361,9 +360,9 @@ public static class RecipeEndpoints
         return MutationResult(result);
     }
 
-    private static IResult GetPhotoFileAsync(string fileName, IPhotoStore storage)
+    private static IResult GetPhotoFileAsync(string fileName, IRecipeFileStore storage)
     {
-        var path = storage.ResolveReadPath(fileName);
+        var path = storage.ResolveReadPath(RecipeFileKind.Photo, fileName);
         if (path is null)
             return Results.NotFound();
 
@@ -374,9 +373,9 @@ public static class RecipeEndpoints
         return Results.File(path, contentType);
     }
 
-    private static IResult GetDocumentFileAsync(string fileName, IDocumentStore storage)
+    private static IResult GetDocumentFileAsync(string fileName, IRecipeFileStore storage)
     {
-        var path = storage.ResolveReadPath(fileName);
+        var path = storage.ResolveReadPath(RecipeFileKind.Document, fileName);
         if (path is null)
             return Results.NotFound();
 

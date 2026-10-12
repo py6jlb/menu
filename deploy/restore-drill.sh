@@ -230,10 +230,10 @@ fi
 # должны быть no-op, приложение должно ответить на health.
 log "Запуск закреплённого релиза $RELEASE"
 release_mounts=(-v "$TMP/photos":/app/photos:ro)
-release_env=(-e PHOTOS_DIR=/app/photos)
+release_env=(-e RECIPE_FILES_PHOTOS_DIR=/app/photos)
 if [ "$DOCUMENTS_PRESENT" -eq 1 ]; then
   release_mounts+=(-v "$TMP/documents":/app/documents:ro)
-  release_env+=(-e DOCUMENTS_DIR=/app/documents)
+  release_env+=(-e RECIPE_FILES_DOCUMENTS_DIR=/app/documents)
 fi
 docker run -d --name "$RELEASE_CONTAINER" --network "$DRILL_NET" \
   --memory "$DRILL_MEMORY_LIMIT" \
