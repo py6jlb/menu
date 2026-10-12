@@ -98,6 +98,7 @@ builder.Services.AddScoped<RecipeRevisionReader>();
 builder.Services.AddScoped<ExternalRecipePromotionService>();
 builder.Services.AddScoped<RecipeMutationService>();
 builder.Services.AddScoped<RecipeSharingService>();
+builder.Services.AddScoped<SharedRecipeImportService>();
 builder.Services.AddScoped<RepetitionCounter>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<WeekPlanSaver>();
