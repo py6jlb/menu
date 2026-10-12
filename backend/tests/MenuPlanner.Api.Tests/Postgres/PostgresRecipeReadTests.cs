@@ -200,10 +200,12 @@ public sealed class PostgresRecipeReadTests : PostgresTestBase
 
     private static RecipeReader Reader(AppDbContext db) => new(
         db,
-        new ExternalRecipeSourceLoader(db),
-        new ExternalRecipeStateResolver(db),
-        new ExternalRecipeNameCache(db),
-        new SourceFamilyNameResolver(db));
+        new ExternalRecipeContext(
+            new ExternalRecipeStateResolver(db),
+            new ExternalRecipeSourceLoader(db),
+            new ExternalRecipeNameCache(db),
+            new SourceFamilyNameResolver(db)),
+        new ExternalRecipeSourceLoader(db));
 
     internal sealed class CommandRecordingInterceptor : DbCommandInterceptor
     {

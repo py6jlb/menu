@@ -92,6 +92,7 @@ builder.Services.AddScoped<SourceFamilyNameResolver>();
 builder.Services.AddScoped<ExternalRecipeSourceLoader>();
 builder.Services.AddScoped<ExternalRecipeStateResolver>();
 builder.Services.AddScoped<ExternalRecipeNameCache>();
+builder.Services.AddScoped<ExternalRecipeContext>();
 builder.Services.AddScoped<RecipeReader>();
 builder.Services.AddScoped<RecipeRevisionReader>();
 builder.Services.AddScoped<ExternalRecipePromotionService>();

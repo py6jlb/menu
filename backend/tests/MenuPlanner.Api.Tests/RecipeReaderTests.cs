@@ -546,10 +546,12 @@ public sealed class RecipeReaderTests
 
     private static RecipeReader Reader(AppDbContext db) => new(
         db,
-        new ExternalRecipeSourceLoader(db),
-        new ExternalRecipeStateResolver(db),
-        new ExternalRecipeNameCache(db),
-        new SourceFamilyNameResolver(db));
+        new ExternalRecipeContext(
+            new ExternalRecipeStateResolver(db),
+            new ExternalRecipeSourceLoader(db),
+            new ExternalRecipeNameCache(db),
+            new SourceFamilyNameResolver(db)),
+        new ExternalRecipeSourceLoader(db));
 
     private static AppDbContext NewDb() =>
         new(new DbContextOptionsBuilder<AppDbContext>()
