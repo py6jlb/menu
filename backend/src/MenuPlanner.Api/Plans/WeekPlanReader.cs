@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
@@ -44,8 +43,6 @@ public sealed record WeekPlanContent(
 /// </summary>
 public sealed class WeekPlanReader
 {
-    private const string WeekStartFormat = "yyyy-MM-dd";
-
     private readonly AppDbContext _db;
     private readonly ExternalRecipeContext _context;
 
@@ -78,7 +75,7 @@ public sealed class WeekPlanReader
 
     /// <summary>Пустая карточка недели с исходной ревизией — условием создания.</summary>
     public static WeekPlanDto Empty(DateOnly monday) =>
-        new(Format(monday), WeekPlanRevisions.Initial, Array.Empty<PlanEntryDto>());
+        new(WeekStart.Format(monday), WeekPlanRevisions.Initial, Array.Empty<PlanEntryDto>());
 
     private async Task<WeekPlanContent?> LoadAsync(
         Guid familyId, DateOnly weekStart, PlanProjection projection, CancellationToken cancellationToken)
@@ -154,7 +151,7 @@ public sealed class WeekPlanReader
 
     private static WeekPlanDto ToDto(WeekPlanContent content) =>
         new(
-            Format(content.WeekStart),
+            WeekStart.Format(content.WeekStart),
             content.Revision,
             content.Entries
                 .Select(e => new PlanEntryDto(
@@ -165,7 +162,4 @@ public sealed class WeekPlanReader
                     e.Portions,
                     e.State is null ? null : ExternalRecipeStateRules.Code(e.State.Value)))
                 .ToList());
-
-    internal static string Format(DateOnly date) =>
-        date.ToString(WeekStartFormat, CultureInfo.InvariantCulture);
 }

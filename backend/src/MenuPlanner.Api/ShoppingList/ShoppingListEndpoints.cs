@@ -1,14 +1,12 @@
-using System.Globalization;
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Plans;
 
 namespace MenuPlanner.Api.ShoppingList;
 
 public static class ShoppingListEndpoints
 {
-    private const string WeekStartFormat = "yyyy-MM-dd";
-
     public static IEndpointRouteBuilder MapShoppingListEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/shopping-list").RequireAuthorization();
@@ -28,15 +26,15 @@ public static class ShoppingListEndpoints
         if (familyId is null)
             return Results.NotFound(new ShoppingListErrorDto("Вы не состоите в семье."));
 
-        if (!TryParseWeekStart(weekStart, out var monday))
+        if (!WeekStart.TryParse(weekStart, out var monday))
             return Results.BadRequest(new ShoppingListErrorDto(
-                $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStartFormat}."));
+                $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStart.FormatPattern}."));
 
         var plan = await reader.ReadContentAsync(familyId.Value, monday);
         if (plan is null)
         {
             return Results.Json(new ShoppingListDto(
-                Format(monday), HasPlan: false, Array.Empty<ShoppingListItemDto>(),
+                WeekStart.Format(monday), HasPlan: false, Array.Empty<ShoppingListItemDto>(),
                 Array.Empty<ShoppingListExcludedDto>()));
         }
 
@@ -49,19 +47,6 @@ public static class ShoppingListEndpoints
             .Select(e => new ShoppingListExcludedDto(e.Day, e.MealType, e.RecipeId, e.RecipeName, e.Reason))
             .ToList();
 
-        return Results.Json(new ShoppingListDto(Format(monday), HasPlan: true, items, excluded));
+        return Results.Json(new ShoppingListDto(WeekStart.Format(monday), HasPlan: true, items, excluded));
     }
-
-    private static bool TryParseWeekStart(string value, out DateOnly monday)
-    {
-        monday = default;
-        if (!DateOnly.TryParseExact(value, WeekStartFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            return false;
-
-        monday = date;
-        return date.DayOfWeek == DayOfWeek.Monday;
-    }
-
-    private static string Format(DateOnly date) =>
-        date.ToString(WeekStartFormat, CultureInfo.InvariantCulture);
 }

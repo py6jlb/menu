@@ -15,15 +15,20 @@
 
 ## Checklist
 
-- [ ] `Domain/WeekStart.cs` с `TryParse`/`Format`/`Start`/`Window` и прямыми тестами.
-- [ ] `PlanEndpoints`, `ShoppingListEndpoints`, `WeekPlanReader` переведены на `WeekStart`; `WeekStartFormat`/`TryParseWeekStart`/`Format` удалены.
-- [ ] `RepetitionRules` удалён; `RepetitionCounter` читает окно через `SettingsService`; `SettingsCatalog` — единственный источник констант.
-- [ ] `RepetitionRulesTests` переориентированы в `WeekStartTests` (включая `TryParse`/`Format`); добавлен тест чтения окна счётчиком через настройки.
-- [ ] CONTEXT.md: `_Код_` терминов «Повторяемость» и «Окно повторяемости» (`RepetitionRules` → `WeekStart`), обновлён раздел «Разделение кода».
-- [ ] `dotnet test` и `scripts/test-postgres.sh` зелёные; HTTP-контракты и тексты ошибок не изменились.
+- [x] `Domain/WeekStart.cs` с `TryParse`/`Format`/`Start`/`Window` и прямыми тестами.
+- [x] `PlanEndpoints`, `ShoppingListEndpoints`, `WeekPlanReader` переведены на `WeekStart`; `WeekStartFormat`/`TryParseWeekStart`/`Format` удалены.
+- [x] `RepetitionRules` удалён; `RepetitionCounter` читает окно через `SettingsService`; `SettingsCatalog` — единственный источник констант.
+- [x] `RepetitionRulesTests` переориентированы в `WeekStartTests` (включая `TryParse`/`Format`); добавлен тест чтения окна счётчиком через настройки.
+- [x] CONTEXT.md: `_Код_` терминов «Повторяемость» и «Окно повторяемости» (`RepetitionRules` → `WeekStart`), обновлён раздел «Разделение кода».
+- [x] `dotnet test` и `scripts/test-postgres.sh` зелёные; HTTP-контракты и тексты ошибок не изменились.
 
 ## Evidence
 
-_(заполняется при реализации)_
+- `Domain/WeekStart.cs` (static): `TryParse` (строгий `yyyy-MM-dd` + понедельник, прежняя семантика `out`), `Format`, `Start` (понедельник недели даты), `Window(selectedWeekStart, weeks)`. Формат вынесен в `public const FormatPattern`, чтобы тексты ошибок 400 не дублировали литерал.
+- Удалён `Recipes/Repetition/RepetitionRules.cs`; его константы окна — в `SettingsCatalog` (`DefaultRepetitionWindowWeeks`/`Min`/`Max`), мёртвые `MinWindowWeeks`/`MaxWindowWeeks` исчезли. `RepetitionCounter` внедряет `SettingsService`, читает окно через `ReadAsync`, прямой `_db.UserSettings` убран; анонимный/без `userId` → `SettingsCatalog.DefaultRepetitionWindowWeeks`. Публичные сигнатуры `RepetitionCounter` и `RepetitionWindowResult` не менялись.
+- `PlanEndpoints` (3 × `TryParseWeekStart` + `WeekStartFormat`), `ShoppingListEndpoints` (`TryParseWeekStart` + `Format` + `WeekStartFormat`), `WeekPlanReader` (`WeekStartFormat` + `Format`, включая `Empty`/`ToDto`) переведены на `WeekStart`; приватные хелперы и константы удалены. HTTP-статусы и тексты 400 («Некорректная дата начала недели… `yyyy-MM-dd`») не изменились.
+- CONTEXT.md: «Повторяемость» `_Код_` → `WeekStart`, `RepetitionCounter`; «Окно повторяемости» → `SettingsCatalog.DefaultRepetitionWindowWeeks`, `WeekStart.Window`; stateless-список → `WeekStart`.
+- Тесты: `RepetitionRulesTests` → `WeekStartTests` (`Start`/`Window`/`TryParse`/`Format`); новый `RepetitionCounterTests` (сохранённое значение, отсутствие строки → дефолт, анонимный → дефолт, окно в `RepetitionWindowResult`); `DbServicesTests` передаёт `SettingsService` в конструктор счётчика.
+- Прогоны: `docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 dotnet test` → Failed: 0, Passed: 684, Skipped: 62; `scripts/test-postgres.sh` → Failed: 0, Passed: 70, Skipped: 0.
 
 ## Comments

@@ -1,13 +1,11 @@
-using System.Globalization;
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Plans;
 
 public static class PlanEndpoints
 {
-    private const string WeekStartFormat = "yyyy-MM-dd";
-
     private const string ConflictMessage =
         "План изменил другой участник. Загрузите актуальную версию и повторите.";
 
@@ -32,9 +30,9 @@ public static class PlanEndpoints
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
-        if (!TryParseWeekStart(weekStart, out var monday))
+        if (!WeekStart.TryParse(weekStart, out var monday))
             return Results.BadRequest(new PlanErrorDto(
-                $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStartFormat}."));
+                $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStart.FormatPattern}."));
 
         var dto = await reader.ReadAsync(familyId.Value, monday) ?? WeekPlanReader.Empty(monday);
         return Results.Json(dto);
@@ -52,9 +50,9 @@ public static class PlanEndpoints
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
-        if (!TryParseWeekStart(weekStart, out var monday))
+        if (!WeekStart.TryParse(weekStart, out var monday))
             return Results.BadRequest(new PlanErrorDto(
-                $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStartFormat}."));
+                $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStart.FormatPattern}."));
 
         var entries = request.Entries ?? new List<PlanEntryRequest>();
         var validationError = PlanValidation.ValidateEntries(entries);
@@ -85,9 +83,9 @@ public static class PlanEndpoints
         if (familyId is null)
             return Results.NotFound(new PlanErrorDto("Вы не состоите в семье."));
 
-        if (!TryParseWeekStart(weekStart, out var monday))
+        if (!WeekStart.TryParse(weekStart, out var monday))
             return Results.BadRequest(new PlanErrorDto(
-                $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStartFormat}."));
+                $"Некорректная дата начала недели. Ожидается дата понедельника в формате {WeekStart.FormatPattern}."));
 
         // Без ожидаемой ревизии удаление защищено только для уже пустой недели:
         // повторное удаление без новых данных идемпотентно, а существующий
@@ -113,15 +111,5 @@ public static class PlanEndpoints
         return Results.Json(
             new PlanConflictDto(ConflictMessage, dto.WeekStart, dto.Revision, dto.Entries),
             statusCode: StatusCodes.Status409Conflict);
-    }
-
-    private static bool TryParseWeekStart(string value, out DateOnly monday)
-    {
-        monday = default;
-        if (!DateOnly.TryParseExact(value, WeekStartFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            return false;
-
-        monday = date;
-        return date.DayOfWeek == DayOfWeek.Monday;
     }
 }

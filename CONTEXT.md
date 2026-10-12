@@ -209,12 +209,12 @@ _Avoid_: Рецепт (рецепт — это сущность рецепта)
 
 **Повторяемость**:
 Сколько различных недель окна содержат рецепт; повторения внутри одной недели дают один вклад. Вычисляемый признак, в БД не хранится.
-_Код_: `RepetitionRules`, `RepetitionCounter`.
+_Код_: `WeekStart`, `RepetitionCounter`.
 _Avoid_: Частота, Счётчик повторений, «сколько раз готовилось»
 
 **Окно повторяемости**:
 Число недель, за которое считается повторяемость. Заканчивается выбранной неделей (при подборе для недели) или текущей неделей; начало — выбранная минус N−1 недель. Личная настройка, по умолчанию 3 недели.
-_Код_: `UserSettings.RepetitionWindowWeeks`, `RepetitionRules.Window`.
+_Код_: `UserSettings.RepetitionWindowWeeks`, `SettingsCatalog.DefaultRepetitionWindowWeeks`, `WeekStart.Window`.
 _Avoid_: Период, Окно
 
 **Подбор**:
@@ -268,7 +268,7 @@ _Avoid_: Версия, Номер, ETag
 
 ## Разделение кода
 
-**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `ShoppingListContentBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `PlanValidation`, `WeekPlanRevisions`, `DietCatalog`, `RecipeFileNames`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
+**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`WeekStart`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `ShoppingListContentBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `PlanValidation`, `WeekPlanRevisions`, `DietCatalog`, `RecipeFileNames`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
 
 **БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `RecipeReader`, `ExternalRecipeContext`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `RecipeSharingService`, `SharedRecipeImportService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`, `RecipeFileLifecycle`, `RecipeGarbageCollector`). Обработчики Minimal API получают его параметром. Фоновые проходы — hosted-сервисы `EmailDeliveryWorker`, `RecipeFileCleanupWorker`; файловый порт `IRecipeFileStore` реализуется singleton `FileStorage`.
 
