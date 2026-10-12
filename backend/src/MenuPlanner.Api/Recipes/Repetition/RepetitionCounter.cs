@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
+using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Settings;
 
 namespace MenuPlanner.Api.Recipes.Repetition;
 
@@ -8,18 +10,23 @@ public sealed record RepetitionWindowResult(int WindowWeeks, Dictionary<Guid, in
 
 /// <summary>
 /// Считает, в скольких различных неделях планов семьи встречается рецепт за окно
-/// (повторения внутри одной недели дают один вклад). Scoped-сервис: читает БД;
-/// чистые правила окна — в <see cref="RepetitionRules"/>.
+/// (повторения внутри одной недели дают один вклад). Scoped-сервис: читает БД и
+/// личные настройки; чистые правила недели и окна — в <see cref="WeekStart"/>.
 /// </summary>
 public sealed class RepetitionCounter
 {
     private readonly AppDbContext _db;
+    private readonly SettingsService _settings;
 
-    public RepetitionCounter(AppDbContext db) => _db = db;
+    public RepetitionCounter(AppDbContext db, SettingsService settings)
+    {
+        _db = db;
+        _settings = settings;
+    }
 
     /// <summary>
     /// Повторяемость семьи за окно, выбранное в настройках конкретного пользователя
-    /// (по умолчанию — <see cref="RepetitionRules.DefaultWindowWeeks"/>). Окно
+    /// (по умолчанию — <see cref="SettingsCatalog.DefaultRepetitionWindowWeeks"/>). Окно
     /// заканчивается <paramref name="weekStart"/> включительно, если он передан
     /// (подбор для выбранной недели); иначе — текущей неделей сервера.
     /// </summary>
@@ -45,10 +52,10 @@ public sealed class RepetitionCounter
     {
         var weeks = await ResolveWindowWeeksAsync(userId, cancellationToken);
         var anchor = weekStart is { } selected
-            ? RepetitionRules.WeekStart(selected)
-            : RepetitionRules.CurrentWeekStart();
+            ? WeekStart.Start(selected)
+            : WeekStart.Start(DateOnly.FromDateTime(DateTime.UtcNow));
 
-        var (windowStart, windowEnd) = RepetitionRules.Window(anchor, weeks);
+        var (windowStart, windowEnd) = WeekStart.Window(anchor, weeks);
         var counts = await CountForFamilyAsync(familyId, windowStart, windowEnd);
         return new RepetitionWindowResult(weeks, counts);
     }
@@ -59,13 +66,10 @@ public sealed class RepetitionCounter
         CancellationToken cancellationToken = default)
     {
         if (userId is not { } id)
-            return RepetitionRules.DefaultWindowWeeks;
+            return SettingsCatalog.DefaultRepetitionWindowWeeks;
 
-        var settings = await _db.UserSettings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(s => s.UserId == id, cancellationToken);
-
-        return settings?.RepetitionWindowWeeks ?? RepetitionRules.DefaultWindowWeeks;
+        var settings = await _settings.ReadAsync(id, cancellationToken);
+        return settings.RepetitionWindowWeeks;
     }
 
     public async Task<Dictionary<Guid, int>> CountForFamilyAsync(

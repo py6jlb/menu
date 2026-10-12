@@ -6,6 +6,7 @@ using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Repetition;
+using MenuPlanner.Api.Settings;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
@@ -163,7 +164,7 @@ public sealed class DbServicesTests
         });
         await db.SaveChangesAsync();
 
-        var counter = new RepetitionCounter(db);
+        var counter = new RepetitionCounter(db, new SettingsService(db));
         var counts = await counter.CountForFamilyAsync(
             family.Id, new DateOnly(2026, 1, 5), new DateOnly(2026, 1, 18));
 
