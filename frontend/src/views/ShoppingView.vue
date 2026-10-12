@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onMounted } from 'vue'
 import { useShoppingList } from '../composables/useShoppingList'
-import { DAYS, MEALS, weekRangeLabel, toIso } from '../constants/plan'
+import { dayLabel, mealLabel, weekRangeLabel, toIso } from '../constants/plan'
 import { CATEGORIES, OTHER_CATEGORY } from '../constants/recipe'
 import { useOnlineStatus } from '../composables/useOnlineStatus'
+import WeekNav from '../components/WeekNav.vue'
 
 const KNOWN_CATEGORIES = new Set(CATEGORIES.map((c) => c.code))
 
@@ -57,14 +58,6 @@ const showOfflineNote = computed(
   () => !online.value && (items.value.length > 0 || excluded.value.length > 0)
 )
 
-function dayLabel(day) {
-  return DAYS[day]?.label || `День ${day + 1}`
-}
-
-function mealLabel(code) {
-  return MEALS.find((m) => m.code === code)?.label || code
-}
-
 function reasonLabel(reason) {
   return reason === 'source_missing' ? 'источник удалён' : 'недоступно'
 }
@@ -87,23 +80,7 @@ onMounted(load)
     </div>
 
     <div class="week-nav">
-      <button
-        type="button"
-        class="btn btn--ghost btn--small"
-        aria-label="Предыдущая неделя"
-        @click="goToWeek(-1)"
-      >
-        ←
-      </button>
-      <span class="week-label">{{ weekLabel }}</span>
-      <button
-        type="button"
-        class="btn btn--ghost btn--small"
-        aria-label="Следующая неделя"
-        @click="goToWeek(1)"
-      >
-        →
-      </button>
+      <WeekNav :label="weekLabel" @prev="goToWeek(-1)" @next="goToWeek(1)" />
     </div>
 
     <p v-if="loading" class="loading">Загрузка…</p>
@@ -176,17 +153,6 @@ onMounted(load)
   border: 1px solid var(--border);
   border-radius: 999px;
   padding: 0.3rem;
-}
-
-.week-nav .btn {
-  min-height: 40px;
-}
-
-.week-label {
-  font-weight: 700;
-  font-size: 0.95rem;
-  flex: 1;
-  text-align: center;
 }
 
 .incomplete {

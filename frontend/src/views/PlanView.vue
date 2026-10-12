@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave, useRoute } from 'vue-router'
-import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel, parseIso, toIso } from '../constants/plan'
+import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel, parseIso, toIso, mealLabel } from '../constants/plan'
 import { useWeekDraft } from '../composables/useWeekDraft'
 import { useRecipePicker } from '../composables/useRecipePicker'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
+import WeekNav from '../components/WeekNav.vue'
 import { SEASONS, DIETS } from '../constants/recipe'
 import { externalState } from '../constants/external'
 import { repetitionChip, repetitionTitle, repetitionWindowNote } from '../constants/repetition'
@@ -138,10 +139,6 @@ function dayHeader(index) {
   return `${DAYS[index].label} ${String(days.value[index].getDate()).padStart(2, '0')}`
 }
 
-function mealLabel(code) {
-  return MEALS.find((m) => m.code === code)?.label || code
-}
-
 function slotLabel(name, portions) {
   if (!name) return 'пусто'
   return portions ? `${name} (${portions} порц.)` : name
@@ -202,23 +199,7 @@ onBeforeUnmount(() => {
     </p>
 
     <div class="nav">
-      <button
-        type="button"
-        class="btn btn--ghost btn--small"
-        aria-label="Предыдущая неделя"
-        @click="goToWeek(-1)"
-      >
-        ←
-      </button>
-      <span class="week-label">{{ weekLabel }}</span>
-      <button
-        type="button"
-        class="btn btn--ghost btn--small"
-        aria-label="Следующая неделя"
-        @click="goToWeek(1)"
-      >
-        →
-      </button>
+      <WeekNav :label="weekLabel" @prev="goToWeek(-1)" @next="goToWeek(1)" />
     </div>
 
     <p v-if="!online" class="notice">
@@ -607,13 +588,6 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 0.75rem;
   margin: 0 0 1rem;
-}
-
-.week-label {
-  font-weight: 700;
-  font-size: 0.95rem;
-  text-align: center;
-  flex: 1;
 }
 
 .desktop-grid {

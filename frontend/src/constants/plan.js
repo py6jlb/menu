@@ -52,3 +52,11 @@ export function weekRangeLabel(monday) {
   const end = addDays(monday, 6)
   return `${monday.getDate()} ${MONTHS_GENITIVE[monday.getMonth()]} — ${end.getDate()} ${MONTHS_GENITIVE[end.getMonth()]} ${end.getFullYear()}`
 }
+
+export function dayLabel(day) {
+  return DAYS[day]?.label || `День ${day + 1}`
+}
+
+export function mealLabel(code) {
+  return MEALS.find((m) => m.code === code)?.label || code
+}
