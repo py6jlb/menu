@@ -8,7 +8,9 @@ namespace MenuPlanner.Api.Plans;
 public enum WeekPlanMutationOutcome
 {
     Success,
-    Conflict
+    Conflict,
+    /// <summary>Хотя бы один рецепт набора не принадлежит семье — полная замена отклонена.</summary>
+    NotOwnedRecipes
 }
 
 /// <summary>
@@ -31,6 +33,18 @@ public sealed class WeekPlanSaver
         DateTime now,
         CancellationToken cancellationToken = default)
     {
+        // Инвариант полной замены: все рецепты нового набора должны принадлежать
+        // семье. Проверяется до чтения ревизии, поэтому чужой рецепт даёт отказ
+        // (400), а не конфликт (409), и чужие данные не попадают в план.
+        var recipeIds = entries.Select(e => e.RecipeId).Distinct().ToList();
+        if (recipeIds.Count > 0)
+        {
+            var found = await _db.Recipes.CountAsync(
+                r => r.FamilyId == familyId && recipeIds.Contains(r.Id), cancellationToken);
+            if (found != recipeIds.Count)
+                return WeekPlanMutationOutcome.NotOwnedRecipes;
+        }
+
         var plan = await _db.WeekPlans
             .Include(p => p.Entries)
             .FirstOrDefaultAsync(p => p.FamilyId == familyId && p.WeekStart == weekStart, cancellationToken);
