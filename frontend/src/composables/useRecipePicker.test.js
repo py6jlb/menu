@@ -4,9 +4,9 @@ import {
   emptyFilters,
   hasAnyFilter,
   toPickerItem,
-  MATCH_ERROR_MESSAGE,
   BROKEN_SELECTION_MESSAGE
 } from './useRecipePicker'
+import { LOAD_FAILED } from '../constants/messages'
 
 function deferred() {
   let resolve
@@ -210,7 +210,7 @@ describe('useRecipePicker — порядок ответов и ошибки', ()
     await picker.reload()
 
     expect(picker.loading.value).toBe(false)
-    expect(picker.error.value).toBe(MATCH_ERROR_MESSAGE)
+    expect(picker.error.value).toBe(LOAD_FAILED)
     expect(picker.recipes.value).toHaveLength(1)
     expect(picker.selection.value.recipeId).toBe('r1')
   })
@@ -237,7 +237,7 @@ describe('useRecipePicker — порядок ответов и ошибки', ()
     await picker.open(null)
     await picker.reload()
 
-    expect(picker.error.value).toBe(MATCH_ERROR_MESSAGE)
+    expect(picker.error.value).toBe(LOAD_FAILED)
     expect(picker.recipes.value).toHaveLength(1)
   })
 })
@@ -330,6 +330,6 @@ describe('useRecipePicker — повторяемость для выбранно
     await picker.reload()
 
     expect(picker.repetitionWindowWeeks.value).toBe(0)
-    expect(picker.error.value).toBe(MATCH_ERROR_MESSAGE)
+    expect(picker.error.value).toBe(LOAD_FAILED)
   })
 })

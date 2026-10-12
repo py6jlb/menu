@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { useSettings, SETTINGS_LOAD_ERROR, SETTINGS_SAVE_ERROR } from './useSettings'
+import { useSettings } from './useSettings'
 import { DEFAULT_WINDOW_WEEKS } from '../constants/settings'
+import { LOAD_FAILED, SAVE_FAILED } from '../constants/messages'
 
 function deferred() {
   let resolve
@@ -43,7 +44,7 @@ describe('useSettings — загрузка', () => {
     await state.load()
 
     expect(state.loading.value).toBe(false)
-    expect(state.loadError.value).toBe(SETTINGS_LOAD_ERROR)
+    expect(state.loadError.value).toBe(LOAD_FAILED)
     expect(state.windowWeeks.value).toBe(DEFAULT_WINDOW_WEEKS)
 
     await state.load()
@@ -58,7 +59,7 @@ describe('useSettings — загрузка', () => {
 
     await state.load()
 
-    expect(state.loadError.value).toBe(SETTINGS_LOAD_ERROR)
+    expect(state.loadError.value).toBe(LOAD_FAILED)
     expect(state.windowWeeks.value).toBe(DEFAULT_WINDOW_WEEKS)
     expect(state.loading.value).toBe(false)
   })
@@ -104,7 +105,7 @@ describe('useSettings — сохранение', () => {
     await state.save()
 
     expect(state.saving.value).toBe(false)
-    expect(state.saveError.value).toBe(SETTINGS_SAVE_ERROR)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
     expect(state.windowWeeks.value).toBe(8)
 
     await state.save()
@@ -121,7 +122,7 @@ describe('useSettings — сохранение', () => {
 
     await state.save()
 
-    expect(state.saveError.value).toBe(SETTINGS_SAVE_ERROR)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
     expect(state.windowWeeks.value).toBe(9)
     expect(state.confirmedWindowWeeks.value).toBeNull()
     expect(state.saving.value).toBe(false)

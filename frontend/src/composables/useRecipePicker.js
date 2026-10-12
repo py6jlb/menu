@@ -1,7 +1,8 @@
 import { ref, computed } from 'vue'
 import { matchRecipes } from '../api/recipes'
+import { LOAD_FAILED } from '../constants/messages'
+import { useRequestTracker } from './useRequestTracker'
 
-export const MATCH_ERROR_MESSAGE = 'Не удалось загрузить рецепты. Проверьте соединение и повторите.'
 export const BROKEN_SELECTION_MESSAGE =
   'Блюдо недоступно: источник удалён, контент не читается. Уберите его из плана или замените на другое.'
 
@@ -121,7 +122,7 @@ export function useRecipePicker(options = {}) {
   const weekStart = ref(null)
   const repetitionWindowWeeks = ref(0)
 
-  let requestId = 0
+  const tracker = useRequestTracker()
 
   const hasFilters = computed(() => hasAnyFilter(appliedFilters.value))
 
@@ -140,25 +141,26 @@ export function useRecipePicker(options = {}) {
   }
 
   async function reload() {
-    const id = ++requestId
+    const token = tracker.begin()
+    const current = () => tracker.isCurrent(token)
     loading.value = true
     error.value = ''
     try {
       const { response, data } = await matchRecipe(
         matchBody(appliedFilters.value, search.value, weekStart.value)
       )
-      if (id !== requestId) return
+      if (!current()) return
       if (response.status === 200 && data && Array.isArray(data.items)) {
         recipes.value = data.items.map(toPickerItem)
         repetitionWindowWeeks.value = data.repetitionWindowWeeks || 0
         syncSelection()
       } else {
-        error.value = data?.error || MATCH_ERROR_MESSAGE
+        error.value = data?.error || LOAD_FAILED
       }
     } catch {
-      if (id === requestId) error.value = MATCH_ERROR_MESSAGE
+      if (current()) error.value = LOAD_FAILED
     } finally {
-      if (id === requestId) loading.value = false
+      if (current()) loading.value = false
     }
   }
 

@@ -1,12 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import {
-  useWeekDraft,
-  slotKey,
-  LOAD_ERROR_MESSAGE,
-  SAVE_ERROR_MESSAGE,
-  CONFLICT_MESSAGE
-} from './useWeekDraft'
+import { useWeekDraft, slotKey } from './useWeekDraft'
 import { toIso } from '../constants/plan'
+import { LOAD_FAILED, SAVE_FAILED, CONFLICT } from '../constants/messages'
 
 const WEEK_A = new Date(2026, 0, 5)
 const WEEK_B = new Date(2026, 0, 12)
@@ -154,7 +149,7 @@ describe('useWeekDraft — сетевые отказы', () => {
     await state.loadWeek()
 
     expect(state.loading.value).toBe(false)
-    expect(state.loadError.value).toBe(LOAD_ERROR_MESSAGE)
+    expect(state.loadError.value).toBe(LOAD_FAILED)
     expect(state.draft.value[slotKey(0, 'lunch')].recipeId).toBe(7)
   })
 
@@ -166,7 +161,7 @@ describe('useWeekDraft — сетевые отказы', () => {
     await state.save()
 
     expect(state.saving.value).toBe(false)
-    expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
     expect(state.draft.value[slotKey(0, 'lunch')].recipeId).toBe(7)
     expect(state.dirty.value).toBe(true)
     expect(saveWeekPlan).toHaveBeenCalledTimes(1)
@@ -181,7 +176,7 @@ describe('useWeekDraft — сетевые отказы', () => {
     await state.save()
 
     expect(state.saving.value).toBe(false)
-    expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
     expect(state.dirty.value).toBe(true)
   })
 
@@ -194,7 +189,7 @@ describe('useWeekDraft — сетевые отказы', () => {
     await state.loadWeek()
 
     expect(state.loading.value).toBe(false)
-    expect(state.loadError.value).toBe(LOAD_ERROR_MESSAGE)
+    expect(state.loadError.value).toBe(LOAD_FAILED)
     expect(state.draft.value[slotKey(0, 'lunch')].recipeId).toBe(7)
   })
 
@@ -207,7 +202,7 @@ describe('useWeekDraft — сетевые отказы', () => {
     await state.save()
 
     expect(state.saving.value).toBe(false)
-    expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
     expect(state.draft.value[slotKey(0, 'lunch')].recipeId).toBe(7)
     expect(state.dirty.value).toBe(true)
   })
@@ -317,7 +312,7 @@ describe('useWeekDraft — ревизия и конфликты', () => {
     expect(state.revision.value).toBe(2)
     expect(state.dirty.value).toBe(true)
     expect(state.conflict.value).toEqual({ revision: null, entries: [] })
-    expect(state.saveError.value).toBe(CONFLICT_MESSAGE)
+    expect(state.saveError.value).toBe(CONFLICT)
   })
 
   it('загрузка актуальной версии заменяет черновик и ревизию', async () => {
@@ -364,7 +359,7 @@ describe('useWeekDraft — ревизия и конфликты', () => {
 
     expect(state.revision.value).toBe(1)
     expect(state.dirty.value).toBe(true)
-    expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
 
     await state.save()
 

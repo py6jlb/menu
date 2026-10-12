@@ -8,12 +8,11 @@ import {
   draftToPayload,
   photoIntentFromDraft,
   documentIntentFromDraft,
-  LOAD_ERROR_MESSAGE,
-  SAVE_ERROR_MESSAGE,
   EMPTY_NAME_MESSAGE,
   PHOTO_ERROR_MESSAGE,
   PHOTO_UNKNOWN_MESSAGE
 } from './useRecipeDraft'
+import { LOAD_FAILED, SAVE_FAILED } from '../constants/messages'
 
 function deferred() {
   let resolve
@@ -161,7 +160,7 @@ describe('useRecipeDraft — lifecycle загрузки', () => {
     await state.load()
 
     expect(state.loading.value).toBe(false)
-    expect(state.loadError.value).toBe(LOAD_ERROR_MESSAGE)
+    expect(state.loadError.value).toBe(LOAD_FAILED)
     expect(state.draft.value.name).toBe('мой черновик')
   })
 
@@ -175,7 +174,7 @@ describe('useRecipeDraft — lifecycle загрузки', () => {
     await state.load()
 
     expect(state.loading.value).toBe(false)
-    expect(state.loadError.value).toBe(LOAD_ERROR_MESSAGE)
+    expect(state.loadError.value).toBe(LOAD_FAILED)
     expect(state.draft.value.name).toBe('мой черновик')
   })
 
@@ -343,7 +342,7 @@ describe('useRecipeDraft — сохранение', () => {
     await state.save()
 
     expect(state.saving.value).toBe(false)
-    expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
     expect(state.draft.value.name).toBe('важное')
     expect(state.dirty.value).toBe(true)
     expect(updateRecipe).toHaveBeenCalledTimes(1)
@@ -361,7 +360,7 @@ describe('useRecipeDraft — сохранение', () => {
     await state.save()
 
     expect(state.saving.value).toBe(false)
-    expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
     expect(state.dirty.value).toBe(true)
   })
 
@@ -376,7 +375,7 @@ describe('useRecipeDraft — сохранение', () => {
 
     await state.save()
 
-    expect(state.saveError.value).toBe(SAVE_ERROR_MESSAGE)
+    expect(state.saveError.value).toBe(SAVE_FAILED)
     expect(state.dirty.value).toBe(true)
   })
 

@@ -1,8 +1,6 @@
 import { ref } from 'vue'
-
-export const RESOURCE_LOAD_ERROR =
-  'Не удалось загрузить данные. Проверьте соединение и попробуйте снова.'
-export const RESOURCE_NOT_FOUND = 'Ресурс не найден.'
+import { LOAD_FAILED, NOT_FOUND } from '../constants/messages'
+import { useRequestTracker } from './useRequestTracker'
 
 /**
  * Загрузка ресурса, привязанного к ключу маршрута (id рецепта или токен
@@ -10,29 +8,26 @@ export const RESOURCE_NOT_FOUND = 'Ресурс не найден.'
  * запроса, поэтому поздний ответ старого ресурса не заменяет новый.
  */
 export function useRouteResource(fetchResource, options = {}) {
-  const notFoundMessage = options.notFound || RESOURCE_NOT_FOUND
-  const loadErrorMessage = options.loadError || RESOURCE_LOAD_ERROR
+  const notFoundMessage = options.notFound || NOT_FOUND
+  const loadErrorMessage = options.loadError || LOAD_FAILED
 
   const key = ref(options.initialKey ?? null)
   const resource = ref(null)
   const loading = ref(false)
   const error = ref('')
 
-  let requestId = 0
-
-  function isCurrent(requestIdForLoad, requestedKey) {
-    return requestIdForLoad === requestId && requestedKey === key.value
-  }
+  const tracker = useRequestTracker()
 
   async function load(nextKey = key.value) {
     key.value = nextKey
-    const requestIdForLoad = ++requestId
+    const token = tracker.begin(nextKey)
+    const current = () => tracker.isCurrent(token) && nextKey === key.value
     loading.value = true
     error.value = ''
     resource.value = null
     try {
       const { response, data } = await fetchResource(nextKey)
-      if (!isCurrent(requestIdForLoad, nextKey)) return null
+      if (!current()) return null
       if (response.status === 200) {
         if (data == null) {
           error.value = loadErrorMessage
@@ -48,10 +43,10 @@ export function useRouteResource(fetchResource, options = {}) {
       }
       return null
     } catch {
-      if (isCurrent(requestIdForLoad, nextKey)) error.value = loadErrorMessage
+      if (current()) error.value = loadErrorMessage
       return null
     } finally {
-      if (requestIdForLoad === requestId) loading.value = false
+      if (tracker.isCurrent(token)) loading.value = false
     }
   }
 

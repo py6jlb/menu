@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { autocompleteIngredients } from '../api/ingredients'
+import { useRequestTracker } from './useRequestTracker'
 
 export const AUTOCOMPLETE_DELAY = 150
 
@@ -27,22 +28,23 @@ function resetSuggestionState(state) {
  *
  * Состояние каждой строки живёт в одной записи по её `id` (uid), а не по
  * индексу: `{ state, timer, token, query }`. Каждый запрос получает собственный
- * токен и query, поэтому ответ устаревшего текста, удалённой или переставленной
- * строки не может открыть список или подменить более новый результат.
- * `reset()` очищает таймеры и обесценивает все записи при смене рецепта или
- * уходе со страницы.
+ * токен для ключа строки и query, поэтому ответ устаревшего текста, удалённой
+ * или переставленной строки не может открыть список или подменить более новый
+ * результат. Ключи строк изолированы, поэтому запрос по соседней строке не
+ * отменяет текущий. `reset()` очищает таймеры и обесценивает все записи при
+ * смене рецепта или уходе со страницы.
  */
 export function useIngredientAutocomplete(options = {}) {
   const request = options.request || autocompleteIngredients
   const delay = options.delay ?? AUTOCOMPLETE_DELAY
 
   const records = new Map()
-  let tokenSequence = 0
+  const tracker = useRequestTracker()
 
   function recordFor(id) {
     let record = records.get(id)
     if (!record) {
-      record = { state: reactive(createSuggestionState()), timer: undefined, token: 0, query: '' }
+      record = { state: reactive(createSuggestionState()), timer: undefined, token: null, query: '' }
       records.set(id, record)
     }
     return record
@@ -52,9 +54,9 @@ export function useIngredientAutocomplete(options = {}) {
     return recordFor(id).state
   }
 
-  function isCurrent(id, token, query) {
+  function applies(id, token, query) {
     const record = records.get(id)
-    return Boolean(record) && record.token === token && record.query === query
+    return Boolean(record) && tracker.isCurrent(token) && record.query === query
   }
 
   function cancelTimer(id) {
@@ -68,7 +70,7 @@ export function useIngredientAutocomplete(options = {}) {
   async function run(id, query, token) {
     const record = records.get(id)
     if (record) record.timer = undefined
-    if (!isCurrent(id, token, query)) return
+    if (!applies(id, token, query)) return
 
     const state = records.get(id).state
     state.loading = true
@@ -78,12 +80,12 @@ export function useIngredientAutocomplete(options = {}) {
     try {
       result = await request(query)
     } catch {
-      if (!isCurrent(id, token, query)) return
+      if (!applies(id, token, query)) return
       resetSuggestionState(records.get(id).state)
       return
     }
 
-    if (!isCurrent(id, token, query)) return
+    if (!applies(id, token, query)) return
     const current = records.get(id).state
     current.loading = false
     const response = result?.response
@@ -103,7 +105,7 @@ export function useIngredientAutocomplete(options = {}) {
     cancelTimer(id)
     const record = recordFor(id)
     const query = (rawQuery || '').trim()
-    record.token = ++tokenSequence
+    record.token = tracker.begin(id)
     record.query = query
     resetSuggestionState(record.state)
     if (!query) return
@@ -114,14 +116,15 @@ export function useIngredientAutocomplete(options = {}) {
   function close(id) {
     cancelTimer(id)
     const record = recordFor(id)
-    record.token = ++tokenSequence
+    record.token = tracker.begin(id)
     record.query = ''
     resetSuggestionState(record.state)
   }
 
-  /** Строка удалена: убрать таймер и состояние. */
+  /** Строка удалена: убрать таймер, состояние и обесценить ответ по её ключу. */
   function release(id) {
     cancelTimer(id)
+    tracker.reset(id)
     records.delete(id)
   }
 
@@ -131,6 +134,7 @@ export function useIngredientAutocomplete(options = {}) {
       if (record.timer !== undefined) clearTimeout(record.timer)
     })
     records.clear()
+    tracker.reset()
   }
 
   function moveActive(id, delta) {

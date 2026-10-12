@@ -1,10 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import {
-  useShoppingList,
-  SHOPPING_LOAD_ERROR_MESSAGE,
-  SHOPPING_FAMILY_ERROR_MESSAGE
-} from './useShoppingList'
+import { useShoppingList } from './useShoppingList'
 import { toIso } from '../constants/plan'
+import { LOAD_FAILED, NOT_IN_FAMILY } from '../constants/messages'
 
 const WEEK_A = new Date(2026, 0, 5)
 const WEEK_B = new Date(2026, 0, 12)
@@ -111,7 +108,7 @@ describe('useShoppingList — сетевые ошибки', () => {
     await state.goToWeek(1)
 
     expect(state.loading.value).toBe(false)
-    expect(state.error.value).toBe(SHOPPING_LOAD_ERROR_MESSAGE)
+    expect(state.error.value).toBe(LOAD_FAILED)
     expect(state.items.value.map((i) => i.name)).toEqual(['мука'])
     expect(state.resultWeek.value).toBe(toIso(WEEK_A))
     expect(state.resultIsCurrent.value).toBe(false)
@@ -126,7 +123,7 @@ describe('useShoppingList — сетевые ошибки', () => {
     await state.load()
 
     expect(state.loading.value).toBe(false)
-    expect(state.error.value).toBe(SHOPPING_FAMILY_ERROR_MESSAGE)
+    expect(state.error.value).toBe(NOT_IN_FAMILY)
     expect(state.resultWeek.value).toBe(null)
     expect(state.items.value).toEqual([])
   })
@@ -143,6 +140,6 @@ describe('useShoppingList — сетевые ошибки', () => {
 
     expect(state.refreshing.value).toBe(false)
     expect(state.items.value.map((i) => i.name)).toEqual(['соль'])
-    expect(state.error.value).toBe(SHOPPING_LOAD_ERROR_MESSAGE)
+    expect(state.error.value).toBe(LOAD_FAILED)
   })
 })
