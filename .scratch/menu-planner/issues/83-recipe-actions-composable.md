@@ -17,14 +17,25 @@
 
 ## Checklist
 
-- [ ] `composables/useRecipeAction.js` покрыт тестами: принятые статусы → `onSuccess`; `409` → `conflict` + ошибка; прочий статус → серверный текст/фолбэк; сеть → `SERVER_UNAVAILABLE`; устаревший `key` → результат игнорируется; `pending` переключается.
-- [ ] `RecipeDetailView` использует три инстанса: `onDelete`/`onRemoveExternal` (успех → `router.push('/recipes')`, конфликт → баннер), `onCopy` (успех → замена `recipe`, конфликт → `copyError`).
-- [ ] `SharedRecipeView.onAdd` использует инстанс (успех `201`/`409` → `router.push('/recipes/{id}')`, ошибка → `addError`; без ревизии/конфликта).
-- [ ] `markActionConflict`/`reloadAfterConflict` и дублирующие обработчики удалены из view; `resetResourceState` чистит инстансы.
-- [ ] `npm run test` и `npm run build` зелёные; поведение и тексты не изменились (кроме канонизации из #82).
+- [x] `composables/useRecipeAction.js` покрыт тестами: принятые статусы → `onSuccess`; `409` → `conflict` + ошибка; прочий статус → серверный текст/фолбэк; сеть → `SERVER_UNAVAILABLE`; устаревший `key` → результат игнорируется; `pending` переключается.
+- [x] `RecipeDetailView` использует три инстанса: `onDelete`/`onRemoveExternal` (успех → `router.push('/recipes')`, конфликт → баннер), `onCopy` (успех → замена `recipe`, конфликт → `copyError`).
+- [x] `SharedRecipeView.onAdd` использует инстанс (успех `201`/`409` → `router.push('/recipes/{id}')`, ошибка → `addError`; без ревизии/конфликта).
+- [x] `markActionConflict`/`reloadAfterConflict` и дублирующие обработчики удалены из view; `resetResourceState` чистит инстансы.
+- [x] `npm run test` и `npm run build` зелёные; поведение и тексты не изменились (кроме канонизации из #82).
 
 ## Evidence
 
-_(заполняется при реализации)_
+Реализовано в worktree `.worktrees/83-recipe-actions-composable`, ветка `ticket/83-recipe-actions-composable`.
+
+**Файлы:**
+- Добавлен `frontend/src/composables/useRecipeAction.js` — инстанс на действие: `pending`/`error`/`conflict`, `run(request, { key, acceptedStatuses, onSuccess, fallbackMessage })`, `reset()`. Страж identity — `useRequestTracker` + запомненный `activeKey`; `409` → `conflict = { revision: revisionOf(data) }` + `data?.error || CONFLICT`; сеть → `SERVER_UNAVAILABLE`; принятый статус → `onSuccess(data)`; прочий → `data?.error || fallbackMessage`.
+- Добавлен `frontend/src/composables/useRecipeAction.test.js` — 13 тестов (принятые статусы, 200/201, 409 с ревизией/без, сеть, `fallbackMessage`, `pending`, страж старого ключа, `reset`).
+- Изменён `frontend/src/views/RecipeDetailView.vue` — три инстанса (delete/removeExternal/copy), `actionError`/`actionConflict`/`actionRevision` — computed над инстансами; `markActionConflict`/`reloadAfterConflict` удалены, кнопка «перечитать» зовёт `load()` из `useRouteResource`; `resetResourceState` чистит инстансы; три места `copyError` сохранены.
+- Изменён `frontend/src/views/SharedRecipeView.vue` — `onAdd` через инстанс (`acceptedStatuses: [201, 409]`, `onSuccess` → `router.push('/recipes/{id}')`); `resetResourceState` чистит инстанс.
+
+**Проверки (Node v22.21.1, хост-Node v18 обойдён через nvm; `npm ci` из-за отсутствия `node_modules` в worktree):**
+- `npm run test` — 22 файла, 273 теста, все зелёные (13 новых из `useRecipeAction.test.js`).
+- `npm run build` — успешно, включая PWA-шаг (`precache 22 entries`, `dist/sw.js`). На PWA-шаге не падало; сборка подтверждена Node ≥ 20 (v22.21.1).
 
 ## Comments
+

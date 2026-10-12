@@ -8,9 +8,9 @@ import {
   copyRecipe
 } from '../api/recipes'
 import { getMyFamily } from '../api/families'
-import { revisionOf } from '../api/revision'
 import { useAuth } from '../stores/auth'
 import { useRouteResource } from '../composables/useRouteResource'
+import { useRecipeAction } from '../composables/useRecipeAction'
 import { useRecipeShare } from '../composables/useRecipeShare'
 import RecipeBody from '../components/RecipeBody.vue'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
@@ -23,13 +23,39 @@ const { resource: recipe, loading, error, load } = useRouteResource(getRecipe, {
   notFound: 'Рецепт не найден.'
 })
 
-const deleting = ref(false)
-const removingLocal = ref(false)
-const copying = ref(false)
-const copyError = ref('')
-const actionError = ref('')
-const actionConflict = ref(false)
-const actionRevision = ref(null)
+// Инстанс на действие: у каждого свои pending/error/conflict, поэтому ошибки
+// удаления, удаления внешнего и копии не перетирают друг друга.
+const {
+  pending: deleting,
+  error: deleteError,
+  conflict: deleteConflict,
+  run: runDelete,
+  reset: resetDelete
+} = useRecipeAction()
+
+const {
+  pending: removingLocal,
+  error: removeExternalError,
+  conflict: removeExternalConflict,
+  run: runRemoveExternal,
+  reset: resetRemoveExternal
+} = useRecipeAction()
+
+const {
+  pending: copying,
+  error: copyError,
+  run: runCopy,
+  reset: resetCopy
+} = useRecipeAction()
+
+// Удалить и «убрать из семьи» показываются в общем баннере страницы. Для
+// конкретного рецепта они взаимоисключащи (кнопка удаления — только у своего
+// рецепта, «убрать» — только у внешнего), поэтому можно объединить их исход.
+const actionError = computed(() => deleteError.value || removeExternalError.value)
+const actionConflict = computed(
+  () => deleteConflict.value ?? removeExternalConflict.value ?? null
+)
+const actionRevision = computed(() => actionConflict.value?.revision ?? null)
 
 const family = ref(null)
 const {
@@ -54,31 +80,19 @@ const shareLink = computed(() => {
 })
 
 function resetResourceState() {
-  deleting.value = false
-  removingLocal.value = false
-  copying.value = false
-  copyError.value = ''
-  actionError.value = ''
-  actionConflict.value = false
-  actionRevision.value = null
+  resetDelete()
+  resetRemoveExternal()
+  resetCopy()
   resetShare()
   copied.value = false
 }
 
-/** Конфликт ревизии действия: показать актуальную версию и предложить перечитать. */
-function markActionConflict(data) {
-  actionConflict.value = true
-  actionRevision.value = revisionOf(data)
-  return data?.error || 'Кто-то уже изменил рецепт. Загрузите актуальную версию и повторите.'
-}
-
-/** Перечитать рецепт после конфликта, чтобы пользователь повторил действие с новой ревизией. */
-async function reloadAfterConflict() {
-  actionConflict.value = false
-  actionRevision.value = null
-  actionError.value = ''
-  copyError.value = ''
-  await load(recipe.value?.id)
+/** Перечитать рецепт после конфликта, чтобы повторить действие с новой ревизией. */
+function reloadRecipeAfterConflict() {
+  resetDelete()
+  resetRemoveExternal()
+  resetCopy()
+  return load(recipe.value?.id)
 }
 
 async function loadFamily() {
@@ -123,27 +137,12 @@ async function onDelete() {
   const id = recipe.value?.id
   if (!id) return
   if (!window.confirm(`Удалить рецепт «${recipe.value.name}»?`)) return
-  deleting.value = true
-  actionError.value = ''
-  actionConflict.value = false
-  actionRevision.value = null
-  try {
-    const { response, data } = await deleteRecipe(id, recipe.value.revision)
-    if (recipe.value?.id !== id) return
-    if (response.status === 204) {
-      router.push('/recipes')
-      return
-    }
-    if (response.status === 409) {
-      actionError.value = markActionConflict(data)
-      return
-    }
-    actionError.value = 'Не удалось удалить рецепт.'
-  } catch {
-    if (recipe.value?.id === id) actionError.value = 'Сервер недоступен. Попробуйте ещё раз.'
-  } finally {
-    if (recipe.value?.id === id) deleting.value = false
-  }
+  return runDelete(() => deleteRecipe(id, recipe.value.revision), {
+    key: id,
+    acceptedStatuses: [204],
+    onSuccess: () => router.push('/recipes'),
+    fallbackMessage: 'Не удалось удалить рецепт.'
+  })
 }
 
 async function onRemoveExternal() {
@@ -155,51 +154,25 @@ async function onRemoveExternal() {
     )
   )
     return
-  removingLocal.value = true
-  actionError.value = ''
-  actionConflict.value = false
-  actionRevision.value = null
-  try {
-    const { response, data } = await removeExternalRecipe(id, recipe.value.revision)
-    if (recipe.value?.id !== id) return
-    if (response.status === 204) {
-      router.push('/recipes')
-      return
-    }
-    if (response.status === 409) {
-      actionError.value = markActionConflict(data)
-      return
-    }
-    actionError.value = 'Не удалось убрать рецепт из семьи.'
-  } catch {
-    if (recipe.value?.id === id) actionError.value = 'Сервер недоступен. Попробуйте ещё раз.'
-  } finally {
-    if (recipe.value?.id === id) removingLocal.value = false
-  }
+  return runRemoveExternal(() => removeExternalRecipe(id, recipe.value.revision), {
+    key: id,
+    acceptedStatuses: [204],
+    onSuccess: () => router.push('/recipes'),
+    fallbackMessage: 'Не удалось убрать рецепт из семьи.'
+  })
 }
 
 async function onCopy() {
   const id = recipe.value?.id
   if (!id) return
-  copyError.value = ''
-  actionConflict.value = false
-  actionRevision.value = null
-  copying.value = true
-  try {
-    const { response, data } = await copyRecipe(id, recipe.value.revision)
-    if (recipe.value?.id !== id) return
-    if (response.status === 200 || response.status === 201) {
+  return runCopy(() => copyRecipe(id, recipe.value.revision), {
+    key: id,
+    acceptedStatuses: [200, 201],
+    onSuccess: (data) => {
       recipe.value = data
-    } else if (response.status === 409) {
-      copyError.value = markActionConflict(data)
-    } else {
-      copyError.value = data?.error || 'Сохранение копии пока недоступно.'
-    }
-  } catch {
-    if (recipe.value?.id === id) copyError.value = 'Сервер недоступен. Попробуйте ещё раз.'
-  } finally {
-    if (recipe.value?.id === id) copying.value = false
-  }
+    },
+    fallbackMessage: 'Сохранение копии пока недоступно.'
+  })
 }
 
 watch(
@@ -247,7 +220,7 @@ onMounted(async () => {
           v-if="actionConflict"
           type="button"
           class="btn btn--ghost btn--small"
-          @click="reloadAfterConflict"
+          @click="reloadRecipeAfterConflict"
         >
           Загрузить актуальную версию{{ actionRevision !== null ? ` (ревизия ${actionRevision})` : '' }}
         </button>

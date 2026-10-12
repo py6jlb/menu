@@ -5,6 +5,7 @@ import { getSharedRecipe, importSharedRecipe } from '../api/recipes'
 import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
 import { useRouteResource } from '../composables/useRouteResource'
+import { useRecipeAction } from '../composables/useRecipeAction'
 import RecipeBody from '../components/RecipeBody.vue'
 
 const route = useRoute()
@@ -17,16 +18,22 @@ const { key, resource: recipe, loading, error, load } = useRouteResource(getShar
 
 const family = ref(null)
 const familyLoaded = ref(false)
-const importing = ref(false)
-const addError = ref('')
+
+// Импорт по ссылке: у действия собственные pending/error; ревизии и конфликта
+// у импорта нет, поэтому 409 — тоже принятый исход (рецепт уже добавлен).
+const {
+  pending: importing,
+  error: addError,
+  run: runImport,
+  reset: resetImport
+} = useRecipeAction()
 
 const isSourceFamily = computed(() =>
   Boolean(family.value && recipe.value?.sourceFamilyId === family.value.id)
 )
 
 function resetResourceState() {
-  importing.value = false
-  addError.value = ''
+  resetImport()
 }
 
 async function loadFamily() {
@@ -37,26 +44,18 @@ async function loadFamily() {
 
 async function onAdd() {
   const token = route.params.token
-  const confirmed = window.confirm(
-    'Добавить рецепт в вашу семью? Он может быть потерян при удалении у владельца.'
+  if (
+    !window.confirm(
+      'Добавить рецепт в вашу семью? Он может быть потерян при удалении у владельца.'
+    )
   )
-  if (!confirmed) return
-
-  addError.value = ''
-  importing.value = true
-  try {
-    const { response, data } = await importSharedRecipe(token)
-    if (route.params.token !== token) return
-    if (response.status === 201 || response.status === 409) {
-      router.push(`/recipes/${data.recipeId}`)
-      return
-    }
-    addError.value = data?.error || 'Не удалось добавить рецепт.'
-  } catch {
-    if (route.params.token === token) addError.value = 'Сервер недоступен. Попробуйте ещё раз.'
-  } finally {
-    if (route.params.token === token) importing.value = false
-  }
+    return
+  return runImport(() => importSharedRecipe(token), {
+    key: token,
+    acceptedStatuses: [201, 409],
+    onSuccess: (data) => router.push(`/recipes/${data.recipeId}`),
+    fallbackMessage: 'Не удалось добавить рецепт.'
+  })
 }
 
 watch(
