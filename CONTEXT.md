@@ -100,9 +100,19 @@ _Avoid_: Код приглашения, Приглашение
 _Код_: `Recipe` (`Domain/Recipe.cs`).
 _Avoid_: Блюдо (блюдо — это рецепт в контексте плана)
 
-**Жизненный цикл фото**:
-Согласованное с ревизией рецепта ведение файла фото: новый файл пишется до commit БД, при неуспехе записи убирается компенсацией, старый файл удаляется после commit; ошибки удаления не делают завершённое изменение неуспешным. Безопасная уборка удаляет только управляемые, не упомянутые ни одним рецептом и достаточно старые файлы, не трогая незавершённую загрузку/копирование и снимаемый backup-набор. Публичный URL фото (`/api/photos/{file}`) не отзывается вместе со ссылкой на рецепт.
-_Код_: `PhotoLifecycle`, `PhotoGarbageCollector`, `PhotoCleanupWorker` (`Recipes/Photos/`), `IPhotoStore`/`PhotoStorage`.
+**Файл рецепта**:
+Управляемый файл, прикреплённый к рецепту: фото или PDF-документ. Виды отличаются каталогом, допустимыми расширениями и полем ссылки в рецепте, но подчиняются одному жизненному циклу и одной безопасной уборке.
+_Код_: `RecipeFileKind`, `RecipeFileCatalog`, `IRecipeFileStore`/`FileStorage`, `RecipeFileLifecycle`, `RecipeFileGarbageCollector`, `RecipeFileNames`, `RecipeFileCleanupWorker` (`Recipes/Files/`).
+_Avoid_: Вложение, Ассет, Загрузка
+
+**Фото рецепта**:
+Необязательное изображение блюда, прикреплённое к рецепту; вид файла рецепта. Отдаётся анонимно по неугадываемому имени (`/api/photos/{file}`); допустимые форматы — jpg, png, webp, gif.
+_Код_: `Recipe.PhotoPath`, `RecipeFileKind.Photo`, `RecipeImageValidator`.
+_Avoid_: Картинка, Изображение
+
+**Жизненный цикл файла рецепта**:
+Согласованное с ревизией рецепта ведение файла (фото или документа): новый файл пишется до commit БД, при неуспехе записи убирается компенсацией, старый файл удаляется после commit; ошибки удаления не делают завершённое изменение неуспешным. Безопасная уборка удаляет только управляемые, не упомянутые ни одним рецептом и достаточно старые файлы, не трогая незавершённую загрузку/копирование и снимаемый backup-набор. Публичный URL фото (`/api/photos/{file}`) не отзывается вместе со ссылкой на рецепт.
+_Код_: `RecipeFileLifecycle`, `RecipeFileGarbageCollector`, `RecipeFileCleanupWorker` (`Recipes/Files/`).
 _Avoid_: File upload, Загрузчик, GC
 
 **Ингредиент**:
@@ -117,7 +127,7 @@ _Avoid_: Этап, Операция
 
 **Документ рецепта**:
 Необязательный PDF-файл с описанием рецепта, приложенный вместо ручного ввода. Сосуществует с фото, один на рецепт; позволяет сохранить рецепт без шагов и ингредиентов. Отдаётся анонимно по неугадываемому имени; у внешнего рецепта читается от источника, при промоушене в копию — копируется.
-_Код_: `Recipe.DocumentPath`, `IDocumentStore`/`DocumentStorage` (`DOCUMENTS_DIR`), `DocumentLifecycle`, `DocumentGarbageCollector`, `RecipePdfValidator` (`Recipes/Documents/`).
+_Код_: `Recipe.DocumentPath`, `RecipeFileKind.Document`, `RecipePdfValidator`.
 _Avoid_: Вложение, Файл, Скан
 
 **Порция**:
@@ -258,8 +268,8 @@ _Avoid_: Версия, Номер, ETag
 
 ## Разделение кода
 
-**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `ShoppingListContentBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, `DietCatalog`, `PhotoFileNames`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
+**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `ShoppingListContentBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, `DietCatalog`, `RecipeFileNames`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
 
-**БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `RecipeReader`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`, `PhotoLifecycle`, `PhotoGarbageCollector`). Обработчики Minimal API получают его параметром. Фоновые проходы — hosted-сервисы `EmailDeliveryWorker`, `PhotoCleanupWorker`; файловый порт `IPhotoStore` реализуется singleton `PhotoStorage`.
+**БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `RecipeReader`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`, `RecipeFileLifecycle`, `RecipeFileGarbageCollector`). Обработчики Minimal API получают его параметром. Фоновые проходы — hosted-сервисы `EmailDeliveryWorker`, `RecipeFileCleanupWorker`; файловый порт `IRecipeFileStore` реализуется singleton `FileStorage`.
 
 _Avoid_: `static`-метод, принимающий `AppDbContext`; service locator; имя `*Service` у чистого правила. Исключение для locator — граница фреймворкового события без точки инъекции (событие `OnTokenValidated` у JwtBearer), где scoped-сервис достаётся из `RequestServices` явно одним вызовом.
