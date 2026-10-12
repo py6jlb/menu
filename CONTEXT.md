@@ -182,7 +182,7 @@ _Avoid_: Мёртвая ссылка, Просроченная ссылка
 
 **Актуальное чтение рецепта**:
 Единый способ прочитать рецепт для краткого списка, подробной страницы и подсказок ингредиентов: локальный id и принадлежность семьи сохраняются, живой контент внешнего рецепта берётся у источника, а состояние ссылки и подпись семьи-источника разрешены модулем; краткое чтение не грузит шаги и ингредиенты, автодополнение читает только названия и не берёт устаревшие у сломанного источника, пофайлового запроса на каждый внешний рецепт нет.
-_Код_: `RecipeReader`, `RecipeSummary`, `RecipeDetail`, `ReadIngredientSuggestionsAsync` (`Recipes/RecipeReader.cs`).
+_Код_: `RecipeReader`, `RecipeSummary`, `RecipeDetail`, `ReadIngredientSuggestionsAsync` (`Recipes/RecipeReader.cs`); состояние, имя источника и живой контент разрешает общий `ExternalRecipeContext` (`Recipes/External/ExternalRecipeContext.cs`).
 _Avoid_: Repository, CQRS, Обёртка чтения
 
 ### Планирование
@@ -224,7 +224,7 @@ _Avoid_: Поиск, Подборка
 
 **Контент недели**:
 Актуальное чтение записей плана для карточки и списка покупок: состояние внешних ссылок разрешено модулем, карточка получает только имена (без дочерних коллекций источника), список покупок — живые ингредиенты и порции источников; для сломанной ссылки контент не подставляется.
-_Код_: `WeekPlanReader`, `WeekPlanContent`, `PlanContentEntry`, `PlanProjection` (`Plans/WeekPlanReader.cs`).
+_Код_: `WeekPlanReader`, `WeekPlanContent`, `PlanContentEntry`, `PlanProjection` (`Plans/WeekPlanReader.cs`); состояние и живой контент разрешает общий `ExternalRecipeContext` (`Recipes/External/ExternalRecipeContext.cs`).
 _Avoid_: Repository, CQRS, Обёртка чтения
 
 ### Покупки
@@ -270,6 +270,6 @@ _Avoid_: Версия, Номер, ETag
 
 **Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `ShoppingListContentBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, `DietCatalog`, `RecipeFileNames`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
 
-**БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `RecipeReader`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`, `RecipeFileLifecycle`, `RecipeGarbageCollector`). Обработчики Minimal API получают его параметром. Фоновые проходы — hosted-сервисы `EmailDeliveryWorker`, `RecipeFileCleanupWorker`; файловый порт `IRecipeFileStore` реализуется singleton `FileStorage`.
+**БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `RecipeReader`, `ExternalRecipeContext`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`, `RecipeFileLifecycle`, `RecipeGarbageCollector`). Обработчики Minimal API получают его параметром. Фоновые проходы — hosted-сервисы `EmailDeliveryWorker`, `RecipeFileCleanupWorker`; файловый порт `IRecipeFileStore` реализуется singleton `FileStorage`.
 
 _Avoid_: `static`-метод, принимающий `AppDbContext`; service locator; имя `*Service` у чистого правила. Исключение для locator — граница фреймворкового события без точки инъекции (событие `OnTokenValidated` у JwtBearer), где scoped-сервис достаётся из `RequestServices` явно одним вызовом.

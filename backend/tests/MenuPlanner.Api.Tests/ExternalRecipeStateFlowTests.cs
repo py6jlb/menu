@@ -109,6 +109,41 @@ public sealed class ExternalRecipeStateFlowTests
     }
 
     [Fact]
+    public async Task RecipeDetailAndPlanCard_ReportSameState_ForOneLink()
+    {
+        // Регрессия согласованности: карточка плана (Summary) и деталь рецепта (Full)
+        // ходят через один module и не могут разойтись в состоянии одной ссылки.
+        using var client = new ApiFactory().CreateClient();
+        var (owner, recipient, imported, source) = await ImportAsync(client);
+
+        await PutAuthorizedAsync<WeekPlanDto>(client, recipient.Token,
+            $"/api/plans/week/{Monday}", new SaveWeekPlanRequest(new[]
+            {
+                new PlanEntryRequest(0, "dinner", imported.WrapperId, 2)
+            }));
+
+        async Task AssertConsistentAsync(string expected)
+        {
+            var (_, detail) = await GetAuthorizedAsync<RecipeDto>(
+                client, recipient.Token, $"/api/recipes/{imported.WrapperId}");
+            var (_, plan) = await GetAuthorizedAsync<WeekPlanDto>(
+                client, recipient.Token, $"/api/plans/week/{Monday}");
+            Assert.Equal(expected, detail!.State);
+            Assert.Equal(expected, Assert.Single(plan!.Entries).State);
+        }
+
+        await AssertConsistentAsync("ok");
+
+        await PostAuthorizedAsync<RecipeShareDto>(
+            client, owner.Token, $"/api/recipes/{imported.SourceId}/share/regenerate", body: null);
+        await AssertConsistentAsync("warning");
+
+        await DeleteAuthorizedAsync(client, owner.Token,
+            $"/api/recipes/{imported.SourceId}?revision={source.Revision}");
+        await AssertConsistentAsync("broken");
+    }
+
+    [Fact]
     public async Task RemoveExternalLocally_DeletesWrapper_KeepsSourceIntact()
     {
         using var client = new ApiFactory().CreateClient();

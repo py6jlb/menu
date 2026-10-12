@@ -47,17 +47,12 @@ public sealed class WeekPlanReader
     private const string WeekStartFormat = "yyyy-MM-dd";
 
     private readonly AppDbContext _db;
-    private readonly ExternalRecipeStateResolver _stateResolver;
-    private readonly ExternalRecipeSourceLoader _sourceLoader;
+    private readonly ExternalRecipeContext _context;
 
-    public WeekPlanReader(
-        AppDbContext db,
-        ExternalRecipeStateResolver stateResolver,
-        ExternalRecipeSourceLoader sourceLoader)
+    public WeekPlanReader(AppDbContext db, ExternalRecipeContext context)
     {
         _db = db;
-        _stateResolver = stateResolver;
-        _sourceLoader = sourceLoader;
+        _context = context;
     }
 
     /// <summary>Карточка плана недели или null, если он ещё не создан.</summary>
@@ -108,28 +103,18 @@ public sealed class WeekPlanReader
             .ThenBy(e => PlanningCatalog.OrderOf(e.MealType))
             .ToList();
 
-        var states = await _stateResolver.ResolveManyAsync(ExternalPlanContent.SourceLinks(entries));
-        var sourceIds = ExternalPlanContent.SourceRecipeIds(entries);
-
-        // Живой источник — единственный источник истины: и имя, и контент, и признак
-        // сломанной ссылки берутся из одной загрузки, поэтому гонка с удалением источника
-        // не даёт молча потерять запись.
-        Dictionary<Guid, Recipe>? liveSources = null;
-        Dictionary<Guid, string> liveNames;
-        if (projection == PlanProjection.Ingredients)
-        {
-            liveSources = await _sourceLoader.LoadIngredientSourcesAsync(sourceIds, cancellationToken);
-            liveNames = liveSources.ToDictionary(x => x.Key, x => x.Value.Name);
-        }
-        else
-        {
-            var summaries = await _sourceLoader.LoadSummariesAsync(sourceIds, cancellationToken);
-            liveNames = summaries.ToDictionary(x => x.Key, x => x.Value.Name);
-        }
+        // Единое разрешение внешних ссылок через module: карточке нужна сводка (только
+        // имена, без дочерних коллекций источника), списку покупок — живые ингредиенты.
+        var resolved = await _context.ResolveAsync(
+            ExternalRecipeLink.FromPlanEntries(entries),
+            projection == PlanProjection.Ingredients
+                ? ExternalRecipeProjection.Ingredients
+                : ExternalRecipeProjection.Summary,
+            cancellationToken);
 
         var content = new List<PlanContentEntry>(entries.Count);
         foreach (var entry in entries)
-            content.Add(Resolve(entry, projection, states, liveNames, liveSources));
+            content.Add(Resolve(entry, projection, resolved));
 
         return new WeekPlanContent(plan.WeekStart, plan.Revision, content);
     }
@@ -137,46 +122,30 @@ public sealed class WeekPlanReader
     private static PlanContentEntry Resolve(
         PlanEntry entry,
         PlanProjection projection,
-        IReadOnlyDictionary<Guid, ExternalRecipeState> states,
-        IReadOnlyDictionary<Guid, string> liveNames,
-        IReadOnlyDictionary<Guid, Recipe>? liveSources)
+        IReadOnlyDictionary<Guid, ResolvedExternalRecipe> resolved)
     {
         var recipe = entry.Recipe;
         if (recipe is null)
             return NewEntry(entry, "", state: null, content: null);
 
-        if (recipe.SourceRecipeId is not Guid sourceId)
+        if (recipe.SourceRecipeId is null)
         {
             // Свой рецепт: контент уже загружен на строке записи.
             var own = projection == PlanProjection.Ingredients ? recipe : null;
             return NewEntry(entry, recipe.Name, state: null, content: own);
         }
 
-        var sourceAlive = liveNames.TryGetValue(sourceId, out var liveName);
+        var resolvedRecipe = resolved[recipe.Id];
+        var name = resolvedRecipe.Content?.Name ?? recipe.Name;
 
-        // Сломанная ссылка определяется наличием живого источника, а не отдельным
-        // чтением: источник, исчезнувший между разрешением состояния и загрузкой
-        // контента, не оставит запись без диагностики.
-        ExternalRecipeState state;
-        if (!sourceAlive)
-        {
-            state = ExternalRecipeState.Broken;
-        }
-        else
-        {
-            state = states.TryGetValue(recipe.Id, out var resolved)
-                && resolved != ExternalRecipeState.Broken
-                ? resolved
-                : ExternalRecipeState.Warning;
-        }
-
-        var name = sourceAlive ? liveName! : recipe.Name;
-
-        var effective = projection == PlanProjection.Ingredients && sourceAlive
-            ? ExternalRecipeContentResolver.Materialize(recipe, liveSources![sourceId])
+        // Сломанная ссылка определяется живым источником, а не отдельным чтением:
+        // для неё контент не подставляется, чтобы устаревшие ингредиенты не попали
+        // в список покупок.
+        var effective = projection == PlanProjection.Ingredients && resolvedRecipe.SourceAlive
+            ? resolvedRecipe.Content
             : null;
 
-        return NewEntry(entry, name, state, effective);
+        return NewEntry(entry, name, resolvedRecipe.State, effective);
     }
 
     private static PlanContentEntry NewEntry(

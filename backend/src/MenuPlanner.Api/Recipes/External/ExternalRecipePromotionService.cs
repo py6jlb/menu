@@ -228,32 +228,11 @@ public sealed class ExternalRecipePromotionService
     private void ApplyCopiedContent(
         Recipe wrapper, Recipe source, string? copiedFromFamilyName, string? copiedPhoto, string? copiedDocument)
     {
-        wrapper.Name = source.Name;
-        wrapper.Description = source.Description;
-        wrapper.CookTimeMinutes = source.CookTimeMinutes;
-        wrapper.Servings = source.Servings;
-        wrapper.Difficulty = source.Difficulty;
-        wrapper.Calories = source.Calories;
-        wrapper.Tags = new List<string>(source.Tags);
-        wrapper.Seasonality = new List<string>(source.Seasonality);
-        wrapper.Diet = DietCatalog.NormalizeAll(source.Diet);
+        // Набор полей контента общий с живым чтением; файлы и метка происхождения
+        // остаются специфичными для промоушена.
+        ExternalRecipeContentResolver.CopySourceContent(wrapper, source);
         wrapper.PhotoPath = copiedPhoto;
         wrapper.DocumentPath = copiedDocument;
-        wrapper.Steps = source.Steps
-            .OrderBy(s => s.Order)
-            .Select(s => new RecipeStep { Order = s.Order, Text = s.Text })
-            .ToList();
-        wrapper.Ingredients = source.Ingredients
-            .OrderBy(i => i.Order)
-            .Select(i => new RecipeIngredient
-            {
-                Order = i.Order,
-                Name = i.Name,
-                Amount = i.Amount,
-                Unit = i.Unit,
-                Note = i.Note
-            })
-            .ToList();
         wrapper.CopiedFromFamilyName = copiedFromFamilyName;
         wrapper.UpdatedAt = _clock.GetUtcNow().UtcDateTime;
     }

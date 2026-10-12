@@ -74,29 +74,24 @@ public sealed class RecipeReader
     private const int MaxIngredientSuggestions = 10;
 
     private readonly AppDbContext _db;
+    private readonly ExternalRecipeContext _context;
     private readonly ExternalRecipeSourceLoader _sources;
-    private readonly ExternalRecipeStateResolver _states;
-    private readonly ExternalRecipeNameCache _nameCache;
-    private readonly SourceFamilyNameResolver _sourceNames;
 
     public RecipeReader(
         AppDbContext db,
-        ExternalRecipeSourceLoader sources,
-        ExternalRecipeStateResolver states,
-        ExternalRecipeNameCache nameCache,
-        SourceFamilyNameResolver sourceNames)
+        ExternalRecipeContext context,
+        ExternalRecipeSourceLoader sources)
     {
         _db = db;
+        _context = context;
         _sources = sources;
-        _states = states;
-        _nameCache = nameCache;
-        _sourceNames = sourceNames;
     }
 
     /// <summary>
     /// Краткие рецепты семьи выбранного среза. Источники читаются скалярной проекцией
-    /// одним запросом: шаги и ингредиенты для списка не загружаются, пофайлового запроса
-    /// на каждый внешний рецепт нет. Кэш имени обновляется, если источник изменился.
+    /// одним запросом через <see cref="ExternalRecipeContext"/>: шаги и ингредиенты для
+    /// списка не загружаются, пофайлового запроса на каждый внешний рецепт нет. Кэш имени
+    /// обновляется, если источник изменился.
     /// </summary>
     public async Task<IReadOnlyList<RecipeSummary>> ReadSummariesAsync(
         Guid familyId, RecipeScope scope, CancellationToken cancellationToken = default)
@@ -114,21 +109,24 @@ public sealed class RecipeReader
 
         var stored = await query
             .OrderBy(r => r.Name)
-            .Select(r => new StoredSummary(
-                r.Id,
-                r.Name,
-                r.Difficulty,
-                r.Calories,
-                r.CookTimeMinutes,
-                r.Servings,
-                r.Tags,
-                r.Seasonality,
-                r.Diet,
-                r.PhotoPath,
-                r.SourceRecipeId,
-                r.SourceFamilyId,
-                r.SourceToken,
-                r.CopiedFromFamilyName))
+            .Select(r => new Recipe
+            {
+                Id = r.Id,
+                FamilyId = r.FamilyId,
+                Name = r.Name,
+                Difficulty = r.Difficulty,
+                Calories = r.Calories,
+                CookTimeMinutes = r.CookTimeMinutes,
+                Servings = r.Servings,
+                Tags = r.Tags,
+                Seasonality = r.Seasonality,
+                Diet = r.Diet,
+                PhotoPath = r.PhotoPath,
+                SourceRecipeId = r.SourceRecipeId,
+                SourceFamilyId = r.SourceFamilyId,
+                SourceToken = r.SourceToken,
+                CopiedFromFamilyName = r.CopiedFromFamilyName
+            })
             .ToListAsync(cancellationToken);
 
         if (stored.Count == 0)
@@ -138,19 +136,15 @@ public sealed class RecipeReader
             .Where(r => r.SourceRecipeId is not null)
             .ToList();
 
-        var liveSources = await _sources.LoadSummariesAsync(
-            external.Select(r => r.SourceRecipeId!.Value), cancellationToken);
-
-        var context = await ResolveExternalContextAsync(
-            external
-                .Select(r => new ExternalLinkInfo(
-                    r.Id, r.SourceRecipeId!.Value, r.SourceToken, r.SourceFamilyId, r.Name))
-                .ToList(),
-            liveSources.ToDictionary(x => x.Key, x => x.Value.Name),
-            cancellationToken);
+        var resolved = external.Count == 0
+            ? new Dictionary<Guid, ResolvedExternalRecipe>()
+            : await _context.ResolveAsync(
+                external.Select(r => new ExternalRecipeLink(r)).ToList(),
+                ExternalRecipeProjection.Summary,
+                cancellationToken);
 
         return stored
-            .Select(r => Summarize(r, liveSources, context.States, context.FamilyNames))
+            .Select(r => Summarize(r, resolved))
             .ToList();
     }
 
@@ -173,38 +167,32 @@ public sealed class RecipeReader
 
         var external = recipes.Where(r => r.SourceRecipeId is not null).ToList();
 
-        var liveSources = await _sources.LoadSourcesAsync(
-            external.Select(r => r.SourceRecipeId!.Value), cancellationToken);
+        var resolved = external.Count == 0
+            ? new Dictionary<Guid, ResolvedExternalRecipe>()
+            : await _context.ResolveAsync(
+                external.Select(r => new ExternalRecipeLink(r)).ToList(),
+                ExternalRecipeProjection.Full,
+                cancellationToken);
 
-        var context = await ResolveExternalContextAsync(
-            external
-                .Select(r => new ExternalLinkInfo(
-                    r.Id, r.SourceRecipeId!.Value, r.SourceToken, r.SourceFamilyId, r.Name))
-                .ToList(),
-            liveSources.ToDictionary(x => x.Key, x => x.Value.Name),
-            cancellationToken);
-
-        var candidates = new List<RecipeMatchCandidate>();
+        var candidates = new List<RecipeMatchCandidate>(recipes.Count);
         foreach (var recipe in recipes)
         {
-            var isExternal = recipe.SourceRecipeId is not null;
-            ExternalRecipeState? state = null;
-            string? sourceFamilyName = null;
-
-            if (isExternal)
+            if (recipe.SourceRecipeId is null)
             {
-                state = context.States.GetValueOrDefault(recipe.Id, ExternalRecipeState.Broken);
-                sourceFamilyName = recipe.SourceFamilyId is Guid sourceFamilyId
-                    ? context.FamilyNames.GetValueOrDefault(sourceFamilyId)
-                    : null;
-
-                if (state == ExternalRecipeState.Broken)
-                    continue;
+                candidates.Add(new RecipeMatchCandidate(recipe, IsExternal: false, null, State: null));
+                continue;
             }
 
-            var effective = ExternalRecipeContentResolver.Resolve(recipe, liveSources);
-            effective.Revision = recipe.Revision;
-            candidates.Add(new RecipeMatchCandidate(effective, isExternal, sourceFamilyName, state));
+            var resolvedRecipe = resolved[recipe.Id];
+            if (resolvedRecipe.State == ExternalRecipeState.Broken)
+                continue;
+
+            // Контент уже материализован на живой источник; локальные id и ревизия сохранены.
+            candidates.Add(new RecipeMatchCandidate(
+                resolvedRecipe.Content ?? recipe,
+                IsExternal: true,
+                resolvedRecipe.SourceFamilyName,
+                resolvedRecipe.State));
         }
 
         return candidates;
@@ -213,12 +201,13 @@ public sealed class RecipeReader
     /// <summary>
     /// Актуальные названия ингредиентов семьи для автодополнения: свои рецепты плюс живой
     /// контент доступных внешних (warning включён — контент ещё читается; broken исключён,
-    /// устаревших ингредиентов не даёт). Пустые имена отсекаются, поиск по префиксу и
-    /// группировка по нормализованному названию идут в SQL (<see cref="IngredientUsageQuery"/>),
-    /// поэтому в память попадают только различимые названия с частотами, а не полное
-    /// содержимое коллекции; пофайлового запроса на каждый внешний рецепт нет. Ранжирование
-    /// по частоте, затем названию, и ограничение выдачи — здесь, единообразно для обоих
-    /// источников.
+    /// устаревших ингредиентов не даёт). Живые источники отбирает единый
+    /// <see cref="ExternalRecipeContext"/>, поэтому правило «сломанной ссылки» не дублируется.
+    /// Поиск по префиксу и группировка по нормализованному названию идут в SQL
+    /// (<see cref="IngredientUsageQuery"/>), поэтому в память попадают только различимые
+    /// названия с частотами, а не полное содержимое коллекции; пофайлового запроса на
+    /// каждый внешний рецепт нет. Ранжирование по частоте, затем названию, и ограничение
+    /// выдачи — здесь, единообразно для обоих источников.
     /// </summary>
     public async Task<IReadOnlyList<IngredientSuggestion>> ReadIngredientSuggestionsAsync(
         Guid familyId, string? query, CancellationToken cancellationToken = default)
@@ -237,14 +226,34 @@ public sealed class RecipeReader
         var external = await _db.Recipes
             .AsNoTracking()
             .Where(r => r.FamilyId == familyId && r.SourceRecipeId != null)
-            .Select(r => new ExternalSourceLink(
-                r.Id, r.SourceRecipeId!.Value, r.SourceToken))
+            .Select(r => new Recipe
+            {
+                Id = r.Id,
+                FamilyId = r.FamilyId,
+                Name = r.Name,
+                SourceRecipeId = r.SourceRecipeId,
+                SourceFamilyId = r.SourceFamilyId,
+                SourceToken = r.SourceToken
+            })
             .ToListAsync(cancellationToken);
 
-        var externalUsages = external.Count == 0
+        IReadOnlyList<Guid> liveSourceIds = Array.Empty<Guid>();
+        if (external.Count > 0)
+        {
+            var resolved = await _context.ResolveAsync(
+                external.Select(r => new ExternalRecipeLink(r)).ToList(),
+                ExternalRecipeProjection.Summary,
+                cancellationToken);
+
+            liveSourceIds = external
+                .Where(r => resolved[r.Id].SourceAlive)
+                .Select(r => r.SourceRecipeId!.Value)
+                .ToList();
+        }
+
+        var externalUsages = liveSourceIds.Count == 0
             ? new List<IngredientUsage>()
-            : await _sources.LoadIngredientSuggestionsAsync(
-                await ResolveLiveSourceIdsAsync(external), normalizedQuery, cancellationToken);
+            : await _sources.LoadIngredientSuggestionsAsync(liveSourceIds, normalizedQuery, cancellationToken);
 
         return own
             .Concat(externalUsages)
@@ -276,20 +285,6 @@ public sealed class RecipeReader
     }
 
     /// <summary>
-    /// id источников, доступных для чтения: warning ещё можно прочитать, broken — нет.
-    /// </summary>
-    private async Task<IReadOnlyList<Guid>> ResolveLiveSourceIdsAsync(
-        IReadOnlyList<ExternalSourceLink> links)
-    {
-        var states = await _states.ResolveManyAsync(links);
-        return links
-            .Where(l => states.GetValueOrDefault(l.WrapperId, ExternalRecipeState.Broken)
-                != ExternalRecipeState.Broken)
-            .Select(l => l.SourceRecipeId)
-            .ToList();
-    }
-
-    /// <summary>
     /// Подробный рецепт семьи или null, если его нет в этой семье. Живой источник читается
     /// с шагами и ингредиентами; при удалённом источнике контент не выдумывается —
     /// возвращается кэш имени со состоянием broken.
@@ -304,135 +299,63 @@ public sealed class RecipeReader
         if (recipe is null)
             return null;
 
-        if (recipe.SourceRecipeId is not Guid sourceId)
+        if (recipe.SourceRecipeId is null)
             return new RecipeDetail(recipe, IsExternal: false, null, null, State: null);
 
-        var states = await _states.ResolveManyAsync(
-            new[] { new ExternalSourceLink(recipe.Id, sourceId, recipe.SourceToken) });
-        var state = states.GetValueOrDefault(recipe.Id, ExternalRecipeState.Broken);
-
-        var sourceFamilyName = await _sourceNames.ResolveAsync(recipe.SourceFamilyId);
-
-        var source = await _sources.LoadFullAsync(sourceId, cancellationToken);
-        if (source is null)
-            return new RecipeDetail(recipe, IsExternal: true, sourceFamilyName, recipe.SourceFamilyId, state);
-
-        await _nameCache.RefreshAsync(
-            new[] { recipe.Id },
-            new Dictionary<Guid, string> { [sourceId] = source.Name },
+        var resolved = await _context.ResolveAsync(
+            new[] { new ExternalRecipeLink(recipe) },
+            ExternalRecipeProjection.Full,
             cancellationToken);
 
-        var effective = ExternalRecipeContentResolver.Materialize(recipe, source);
-        // Контент и даты создания/правки — живого источника (как и до рефакторинга),
-        // а id, принадлежность семьи, ревизия и метка копии — локальной строки-получателя.
-        effective.CreatedAt = source.CreatedAt;
-        effective.Revision = recipe.Revision;
-        effective.CopiedFromFamilyName = recipe.CopiedFromFamilyName;
-
-        return new RecipeDetail(effective, IsExternal: true, sourceFamilyName, recipe.SourceFamilyId, state);
+        var resolvedRecipe = resolved[recipe.Id];
+        return new RecipeDetail(
+            resolvedRecipe.Content ?? recipe,
+            IsExternal: true,
+            resolvedRecipe.SourceFamilyName,
+            recipe.SourceFamilyId,
+            resolvedRecipe.State);
     }
 
     private static RecipeSummary Summarize(
-        StoredSummary stored,
-        IReadOnlyDictionary<Guid, RecipeSourceSummary> liveSources,
-        IReadOnlyDictionary<Guid, ExternalRecipeState> states,
-        IReadOnlyDictionary<Guid, string> familyNames)
+        Recipe stored, IReadOnlyDictionary<Guid, ResolvedExternalRecipe> resolved)
     {
-        var isExternal = stored.SourceRecipeId is not null;
+        if (stored.SourceRecipeId is null)
+        {
+            return new RecipeSummary(
+                stored.Id,
+                stored.Name,
+                stored.Difficulty,
+                stored.Calories,
+                stored.CookTimeMinutes,
+                stored.Servings,
+                stored.Tags,
+                stored.Seasonality,
+                stored.Diet,
+                stored.PhotoPath,
+                IsExternal: false,
+                SourceFamilyName: null,
+                State: null,
+                stored.CopiedFromFamilyName);
+        }
 
-        ExternalRecipeState? state = isExternal && states.TryGetValue(stored.Id, out var resolved)
-            ? resolved
-            : null;
-
-        var sourceFamilyName = isExternal && stored.SourceFamilyId is Guid sourceFamilyId
-            ? familyNames.GetValueOrDefault(sourceFamilyId)
-            : null;
-
-        // Внешний рецепт показывает живой контент источника целиком; у него самого
-        // кэшируется только имя, остальные поля могут быть пустыми/устаревшими.
-        var live = isExternal && liveSources.GetValueOrDefault(stored.SourceRecipeId!.Value) is { } source
-            ? source
-            : null;
-
+        // Модуль уже слил живой контент с кэшем (live?.X ?? stored.X): внешний рецепт
+        // показывает актуальные поля источника, а при сломанной ссылке — свои кэшированные.
+        var resolvedRecipe = resolved[stored.Id];
+        var content = resolvedRecipe.Content ?? stored;
         return new RecipeSummary(
-            stored.Id,
-            live?.Name ?? stored.Name,
-            live?.Difficulty ?? stored.Difficulty,
-            live is null ? stored.Calories : live.Calories,
-            live?.CookTimeMinutes ?? stored.CookTimeMinutes,
-            live?.Servings ?? stored.Servings,
-            live?.Tags ?? stored.Tags,
-            live?.Seasonality ?? stored.Seasonality,
-            live?.Diet ?? stored.Diet,
-            live is null ? stored.PhotoPath : live.PhotoPath,
-            isExternal,
-            sourceFamilyName,
-            state,
-            stored.CopiedFromFamilyName);
+            content.Id,
+            content.Name,
+            content.Difficulty,
+            content.Calories,
+            content.CookTimeMinutes,
+            content.Servings,
+            content.Tags,
+            content.Seasonality,
+            content.Diet,
+            content.PhotoPath,
+            IsExternal: true,
+            resolvedRecipe.SourceFamilyName,
+            resolvedRecipe.State,
+            content.CopiedFromFamilyName);
     }
-
-    /// <summary>
-    /// Связь локального внешнего рецепта с источником в том виде, в каком она нужна
-    /// для разрешения состояния/происхождения и обновления кэша имени.
-    /// </summary>
-    private sealed record ExternalLinkInfo(
-        Guid LocalId,
-        Guid SourceRecipeId,
-        string? SourceToken,
-        Guid? SourceFamilyId,
-        string CachedName);
-
-    private sealed record ExternalContext(
-        Dictionary<Guid, ExternalRecipeState> States,
-        Dictionary<Guid, string> FamilyNames);
-
-    /// <summary>
-    /// Единая оркестрация внешних связей: обновляет кэш имени по живым именам,
-    /// разрешает состояние ссылок и подписи семей-источников. Обе проекции чтения
-    /// используют её, чтобы правила не расходились.
-    /// </summary>
-    private async Task<ExternalContext> ResolveExternalContextAsync(
-        IReadOnlyList<ExternalLinkInfo> links,
-        IReadOnlyDictionary<Guid, string> liveNames,
-        CancellationToken cancellationToken)
-    {
-        if (links.Count == 0)
-            return new ExternalContext(new Dictionary<Guid, ExternalRecipeState>(),
-                new Dictionary<Guid, string>());
-
-        var staleIds = links
-            .Where(l => liveNames.TryGetValue(l.SourceRecipeId, out var liveName)
-                && !string.Equals(l.CachedName, liveName, StringComparison.Ordinal))
-            .Select(l => l.LocalId)
-            .ToList();
-        await _nameCache.RefreshAsync(staleIds, liveNames, cancellationToken);
-
-        var states = await _states.ResolveManyAsync(
-            links
-                .Select(l => new ExternalSourceLink(l.LocalId, l.SourceRecipeId, l.SourceToken))
-                .ToList());
-
-        var familyNames = await _sourceNames.ResolveManyAsync(
-            links
-                .Where(l => l.SourceFamilyId is not null)
-                .Select(l => l.SourceFamilyId!.Value));
-
-        return new ExternalContext(states, familyNames);
-    }
-
-    private sealed record StoredSummary(
-        Guid Id,
-        string Name,
-        int Difficulty,
-        int? Calories,
-        int CookTimeMinutes,
-        int Servings,
-        List<string> Tags,
-        List<string> Seasonality,
-        List<string> Diet,
-        string? PhotoPath,
-        Guid? SourceRecipeId,
-        Guid? SourceFamilyId,
-        string? SourceToken,
-        string? CopiedFromFamilyName);
 }
