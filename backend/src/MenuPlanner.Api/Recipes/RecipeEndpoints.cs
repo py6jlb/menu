@@ -270,30 +270,13 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        if (file is null || file.Length == 0)
-            return Results.BadRequest(new RecipeErrorDto("Выберите файл изображения."));
+        var upload = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, file);
+        if (!upload.Succeeded)
+            return Results.BadRequest(new RecipeErrorDto(upload.Error!));
 
-        if (file.Length > RecipeCatalog.PhotoMaxBytes)
-            return Results.BadRequest(new RecipeErrorDto(
-                $"Размер фото не должен превышать {RecipeCatalog.PhotoMaxBytes / (1024 * 1024)} МБ."));
-
-        byte[] bytes;
-        await using (var content = file.OpenReadStream())
-        {
-            using var buffer = new MemoryStream();
-            await content.CopyToAsync(buffer);
-            bytes = buffer.ToArray();
-        }
-
-        // Формат определяется по содержимому, а не по ContentType/имени файла:
-        // поддельный MIME, повреждённый файл и «бомба» отклоняются до записи в БД.
-        using var probe = new MemoryStream(bytes, writable: false);
-        if (!RecipeImageValidator.TryValidate(probe, out var extension, out var validationError))
-            return Results.BadRequest(new RecipeErrorDto(validationError!));
-
-        using var upload = new MemoryStream(bytes, writable: false);
+        using var content = upload.Content!;
         var result = await mutations.UploadPhotoAsync(
-            new RecipeTarget(id, familyId.Value), revision, extension!, upload);
+            new RecipeTarget(id, familyId.Value), revision, upload.Extension!, content);
         return MutationResult(result, result.Recipe is null ? null : ToDto(result.Recipe));
     }
 
@@ -321,30 +304,13 @@ public static class RecipeEndpoints
         if (familyId is null)
             return Results.NotFound(new RecipeErrorDto("Рецепт не найден."));
 
-        if (file is null || file.Length == 0)
-            return Results.BadRequest(new RecipeErrorDto("Выберите PDF-файл."));
+        var upload = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Document, file);
+        if (!upload.Succeeded)
+            return Results.BadRequest(new RecipeErrorDto(upload.Error!));
 
-        if (file.Length > RecipeCatalog.DocumentMaxBytes)
-            return Results.BadRequest(new RecipeErrorDto(
-                $"Размер PDF не должен превышать {RecipeCatalog.DocumentMaxBytes / (1024 * 1024)} МБ."));
-
-        byte[] bytes;
-        await using (var content = file.OpenReadStream())
-        {
-            using var buffer = new MemoryStream();
-            await content.CopyToAsync(buffer);
-            bytes = buffer.ToArray();
-        }
-
-        // Тип определяется по содержимому (сигнатура %PDF-), а не по ContentType/имени:
-        // поддельный MIME и произвольный файл отклоняются до записи в БД.
-        using var probe = new MemoryStream(bytes, writable: false);
-        if (!RecipePdfValidator.TryValidate(probe))
-            return Results.BadRequest(new RecipeErrorDto(RecipePdfValidator.NotPdfError));
-
-        using var upload = new MemoryStream(bytes, writable: false);
+        using var content = upload.Content!;
         var result = await mutations.UploadDocumentAsync(
-            new RecipeTarget(id, familyId.Value), revision, ".pdf", upload);
+            new RecipeTarget(id, familyId.Value), revision, upload.Extension!, content);
         return MutationResult(result, result.Recipe is null ? null : ToDto(result.Recipe));
     }
 
