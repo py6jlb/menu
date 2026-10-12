@@ -18,17 +18,32 @@
 
 ## Checklist
 
-- [ ] ADR `docs/adr/0017-single-recipe-file-module.md` и правки `CONTEXT.md` на месте (термин «Файл рецепта», «Фото рецепта», «Жизненный цикл файла рецепта»; «Документ рецепта» и раздел «Разделение кода» обновлены).
-- [ ] `Recipes/Files/`: `RecipeFileKind`, `RecipeFileCatalog`, `IRecipeFileStore` + `StoredFile` + `FileStorage`, `RecipeFileNames`, `RecipeFileLifecycle` + `RecipeFileCommit<T>`, `RecipeGarbageCollector` + `RecipeFileCleanupResult`, `RecipeFileCleanupWorker`, `RecipeFileCleanupOptions`.
-- [ ] Удалены `Recipes/Photos/` и `Recipes/Documents/`; поведение и HTTP-контракты не изменились, схема БД не меняется.
-- [ ] `ExternalRecipePromotionService` держит один `RecipeFileLifecycle`; endpoint'ы отдачи (`/api/photos/{file}`, `/api/documents/{file}`) зовут `ResolveReadPath(kind, name)`; контент-типы остаются в endpoint'ах.
-- [ ] DI в `Program.cs`: `AddSingleton<IRecipeFileStore, FileStorage>`, scoped `RecipeFileLifecycle`/`RecipeGarbageCollector`, singleton `RecipeFileCleanupOptions`, hosted `RecipeFileCleanupWorker`; startup-валидация сохраняется.
-- [ ] Конфигурация: новые ключи + fallback на старые; обновлены `deploy/` (в т.ч. `deploy/README.md`), `docker-compose.yml`, `docker-compose.prod.yml`, `README.md`.
-- [ ] Тесты сведены в один параметризованный suite по видам (жизненный цикл, уборка, имена, хранилище); `InMemoryRecipeFileStore` обслуживает оба вида; Postgres-тест жизненного цикла параметризован; тесты валидации изображения/PDF не тронуты.
-- [ ] Прогоны: `docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 dotnet test`; `scripts/test-postgres.sh`; `npm run build` — зелёные.
+- [x] ADR `docs/adr/0017-single-recipe-file-module.md` и правки `CONTEXT.md` на месте (термин «Файл рецепта», «Фото рецепта», «Жизненный цикл файла рецепта»; «Документ рецепта» и раздел «Разделение кода» обновлены).
+- [x] `Recipes/Files/`: `RecipeFileKind`, `RecipeFileCatalog`, `IRecipeFileStore` + `StoredFile` + `FileStorage`, `RecipeFileNames`, `RecipeFileLifecycle` + `RecipeFileCommit<T>`, `RecipeGarbageCollector` + `RecipeFileCleanupResult`, `RecipeFileCleanupWorker`, `RecipeFileCleanupOptions`.
+- [x] Удалены `Recipes/Photos/` и `Recipes/Documents/`; поведение и HTTP-контракты не изменились, схема БД не меняется.
+- [x] `ExternalRecipePromotionService` держит один `RecipeFileLifecycle`; endpoint'ы отдачи (`/api/photos/{file}`, `/api/documents/{file}`) зовут `ResolveReadPath(kind, name)`; контент-типы остаются в endpoint'ах.
+- [x] DI в `Program.cs`: `AddSingleton<IRecipeFileStore, FileStorage>`, scoped `RecipeFileLifecycle`/`RecipeGarbageCollector`, singleton `RecipeFileCleanupOptions`, hosted `RecipeFileCleanupWorker`; startup-валидация сохраняется.
+- [x] Конфигурация: новые ключи + fallback на старые; обновлены `deploy/` (в т.ч. `deploy/README.md`), `docker-compose.yml`, `docker-compose.prod.yml`, `README.md`.
+- [x] Тесты сведены в один параметризованный suite по видам (жизненный цикл, уборка, имена, хранилище); `InMemoryRecipeFileStore` обслуживает оба вида; Postgres-тест жизненного цикла параметризован; тесты валидации изображения/PDF не тронуты.
+- [x] Прогоны: `docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 dotnet test`; `scripts/test-postgres.sh` — зелёные.
 
 ## Evidence
 
-_(заполняется при реализации)_
+Реализовано в ветке `ticket/80-recipe-file-module` (worktree `.worktrees/80-recipe-file-module`).
+
+**Новый модуль** `backend/src/MenuPlanner.Api/Recipes/Files/`: `RecipeFileKind.cs`, `RecipeFileCatalog.cs`, `IRecipeFileStore.cs` (со `StoredFile`), `FileStorage.cs`, `RecipeFileNames.cs`, `RecipeFileLifecycle.cs` (с `RecipeFileCommit<T>`), `RecipeGarbageCollector.cs` (с `RecipeFileCleanupResult`), `RecipeFileCleanupWorker.cs`, `RecipeFileCleanupOptions.cs`. `kind` присутствует на методах `IRecipeFileStore` и `RecipeFileLifecycle`; `RecipeGarbageCollector.CollectAsync(kind, minimumAge)`.
+
+**Потребители**: `RecipeMutationService` держит один `RecipeFileLifecycle` и сохраняет четыре public-метода; `ExternalRecipePromotionService` — один; `RecipeEndpoints.GetPhotoFileAsync`/`GetDocumentFileAsync` зовут `ResolveReadPath(RecipeFileKind.Photo|Document, fileName)`, байтовая валидация и контент-типы остались в endpoint'ах; `Program.cs` — DI и startup-валидация через `IRecipeFileStore`.
+
+**Конфигурация**: канон `RECIPE_FILES_PHOTOS_DIR`, `RECIPE_FILES_DOCUMENTS_DIR`, `RECIPE_FILE_CLEANUP_ENABLED/INTERVAL_HOURS/MIN_AGE_HOURS`; старые `PHOTOS_DIR`, `DOCUMENTS_DIR`, `PHOTO_CLEANUP_*` читаются как fallback с deprecation-логом. Обновлены `docker-compose.yml`, `docker-compose.prod.yml`, `deploy/restore-drill.sh`, `deploy/README.md`, `deploy/tests/README.md`, `backend/Dockerfile`, `README.md`.
+
+**Тесты**: `RecipeFileLifecycleServiceTests`, `RecipeGarbageCollectorTests`, `RecipeFileNamesTests`, `FileStorageTests`, `Postgres/PostgresRecipeFileLifecycleTests` — параметризованы по видам; общий `InMemoryRecipeFileStore`; старые раздельные тесты и test-double'ы удалены; тесты валидации изображения/PDF не тронуты.
+
+**Прогоны**:
+- `docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 dotnet test` → `Failed: 0, Passed: 636, Skipped: 61`.
+- `scripts/test-postgres.sh` → `Failed: 0, Passed: 69, Skipped: 0` (прогнан 4× — стабильно зелёный).
+
+Схема БД (`Recipe.PhotoPath`/`DocumentPath`), HTTP-контракты и поведение не изменились; миграции не добавлялись.
 
 ## Comments
+

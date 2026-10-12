@@ -1,8 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
-using MenuPlanner.Api.Recipes.Documents;
-using MenuPlanner.Api.Recipes.Photos;
+using MenuPlanner.Api.Recipes.Files;
 
 namespace MenuPlanner.Api.Recipes;
 
@@ -30,30 +29,27 @@ public sealed record RecipeMutationResult(
     RecipeFieldError? Validation = null);
 
 /// <summary>
-/// Правка, удаление и операции с фото собственного рецепта с атомарной проверкой
-/// ревизии. Ревизия — токен конкурентности EF Core: два запроса, прочитавшие одну
-/// версию, не могут оба её перезаписать; проигравший получает согласованный
-/// конфликт, а не смешивает содержимое. Scoped-сервис, читает БД и работает с
-/// файлом фото.
+/// Правка, удаление и операции с файлами (фото и документ) собственного рецепта с
+/// атомарной проверкой ревизии. Ревизия — токен конкурентности EF Core: два
+/// запроса, прочитавшие одну версию, не могут оба её перезаписать; проигравший
+/// получает согласованный конфликт, а не смешивает содержимое. Scoped-сервис,
+/// читает БД и работает с файлами рецепта.
 /// </summary>
 public sealed class RecipeMutationService
 {
     private readonly AppDbContext _db;
-    private readonly PhotoLifecycle _photos;
-    private readonly DocumentLifecycle _documents;
+    private readonly RecipeFileLifecycle _files;
     private readonly TimeProvider _clock;
     private readonly RecipeRevisionReader _revisions;
 
     public RecipeMutationService(
         AppDbContext db,
-        PhotoLifecycle photos,
-        DocumentLifecycle documents,
+        RecipeFileLifecycle files,
         TimeProvider clock,
         RecipeRevisionReader revisions)
     {
         _db = db;
-        _photos = photos;
-        _documents = documents;
+        _files = files;
         _clock = clock;
         _revisions = revisions;
     }
@@ -167,7 +163,8 @@ public sealed class RecipeMutationService
             return stale;
 
         var previous = recipe.PhotoPath;
-        return await _photos.ReplaceAsync(
+        return await _files.ReplaceAsync(
+            RecipeFileKind.Photo,
             recipe.Id,
             extension,
             content,
@@ -181,7 +178,7 @@ public sealed class RecipeMutationService
                 try
                 {
                     await _db.SaveChangesAsync(cancellationToken);
-                    return new PhotoCommit<RecipeMutationResult>(
+                    return new RecipeFileCommit<RecipeMutationResult>(
                         true,
                         new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision));
                 }
@@ -189,7 +186,7 @@ public sealed class RecipeMutationService
                 {
                     // Правка проиграла гонку: БД не изменилась, новый файл убирается
                     // компенсацией, чужой актуальный файл не трогается.
-                    return new PhotoCommit<RecipeMutationResult>(
+                    return new RecipeFileCommit<RecipeMutationResult>(
                         false,
                         new(RecipeMutationOutcome.Conflict,
                             Revision: await _revisions.CurrentAsync(target.Id, cancellationToken)));
@@ -231,7 +228,7 @@ public sealed class RecipeMutationService
             return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
         }
 
-        _photos.Retire(previous);
+        _files.Retire(RecipeFileKind.Photo, previous);
 
         return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
     }
@@ -258,7 +255,8 @@ public sealed class RecipeMutationService
             return stale;
 
         var previous = recipe.DocumentPath;
-        return await _documents.ReplaceAsync(
+        return await _files.ReplaceAsync(
+            RecipeFileKind.Document,
             recipe.Id,
             extension,
             content,
@@ -272,7 +270,7 @@ public sealed class RecipeMutationService
                 try
                 {
                     await _db.SaveChangesAsync(cancellationToken);
-                    return new DocumentCommit<RecipeMutationResult>(
+                    return new RecipeFileCommit<RecipeMutationResult>(
                         true,
                         new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision));
                 }
@@ -280,7 +278,7 @@ public sealed class RecipeMutationService
                 {
                     // Правка проиграла гонку: БД не изменилась, новый файл убирается
                     // компенсацией, чужой актуальный файл не трогается.
-                    return new DocumentCommit<RecipeMutationResult>(
+                    return new RecipeFileCommit<RecipeMutationResult>(
                         false,
                         new(RecipeMutationOutcome.Conflict,
                             Revision: await _revisions.CurrentAsync(target.Id, cancellationToken)));
@@ -322,7 +320,7 @@ public sealed class RecipeMutationService
             return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(target.Id, cancellationToken));
         }
 
-        _documents.Retire(previous);
+        _files.Retire(RecipeFileKind.Document, previous);
 
         return new(RecipeMutationOutcome.Ok, Recipe: recipe, Revision: recipe.Revision);
     }
@@ -353,8 +351,8 @@ public sealed class RecipeMutationService
             return new(RecipeMutationOutcome.Conflict, Revision: await _revisions.CurrentAsync(recipe.Id, cancellationToken));
         }
 
-        _photos.Retire(photoPath);
-        _documents.Retire(documentPath);
+        _files.Retire(RecipeFileKind.Photo, photoPath);
+        _files.Retire(RecipeFileKind.Document, documentPath);
         return new(RecipeMutationOutcome.Ok, Revision: RecipeRevisionRules.Next(revision.Value));
     }
 

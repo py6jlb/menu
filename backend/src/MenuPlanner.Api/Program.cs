@@ -20,9 +20,8 @@ using MenuPlanner.Api.Ingredients;
 using MenuPlanner.Api.Observability;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes;
-using MenuPlanner.Api.Recipes.Documents;
 using MenuPlanner.Api.Recipes.External;
-using MenuPlanner.Api.Recipes.Photos;
+using MenuPlanner.Api.Recipes.Files;
 using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.Settings;
 using MenuPlanner.Api.ShoppingList;
@@ -35,14 +34,13 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
-builder.Services.AddSingleton<IPhotoStore, PhotoStorage>();
-builder.Services.AddScoped<PhotoLifecycle>();
-builder.Services.AddScoped<PhotoGarbageCollector>();
-builder.Services.AddSingleton<IDocumentStore, DocumentStorage>();
-builder.Services.AddScoped<DocumentLifecycle>();
-builder.Services.AddScoped<DocumentGarbageCollector>();
-builder.Services.AddSingleton(PhotoCleanupOptions.Read(builder.Configuration));
-builder.Services.AddHostedService<PhotoCleanupWorker>();
+builder.Services.AddSingleton<IRecipeFileStore, FileStorage>();
+builder.Services.AddScoped<RecipeFileLifecycle>();
+builder.Services.AddScoped<RecipeGarbageCollector>();
+builder.Services.AddSingleton(services => RecipeFileCleanupOptions.Read(
+    services.GetRequiredService<IConfiguration>(),
+    services.GetRequiredService<ILogger<RecipeFileCleanupOptions>>()));
+builder.Services.AddHostedService<RecipeFileCleanupWorker>();
 
 builder.Services.AddSingleton(ReadinessOptions.FromConfiguration(builder.Configuration));
 builder.Services.AddScoped<IDatabaseReadinessProbe, DatabaseReadinessProbe>();
@@ -211,8 +209,7 @@ if (!observability.Release.IsKnown)
         observability.ManifestPath ?? "(не задан)",
         observability.Release.Id);
 
-app.Services.GetRequiredService<IPhotoStore>();
-app.Services.GetRequiredService<IDocumentStore>();
+app.Services.GetRequiredService<IRecipeFileStore>();
 
 app.MapGet("/health", () => Results.Json(
     new { status = "ok", service = "menu-planner-api", release = observability.Release.Id }));

@@ -1,8 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
-using MenuPlanner.Api.Recipes.Documents;
-using MenuPlanner.Api.Recipes.Photos;
+using MenuPlanner.Api.Recipes.Files;
 
 namespace MenuPlanner.Api.Recipes.External;
 
@@ -31,31 +30,28 @@ public sealed record RecipePromotionResult(
 /// Однократный промоушен внешнего рецепта в копию на месте. Переход
 /// «внешний → собственный» защищён до вставки зависимого контента и файловых
 /// эффектов: строка атомарно «выкупается» условным обновлением по ревизии,
-/// и только победитель копирует шаги, ингредиенты и фото. Повторный промоушен
-/// возвращает предсказуемый конфликт, не повторяя копирование.
-/// Scoped-сервис, читает БД и копирует файл фото.
+/// и только победитель копирует шаги, ингредиенты, фото и документ. Повторный
+/// промоушен возвращает предсказуемый конфликт, не повторяя копирование.
+/// Scoped-сервис, читает БД и копирует файлы рецепта.
 /// </summary>
 public sealed class ExternalRecipePromotionService
 {
     private readonly AppDbContext _db;
     private readonly SourceFamilyNameResolver _sourceNames;
-    private readonly PhotoLifecycle _photos;
-    private readonly DocumentLifecycle _documents;
+    private readonly RecipeFileLifecycle _files;
     private readonly TimeProvider _clock;
     private readonly RecipeRevisionReader _revisions;
 
     public ExternalRecipePromotionService(
         AppDbContext db,
         SourceFamilyNameResolver sourceNames,
-        PhotoLifecycle photos,
-        DocumentLifecycle documents,
+        RecipeFileLifecycle files,
         TimeProvider clock,
         RecipeRevisionReader revisions)
     {
         _db = db;
         _sourceNames = sourceNames;
-        _photos = photos;
-        _documents = documents;
+        _files = files;
         _clock = clock;
         _revisions = revisions;
     }
@@ -145,8 +141,10 @@ public sealed class ExternalRecipePromotionService
 
             previousPhoto = wrapper.PhotoPath;
             previousDocument = wrapper.DocumentPath;
-            copiedPhoto = await _photos.StageCopyAsync(target.Id, source.PhotoPath, cancellationToken);
-            copiedDocument = await _documents.StageCopyAsync(target.Id, source.DocumentPath, cancellationToken);
+            copiedPhoto = await _files.StageCopyAsync(
+                RecipeFileKind.Photo, target.Id, source.PhotoPath, cancellationToken);
+            copiedDocument = await _files.StageCopyAsync(
+                RecipeFileKind.Document, target.Id, source.DocumentPath, cancellationToken);
 
             ApplyCopiedContent(wrapper, source, copiedFromFamilyName, copiedPhoto, copiedDocument);
             await _db.SaveChangesAsync(cancellationToken);
@@ -156,8 +154,8 @@ public sealed class ExternalRecipePromotionService
             // Ошибка до подтверждения: возвращаем строку внешнему состоянию и
             // убираем уже скопированные файлы, чтобы не оставить сирот.
             await transaction.RollbackAsync(cancellationToken);
-            _photos.Discard(copiedPhoto);
-            _documents.Discard(copiedDocument);
+            _files.Discard(RecipeFileKind.Photo, copiedPhoto);
+            _files.Discard(RecipeFileKind.Document, copiedDocument);
             throw;
         }
 
@@ -165,8 +163,8 @@ public sealed class ExternalRecipePromotionService
         // потерян после фактической записи) не удаляем ни новые, ни предыдущие
         // файлы — уборка разберётся по фактической ссылке БД.
         await transaction.CommitAsync(cancellationToken);
-        _photos.Retire(previousPhoto);
-        _documents.Retire(previousDocument);
+        _files.Retire(RecipeFileKind.Photo, previousPhoto);
+        _files.Retire(RecipeFileKind.Document, previousDocument);
         return new(RecipePromotionOutcome.Promoted, wrapper, Revision: wrapper!.Revision);
     }
 
@@ -189,9 +187,11 @@ public sealed class ExternalRecipePromotionService
         string? copiedDocument = null;
         try
         {
-            // Документ готовим заранее; фото копирует и согласует PhotoLifecycle.
-            copiedDocument = await _documents.StageCopyAsync(target.Id, source.DocumentPath, cancellationToken);
-            var result = await _photos.CopyFromAsync(
+            // Документ готовим заранее; фото копирует и согласует RecipeFileLifecycle.
+            copiedDocument = await _files.StageCopyAsync(
+                RecipeFileKind.Document, target.Id, source.DocumentPath, cancellationToken);
+            var result = await _files.CopyFromAsync(
+                RecipeFileKind.Photo,
                 target.Id,
                 source.PhotoPath,
                 previousPhoto,
@@ -203,7 +203,7 @@ public sealed class ExternalRecipePromotionService
                     wrapper.SourceToken = null;
                     wrapper.Revision = RecipeRevisionRules.Next(wrapper.Revision);
                     await _db.SaveChangesAsync(cancellationToken);
-                    return new PhotoCommit<RecipePromotionResult>(
+                    return new RecipeFileCommit<RecipePromotionResult>(
                         true,
                         new(RecipePromotionOutcome.Promoted, wrapper, Revision: wrapper.Revision));
                 },
@@ -211,16 +211,16 @@ public sealed class ExternalRecipePromotionService
 
             if (result.Outcome != RecipePromotionOutcome.Promoted)
             {
-                _documents.Discard(copiedDocument);
+                _files.Discard(RecipeFileKind.Document, copiedDocument);
                 return result;
             }
 
-            _documents.Retire(previousDocument);
+            _files.Retire(RecipeFileKind.Document, previousDocument);
             return result;
         }
         catch
         {
-            _documents.Discard(copiedDocument);
+            _files.Discard(RecipeFileKind.Document, copiedDocument);
             throw;
         }
     }

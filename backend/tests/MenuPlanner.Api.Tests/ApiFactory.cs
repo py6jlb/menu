@@ -67,10 +67,10 @@ public class ApiFactory : WebApplicationFactory<Program>
             // Проверки production переопределяют DEPLOYMENT_MODE через Settings.
             var settings = new Dictionary<string, string?>
             {
-                ["PHOTOS_DIR"] = PhotosDir,
-                ["DOCUMENTS_DIR"] = DocumentsDir,
-                // Фоновая уборка фото в тестах выключена: проход запускают явно.
-                ["PHOTO_CLEANUP_ENABLED"] = "false",
+                ["RECIPE_FILES_PHOTOS_DIR"] = PhotosDir,
+                ["RECIPE_FILES_DOCUMENTS_DIR"] = DocumentsDir,
+                // Фоновая уборка файлов рецепта в тестах выключена: проход запускают явно.
+                ["RECIPE_FILE_CLEANUP_ENABLED"] = "false",
                 ["SMTP_HOST"] = "",
                 ["SHARE_BASE_URL"] = "https://menu.example.com",
                 ["DEPLOYMENT_MODE"] = "lab"
