@@ -268,7 +268,7 @@ _Avoid_: Версия, Номер, ETag
 
 ## Разделение кода
 
-**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `ShoppingListContentBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `WeekPlanRevisions`, `DietCatalog`, `RecipeFileNames`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
+**Stateless-правило**: чистая функция или константа — `static`-класс без состояния (`RepetitionRules`, `ExternalRecipeStateRules`, `AuthCodePolicy`, `ShoppingListBuilder`, `ShoppingListContentBuilder`, `RecipeMatcher`, `RecipeValidation`, `RecipeRevisionRules`, `PlanValidation`, `WeekPlanRevisions`, `DietCatalog`, `RecipeFileNames`, каталоги). Не зависит от DI и жизненного цикла, юнит-тестируется напрямую.
 
 **БД-зависимый сервис**: всё, что читает БД или держит ресурс, — scoped-класс через DI (`RepetitionCounter`, `RecipeReader`, `ExternalRecipeContext`, `ExternalRecipeSourceLoader`, `ExternalRecipeStateResolver`, `ExternalRecipeNameCache`, `SourceFamilyNameResolver`, `RecipeRevisionReader`, `RecipeMutationService`, `ExternalRecipePromotionService`, `WeekPlanReader`, `WeekPlanSaver`, `CurrentUserContext`, `AuthSessionValidator`, `AuthCodeLifecycle`, `EmailVerificationService`, `PasswordResetService`, `EmailOutbox`, `EmailOutboxProcessor`, `RecipeFileLifecycle`, `RecipeGarbageCollector`). Обработчики Minimal API получают его параметром. Фоновые проходы — hosted-сервисы `EmailDeliveryWorker`, `RecipeFileCleanupWorker`; файловый порт `IRecipeFileStore` реализуется singleton `FileStorage`.
 
