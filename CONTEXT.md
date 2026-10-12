@@ -102,7 +102,7 @@ _Avoid_: Блюдо (блюдо — это рецепт в контексте п
 
 **Файл рецепта**:
 Управляемый файл, прикреплённый к рецепту: фото или PDF-документ. Виды отличаются каталогом, допустимыми расширениями и полем ссылки в рецепте, но подчиняются одному жизненному циклу и одной безопасной уборке.
-_Код_: `RecipeFileKind`, `RecipeFileCatalog`, `IRecipeFileStore`/`FileStorage`, `RecipeFileLifecycle`, `RecipeGarbageCollector`, `RecipeFileNames`, `RecipeFileCleanupWorker` (`Recipes/Files/`).
+_Код_: `RecipeFileKind`, `RecipeFileCatalog`, `RecipeFileUpload`, `IRecipeFileStore`/`FileStorage`, `RecipeFileLifecycle`, `RecipeGarbageCollector`, `RecipeFileNames`, `RecipeFileCleanupWorker` (`Recipes/Files/`).
 _Avoid_: Вложение, Ассет, Загрузка
 
 **Фото рецепта**:
