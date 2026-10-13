@@ -1,5 +1,5 @@
-using MenuPlanner.Api.Domain;
 using Xunit;
+using MenuPlanner.Api.Domain.Plans;
 
 namespace MenuPlanner.Api.Tests.Plans;
 

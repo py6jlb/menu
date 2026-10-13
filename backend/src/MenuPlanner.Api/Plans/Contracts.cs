@@ -1,3 +1,5 @@
+using MenuPlanner.Api.Domain.Plans;
+
 namespace MenuPlanner.Api.Plans;
 
 /// <summary>Запись недели во входящем запросе: день, приём пищи, рецепт и порции.</summary>

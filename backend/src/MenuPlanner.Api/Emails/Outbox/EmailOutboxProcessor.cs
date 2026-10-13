@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Services;
+using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Api.Domain.Emails;
 
 namespace MenuPlanner.Api.Emails.Outbox;
 

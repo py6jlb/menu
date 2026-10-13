@@ -1,3 +1,6 @@
+using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Api.Domain.Families;
+
 namespace MenuPlanner.Api.Families;
 
 /// <summary>Тело запроса создания семьи: название.</summary>
@@ -20,7 +23,7 @@ public sealed record FamilyDto(
     Guid OwnerId,
     IReadOnlyList<FamilyMemberDto> Members)
 {
-    public static FamilyDto From(Domain.Family family, IEnumerable<Domain.FamilyMember> members)
+    public static FamilyDto From(Domain.Families.Family family, IEnumerable<Domain.Families.FamilyMember> members)
     {
         var memberDtos = members
             .Select(m => new FamilyMemberDto(

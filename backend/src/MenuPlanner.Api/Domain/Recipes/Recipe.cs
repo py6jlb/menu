@@ -1,4 +1,6 @@
-namespace MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Families;
+
+namespace MenuPlanner.Api.Domain.Recipes;
 
 /// <summary>Рецепт семьи: состав, шаги, файлы и связь с внешним источником.</summary>
 public sealed class Recipe

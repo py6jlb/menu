@@ -1,6 +1,5 @@
 using System.Text;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Crud;
 using MenuPlanner.Api.Recipes.External;
@@ -11,6 +10,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Recipes;
 

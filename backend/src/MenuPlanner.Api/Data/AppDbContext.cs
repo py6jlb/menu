@@ -1,5 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Api.Domain.Emails;
+using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Data;
 

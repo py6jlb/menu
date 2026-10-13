@@ -1,4 +1,5 @@
-using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.External;
 

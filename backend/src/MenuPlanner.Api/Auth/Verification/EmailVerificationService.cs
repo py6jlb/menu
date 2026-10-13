@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using MenuPlanner.Api.Auth.Codes;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Api.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.Verification;
 

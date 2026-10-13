@@ -1,6 +1,6 @@
 using System.Linq.Expressions;
 using System.Text.RegularExpressions;
-using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Files;
 

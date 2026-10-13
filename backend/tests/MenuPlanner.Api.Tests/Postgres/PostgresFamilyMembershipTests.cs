@@ -1,10 +1,10 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Families;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
+using MenuPlanner.Api.Domain.Families;
 
 namespace MenuPlanner.Api.Tests.Postgres;
 

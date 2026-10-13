@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain;
+namespace MenuPlanner.Api.Domain.Accounts;
 
 /// <summary>Учётная запись: email, хэш пароля, роль, состояние подтверждения и блокировки.</summary>
 public sealed class User

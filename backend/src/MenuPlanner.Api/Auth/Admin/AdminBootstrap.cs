@@ -3,8 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Auth.Verification;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Api.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.Admin;
 

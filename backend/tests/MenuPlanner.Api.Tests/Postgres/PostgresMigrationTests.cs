@@ -1,5 +1,4 @@
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

@@ -3,7 +3,6 @@ using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Reading;
@@ -11,6 +10,10 @@ using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.Settings;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
+using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Data;
 

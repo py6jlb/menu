@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.Files;
 using MenuPlanner.Api.Recipes.Reading;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Crud;
 

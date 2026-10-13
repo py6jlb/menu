@@ -1,3 +1,5 @@
+using MenuPlanner.Api.Domain.Accounts;
+
 namespace MenuPlanner.Api.Emails.Options;
 
 /// <summary>Куда уходит письмо: защищённый SMTP или запись в лог (только dev/test).</summary>

@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain;
+namespace MenuPlanner.Api.Domain.Plans;
 
 /// <summary>Справочник планирования: границы дня/порций и коды приёмов пищи.</summary>
 public static class PlanningCatalog

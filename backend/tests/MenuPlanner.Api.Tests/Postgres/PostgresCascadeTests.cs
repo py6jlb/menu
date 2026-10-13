@@ -1,7 +1,9 @@
-using MenuPlanner.Api.Domain;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Xunit;
+using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Postgres;
 

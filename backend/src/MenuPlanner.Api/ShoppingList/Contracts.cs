@@ -1,3 +1,5 @@
+using MenuPlanner.Api.Domain.Plans;
+
 namespace MenuPlanner.Api.ShoppingList;
 
 /// <summary>Позиция списка покупок: название, количество, единица и отображаемый текст.</summary>
