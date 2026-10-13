@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain;
+namespace MenuPlanner.Api.Domain.Accounts;
 
 /// <summary>Пользовательские настройки: окно повторяемости рецептов в неделях.</summary>
 public sealed class UserSettings

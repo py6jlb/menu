@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain;
+namespace MenuPlanner.Api.Domain.Recipes;
 
 /// <summary>
 /// Чистое правило категории продукта. Категория агрегированной позиции (или подсказки

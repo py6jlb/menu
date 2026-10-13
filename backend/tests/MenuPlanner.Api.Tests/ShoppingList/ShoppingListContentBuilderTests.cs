@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.ShoppingList;
+using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.ShoppingList;
 

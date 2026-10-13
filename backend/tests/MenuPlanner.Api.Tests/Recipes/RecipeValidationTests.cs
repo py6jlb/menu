@@ -1,7 +1,7 @@
 using Xunit;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Crud;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Recipes;
 

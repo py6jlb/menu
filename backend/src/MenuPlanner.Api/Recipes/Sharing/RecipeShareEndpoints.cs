@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Sessions;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.Crud;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Sharing;
 

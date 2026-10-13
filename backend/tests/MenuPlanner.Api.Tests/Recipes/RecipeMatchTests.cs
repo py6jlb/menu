@@ -4,11 +4,11 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Xunit;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Crud;
 using MenuPlanner.Api.Tests.Support;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Recipes;
 

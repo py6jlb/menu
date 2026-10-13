@@ -4,13 +4,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
 using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Options;
 using MenuPlanner.Api.Emails.Outbox;
 using MenuPlanner.Api.Emails.Services;
 using MenuPlanner.Api.Tests.Support;
+using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Api.Domain.Emails;
 
 namespace MenuPlanner.Api.Tests.Emails;
 

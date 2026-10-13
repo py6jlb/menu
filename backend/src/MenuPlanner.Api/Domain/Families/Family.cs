@@ -1,4 +1,8 @@
-namespace MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Api.Domain.Recipes;
+
+namespace MenuPlanner.Api.Domain.Families;
 
 /// <summary>Семья: владелец, инвайт-код и связанные участники, рецепты и недельные планы.</summary>
 public sealed class Family

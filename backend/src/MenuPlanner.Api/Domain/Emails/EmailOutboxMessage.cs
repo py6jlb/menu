@@ -1,4 +1,6 @@
-namespace MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Accounts;
+
+namespace MenuPlanner.Api.Domain.Emails;
 
 /// <summary>
 /// Состояние записи очереди писем. <see cref="Pending"/> — ждёт отправки (в том

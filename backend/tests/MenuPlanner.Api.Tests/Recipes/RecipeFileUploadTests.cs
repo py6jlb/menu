@@ -1,10 +1,10 @@
 using System.Text;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Files;
 using MenuPlanner.Api.Tests.Support;
 using Microsoft.AspNetCore.Http;
 using Xunit;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Recipes;
 

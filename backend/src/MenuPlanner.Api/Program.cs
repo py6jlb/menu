@@ -17,7 +17,6 @@ using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Auth.Verification;
 using MenuPlanner.Api.Configuration;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
 using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Options;
@@ -37,6 +36,7 @@ using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.Recipes.Sharing;
 using MenuPlanner.Api.Settings;
 using MenuPlanner.Api.ShoppingList;
+using MenuPlanner.Api.Domain.Accounts;
 
 var builder = WebApplication.CreateBuilder(args);
 

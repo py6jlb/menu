@@ -1,5 +1,5 @@
 using System.Globalization;
-using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.ShoppingList;
 

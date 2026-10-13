@@ -9,6 +9,7 @@ using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Crud;
 using MenuPlanner.Api.Tests.Support;
+using MenuPlanner.Api.Domain.Plans;
 
 namespace MenuPlanner.Api.Tests.Plans;
 

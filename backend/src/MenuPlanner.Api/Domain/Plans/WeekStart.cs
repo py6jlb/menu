@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace MenuPlanner.Api.Domain;
+namespace MenuPlanner.Api.Domain.Plans;
 
 /// <summary>
 /// Чистое правило недели: разбор и формат даты понедельника, приведение произвольной

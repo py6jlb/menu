@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain;
+namespace MenuPlanner.Api.Domain.Accounts;
 
 /// <summary>Тип одноразового кода: подтверждение почты или сброс пароля.</summary>
 public enum AuthCodeType

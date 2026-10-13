@@ -3,12 +3,12 @@ using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
+using MenuPlanner.Api.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Auth;
 

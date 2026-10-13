@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Sharing;
 

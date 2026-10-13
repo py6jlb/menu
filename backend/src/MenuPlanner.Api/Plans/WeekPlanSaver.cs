@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Plans;
 
 namespace MenuPlanner.Api.Plans;
 

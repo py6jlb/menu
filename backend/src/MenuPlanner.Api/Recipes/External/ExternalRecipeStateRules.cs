@@ -1,3 +1,5 @@
+using MenuPlanner.Api.Domain.Plans;
+
 namespace MenuPlanner.Api.Recipes.External;
 
 /// <summary>

@@ -1,4 +1,4 @@
-using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth;
 

@@ -4,6 +4,7 @@ using MailKit.Security;
 using MimeKit;
 using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Options;
+using MenuPlanner.Api.Domain.Accounts;
 
 namespace MenuPlanner.Api.Emails.Services;
 

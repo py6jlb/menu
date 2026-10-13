@@ -5,11 +5,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
 using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Services;
 using MenuPlanner.Api.Tests.Support;
+using MenuPlanner.Api.Domain.Emails;
 
 namespace MenuPlanner.Api.Tests.Emails;
 

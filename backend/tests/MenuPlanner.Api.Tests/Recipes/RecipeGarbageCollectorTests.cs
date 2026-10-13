@@ -1,10 +1,12 @@
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.Files;
 using MenuPlanner.Api.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Recipes;
 

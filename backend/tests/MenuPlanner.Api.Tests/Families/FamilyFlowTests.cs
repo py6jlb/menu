@@ -6,6 +6,7 @@ using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Tests.Support;
+using MenuPlanner.Api.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Families;
 

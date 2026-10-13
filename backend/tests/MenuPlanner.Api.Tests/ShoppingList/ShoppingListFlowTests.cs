@@ -10,6 +10,7 @@ using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Crud;
 using MenuPlanner.Api.ShoppingList;
 using MenuPlanner.Api.Tests.Support;
+using MenuPlanner.Api.Domain.Plans;
 
 namespace MenuPlanner.Api.Tests.ShoppingList;
 

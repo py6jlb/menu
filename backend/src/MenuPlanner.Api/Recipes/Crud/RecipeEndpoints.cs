@@ -1,11 +1,12 @@
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Sessions;
-using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Files;
 using MenuPlanner.Api.Recipes.Reading;
 using MenuPlanner.Api.Recipes.Repetition;
+using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Api.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Crud;
 
