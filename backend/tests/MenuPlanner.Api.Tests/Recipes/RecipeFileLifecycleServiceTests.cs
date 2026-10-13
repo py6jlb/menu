@@ -10,9 +10,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
-using MenuPlanner.Api.Domain.Accounts;
-using MenuPlanner.Api.Domain.Families;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Accounts;
+using MenuPlanner.Domain.Families;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Recipes;
 

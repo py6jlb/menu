@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.Codes;
 

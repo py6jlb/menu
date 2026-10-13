@@ -1,5 +1,5 @@
 using MenuPlanner.Api.Auth.Codes;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.Codes;
 

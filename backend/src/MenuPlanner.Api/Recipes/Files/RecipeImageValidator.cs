@@ -1,6 +1,6 @@
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Files;
 

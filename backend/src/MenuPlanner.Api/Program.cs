@@ -36,7 +36,7 @@ using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.Recipes.Sharing;
 using MenuPlanner.Api.Settings;
 using MenuPlanner.Api.ShoppingList;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 var builder = WebApplication.CreateBuilder(args);
 

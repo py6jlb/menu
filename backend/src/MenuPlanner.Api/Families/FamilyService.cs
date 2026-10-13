@@ -3,8 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain.Accounts;
-using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Domain.Accounts;
+using MenuPlanner.Domain.Families;
 
 namespace MenuPlanner.Api.Families;
 

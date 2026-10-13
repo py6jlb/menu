@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Auth;
 
@@ -174,7 +174,7 @@ public sealed class AdminUnlockTests
         return match.Groups[1].Value;
     }
 
-    private static async Task<MenuPlanner.Api.Domain.Accounts.User> GetUserAsync(AuthApiFactory factory, string email)
+    private static async Task<MenuPlanner.Domain.Accounts.User> GetUserAsync(AuthApiFactory factory, string email)
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

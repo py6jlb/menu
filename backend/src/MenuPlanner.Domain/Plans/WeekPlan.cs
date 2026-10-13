@@ -1,6 +1,6 @@
-using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Domain.Families;
 
-namespace MenuPlanner.Api.Domain.Plans;
+namespace MenuPlanner.Domain.Plans;
 
 /// <summary>Недельный план семьи: начало недели, ревизия и записи.</summary>
 public sealed class WeekPlan

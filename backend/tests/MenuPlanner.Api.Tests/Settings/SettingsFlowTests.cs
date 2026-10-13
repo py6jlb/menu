@@ -8,7 +8,7 @@ using MenuPlanner.Api.Settings;
 using MenuPlanner.Api.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Settings;
 

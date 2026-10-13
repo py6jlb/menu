@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain.Accounts;
+namespace MenuPlanner.Domain.Accounts;
 
 /// <summary>Роль пользователя: обычный пользователь или администратор.</summary>
 public enum UserRole

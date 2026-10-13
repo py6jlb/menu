@@ -4,8 +4,8 @@ using Xunit;
 using MenuPlanner.Api.Plans;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.ShoppingList;
-using MenuPlanner.Api.Domain.Plans;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Plans;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.ShoppingList;
 

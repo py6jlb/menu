@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain.Recipes;
+namespace MenuPlanner.Domain.Recipes;
 
 /// <summary>Шаг рецепта: порядок и текст.</summary>
 public sealed class RecipeStep

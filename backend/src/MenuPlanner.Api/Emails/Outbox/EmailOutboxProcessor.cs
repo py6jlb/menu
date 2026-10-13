@@ -3,8 +3,8 @@ using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Services;
-using MenuPlanner.Api.Domain.Accounts;
-using MenuPlanner.Api.Domain.Emails;
+using MenuPlanner.Domain.Accounts;
+using MenuPlanner.Domain.Emails;
 
 namespace MenuPlanner.Api.Emails.Outbox;
 

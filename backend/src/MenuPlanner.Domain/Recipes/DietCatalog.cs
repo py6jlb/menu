@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain.Recipes;
+namespace MenuPlanner.Domain.Recipes;
 
 /// <summary>Стандартная диета: канонический код и русская подпись для формы.</summary>
 public sealed record DietOption(string Code, string Label);

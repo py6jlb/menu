@@ -2,7 +2,7 @@ using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Settings;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Postgres;
 

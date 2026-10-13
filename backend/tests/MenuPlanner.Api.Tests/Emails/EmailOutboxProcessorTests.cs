@@ -10,8 +10,8 @@ using MenuPlanner.Api.Emails.Options;
 using MenuPlanner.Api.Emails.Outbox;
 using MenuPlanner.Api.Emails.Services;
 using MenuPlanner.Api.Tests.Support;
-using MenuPlanner.Api.Domain.Accounts;
-using MenuPlanner.Api.Domain.Emails;
+using MenuPlanner.Domain.Accounts;
+using MenuPlanner.Domain.Emails;
 
 namespace MenuPlanner.Api.Tests.Emails;
 

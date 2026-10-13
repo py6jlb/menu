@@ -1,6 +1,6 @@
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain.Accounts;
-using MenuPlanner.Api.Domain.Emails;
+using MenuPlanner.Domain.Accounts;
+using MenuPlanner.Domain.Emails;
 
 namespace MenuPlanner.Api.Emails.Outbox;
 

@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Configuration;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Emails.Options;
 

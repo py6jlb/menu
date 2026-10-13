@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain.Recipes;
+namespace MenuPlanner.Domain.Recipes;
 
 /// <summary>Справочник рецептов: лимиты полей и коллекций, единицы измерения, сезоны и категории продуктов.</summary>
 public static class RecipeCatalog

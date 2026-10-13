@@ -12,7 +12,7 @@ using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Emails;
 using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Tests.Support;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Auth;
 

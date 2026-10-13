@@ -5,8 +5,8 @@ using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Files;
 using MenuPlanner.Api.Recipes.Reading;
 using MenuPlanner.Api.Recipes.Repetition;
-using MenuPlanner.Api.Domain.Plans;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Plans;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Crud;
 

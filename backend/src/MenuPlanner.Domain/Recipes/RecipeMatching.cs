@@ -1,6 +1,6 @@
-using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Domain.Plans;
 
-namespace MenuPlanner.Api.Domain.Recipes;
+namespace MenuPlanner.Domain.Recipes;
 
 /// <summary>Жёсткие фильтры подбора: отсекают рецепты, не подходящие под пределы и метки.</summary>
 public sealed record MatchFilters(

@@ -3,8 +3,8 @@ using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Recipes.Crud;
 using MenuPlanner.Api.Recipes.Files;
 using MenuPlanner.Api.Recipes.Reading;
-using MenuPlanner.Api.Domain.Families;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Families;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.External;
 
