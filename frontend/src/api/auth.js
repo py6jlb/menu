@@ -1,14 +1,19 @@
-import { apiJson } from './client'
+import { apiJson, postJson } from './client'
+
+export async function login(email, password) {
+  return postJson('/api/auth/login', { email, password })
+}
+
+export async function register(email, password) {
+  return postJson('/api/auth/register', { email, password })
+}
 
 export async function getMe() {
   return apiJson('/api/auth/me')
 }
 
 export async function verifyEmail(code) {
-  return apiJson('/api/auth/verify', {
-    method: 'POST',
-    body: JSON.stringify({ code })
-  })
+  return postJson('/api/auth/verify', { code })
 }
 
 export async function resendVerification() {
@@ -18,15 +23,9 @@ export async function resendVerification() {
 }
 
 export async function forgotPassword(email) {
-  return apiJson('/api/auth/forgot', {
-    method: 'POST',
-    body: JSON.stringify({ email })
-  })
+  return postJson('/api/auth/forgot', { email })
 }
 
 export async function resetPassword(payload) {
-  return apiJson('/api/auth/reset', {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  })
+  return postJson('/api/auth/reset', payload)
 }

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useAuth } from '../stores/auth'
+import { apiJson } from '../api/client'
 
 const { state, isEmailVerified } = useAuth()
 
@@ -9,10 +10,9 @@ const health = ref({ state: 'checking', message: '' })
 async function checkApi() {
   health.value = { state: 'checking', message: '' }
   try {
-    const res = await fetch('/health')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    health.value = { state: 'connected', message: data.status || 'ok' }
+    const { response, data } = await apiJson('/health')
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    health.value = { state: 'connected', message: data?.status || 'ok' }
   } catch (err) {
     health.value = { state: 'disconnected', message: err.message }
   }

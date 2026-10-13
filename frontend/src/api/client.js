@@ -45,3 +45,29 @@ export async function apiJson(path, options = {}) {
   }
   return { response, data }
 }
+
+/** POST с JSON-телом: сериализация и `Content-Type` — забота клиента. */
+export function postJson(path, body) {
+  return apiJson(path, {
+    method: 'POST',
+    body: JSON.stringify(body)
+  })
+}
+
+/** PUT с JSON-телом: сериализация и `Content-Type` — забота клиента. */
+export function putJson(path, body) {
+  return apiJson(path, {
+    method: 'PUT',
+    body: JSON.stringify(body)
+  })
+}
+
+/**
+ * Query-параметр ревизии: `''`, если ревизия неизвестна (`null`/`undefined`),
+ * иначе `?<param>=<encoded>`. `0` — валидная ревизия.
+ */
+export function revisionQuery(param, revision) {
+  return revision === null || revision === undefined
+    ? ''
+    : `?${param}=${encodeURIComponent(revision)}`
+}

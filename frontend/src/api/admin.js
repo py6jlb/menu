@@ -1,8 +1,5 @@
-import { apiJson } from './client'
+import { postJson } from './client'
 
 export async function unlockUser(email) {
-  return apiJson('/api/admin/unlock', {
-    method: 'POST',
-    body: JSON.stringify({ email })
-  })
+  return postJson('/api/admin/unlock', { email })
 }
