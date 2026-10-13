@@ -1,190 +1,38 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using OpenTelemetry;
-using OpenTelemetry.Logs;
-using OpenTelemetry.Resources;
-using OpenTelemetry.Trace;
+using MenuPlanner.Api;
 using MenuPlanner.Api.Features.Auth;
-using MenuPlanner.Api.Features.Auth.Accounts;
 using MenuPlanner.Api.Features.Auth.Admin;
-using MenuPlanner.Api.Features.Auth.Codes;
-using MenuPlanner.Api.Features.Auth.PasswordReset;
-using MenuPlanner.Api.Features.Auth.RateLimiting;
 using MenuPlanner.Api.Features.Auth.Sessions;
-using MenuPlanner.Api.Features.Auth.Verification;
+using MenuPlanner.Api.Features.Families;
+using MenuPlanner.Api.Features.Plans;
+using MenuPlanner.Api.Features.Recipes;
+using MenuPlanner.Api.Features.Recipes.Files;
+using MenuPlanner.Api.Features.Settings;
 using MenuPlanner.Infrastructure.Configuration;
 using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Infrastructure.Emails;
-using MenuPlanner.Infrastructure.Emails.Contracts;
-using MenuPlanner.Infrastructure.Emails.Options;
-using MenuPlanner.Infrastructure.Emails.Outbox;
-using MenuPlanner.Infrastructure.Emails.Services;
-using MenuPlanner.Api.Features.Families;
 using MenuPlanner.Infrastructure.Health;
-using MenuPlanner.Api.Features.Ingredients;
 using MenuPlanner.Infrastructure.Observability;
-using MenuPlanner.Api.Features.Plans;
-using MenuPlanner.Api.Features.Recipes;
-using MenuPlanner.Api.Features.Recipes.Crud;
-using MenuPlanner.Api.Features.Recipes.External;
-using MenuPlanner.Api.Features.Recipes.Files;
-using MenuPlanner.Api.Features.Recipes.Reading;
-using MenuPlanner.Api.Features.Recipes.Repetition;
-using MenuPlanner.Api.Features.Recipes.Sharing;
-using MenuPlanner.Api.Features.Settings;
-using MenuPlanner.Api.Features.ShoppingList;
-using MenuPlanner.Domain.Accounts;
 
 var builder = WebApplication.CreateBuilder(args);
+var configuration = builder.Configuration;
 
-var connectionString = DatabaseConnection.Resolve(builder.Configuration);
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
-
-builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
-builder.Services.AddSingleton<IRecipeFileStore, FileStorage>();
-builder.Services.AddScoped<RecipeFileLifecycle>();
-builder.Services.AddScoped<RecipeGarbageCollector>();
-builder.Services.AddSingleton(services => RecipeFileCleanupOptions.Read(
-    services.GetRequiredService<IConfiguration>(),
-    services.GetRequiredService<ILogger<RecipeFileCleanupOptions>>()));
-builder.Services.AddHostedService<RecipeFileCleanupWorker>();
-
-builder.Services.AddSingleton(ReadinessOptions.FromConfiguration(builder.Configuration));
-builder.Services.AddScoped<IDatabaseReadinessProbe, DatabaseReadinessProbe>();
-
-var jwtOptions = ReadJwtOptions(builder.Configuration);
-var deploymentOptions = ProductionConfiguration.Read(builder.Configuration, jwtOptions.Secret);
-builder.Services.AddSingleton(deploymentOptions);
-builder.Services.AddSingleton(jwtOptions);
-builder.Services.AddSingleton<JwtTokenService>();
-
-// ProductionConfiguration уже отклонил production+log на старте; здесь транспорт
-// выбирается по явному режиму, без автоматического падения в логирование.
-var emailOptions = EmailConfiguration.Read(builder.Configuration);
-builder.Services.AddSingleton(emailOptions);
-builder.Services.AddSingleton<IEmailTransport>(services =>
-    emailOptions.Transport == EmailTransportMode.Log
-        ? new LoggingEmailTransport(services.GetRequiredService<ILogger<LoggingEmailTransport>>())
-        : new SmtpEmailTransport(emailOptions));
-builder.Services.AddSingleton<EmailSender>();
-
-// Надёжная очередь писем: принятая доставка живёт в PostgreSQL, содержимое
-// зашифровано ключом из конфигурации, отправка — фоновая с ограниченными повторами.
-var outboxOptions = EmailOutboxOptions.Read(builder.Configuration);
-builder.Services.AddSingleton(outboxOptions);
-builder.Services.AddSingleton<IOutboxPayloadProtector>(
-    new AesGcmOutboxPayloadProtector(
-        OutboxProtectionKey.Derive(builder.Configuration, jwtOptions.Secret)));
-builder.Services.AddScoped<EmailOutbox>();
-builder.Services.AddScoped<EmailOutboxProcessor>();
-builder.Services.AddSingleton<EmailDispatchTrigger>();
-builder.Services.AddHostedService<EmailDeliveryWorker>();
-
-var authCodeOptions = ReadAuthCodeOptions(builder.Configuration);
-builder.Services.AddSingleton(authCodeOptions);
-var authRateLimitOptions = AuthRateLimitOptions.Read(builder.Configuration);
-builder.Services.AddSingleton(authRateLimitOptions);
-builder.Services.AddSingleton(services =>
-    new FixedWindowRateLimiter(services.GetRequiredService<AuthRateLimitOptions>().MaxTrackedKeys));
-builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
-builder.Services.AddSingleton<IAuthCodeGenerator, RandomAuthCodeGenerator>();
-builder.Services.AddScoped<AuthCodeLifecycle>();
-builder.Services.AddScoped<EmailVerificationService>();
-builder.Services.AddScoped<PasswordResetService>();
-builder.Services.AddScoped<AuthSessionValidator>();
-builder.Services.AddScoped<CurrentUserContext>();
-builder.Services.AddScoped<UserAccountStore>();
-builder.Services.AddScoped<FamilyService>();
-builder.Services.AddScoped<SourceFamilyNameResolver>();
-builder.Services.AddScoped<ExternalRecipeSourceLoader>();
-builder.Services.AddScoped<ExternalRecipeStateResolver>();
-builder.Services.AddScoped<ExternalRecipeNameCache>();
-builder.Services.AddScoped<ExternalRecipeContext>();
-builder.Services.AddScoped<RecipeReader>();
-builder.Services.AddScoped<RecipeRevisionReader>();
-builder.Services.AddScoped<ExternalRecipePromotionService>();
-builder.Services.AddScoped<RecipeMutationService>();
-builder.Services.AddScoped<RecipeSharingService>();
-builder.Services.AddScoped<SharedRecipeImportService>();
-builder.Services.AddScoped<RepetitionCounter>();
-builder.Services.AddScoped<SettingsService>();
-builder.Services.AddScoped<WeekPlanSaver>();
-builder.Services.AddScoped<WeekPlanReader>();
-builder.Services.AddScoped<AdminBootstrap>();
-
-builder.Services.AddSingleton(services => new ShareOptions
-{
-    BaseUrl = services.GetRequiredService<IConfiguration>()["SHARE_BASE_URL"] ?? ""
-});
-
-var observability = ObservabilityOptions.Read(builder.Configuration);
-builder.Services.AddSingleton(observability);
-
-var otelResource = AddReleaseResource(ResourceBuilder.CreateDefault(), observability.Release.Id);
-
-builder.Services.AddOpenTelemetry()
-    .ConfigureResource(resource => AddReleaseResource(resource, observability.Release.Id))
-    .WithTracing(tracing =>
-    {
-        // Activity и trace-id нужны для корреляции журналов всегда. Полные traces
-        // не хранятся согласованно, поэтому их OTLP-экспорт выключен, пока не
-        // появится согласованное хранилище; включается явным флагом.
-        tracing.AddAspNetCoreInstrumentation();
-        if (observability.TracesExportEnabled) tracing.AddOtlpExporter();
-    });
-
-if (observability.LogsExportEnabled)
-{
-    builder.Logging.AddOpenTelemetry(options =>
-    {
-        options.SetResourceBuilder(otelResource);
-        options.IncludeScopes = true;
-        options.IncludeFormattedMessage = true;
-        // Ограниченная очередь не даёт памяти расти при недоступном Collector,
-        // а экспорт идёт фоном и не блокирует пользовательский запрос.
-        options.AddOtlpExporter((exporter, processor) =>
-        {
-            exporter.TimeoutMilliseconds = observability.ExportTimeoutMilliseconds;
-            processor.ExportProcessorType = ExportProcessorType.Batch;
-            processor.BatchExportProcessorOptions.MaxQueueSize = observability.LogQueueSize;
-            processor.BatchExportProcessorOptions.MaxExportBatchSize = observability.LogBatchSize;
-            processor.BatchExportProcessorOptions.ExporterTimeoutMilliseconds =
-                observability.ExportTimeoutMilliseconds;
-            processor.BatchExportProcessorOptions.ScheduledDelayMilliseconds =
-                ObservabilityOptions.DefaultScheduledDelayMilliseconds;
-        });
-    });
-}
-
+// Composition-root: каждый модуль регистрирует свои сервисы рядом с собой.
 builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.MapInboundClaims = false;
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = jwtOptions.Issuer,
-            ValidateAudience = true,
-            ValidAudience = jwtOptions.Audience,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.FromMinutes(1)
-        };
-        options.Events = new JwtBearerEvents
-        {
-            OnTokenValidated = context => context.HttpContext.RequestServices
-                .GetRequiredService<AuthSessionValidator>()
-                .ValidateAsync(context)
-        };
-    });
-builder.Services.AddAuthorization();
+    .AddDatabase(configuration)
+    .AddFileStorage()
+    .AddReadiness(configuration)
+    // Секрет JWT нужен до сборки хоста: из него проверяется production-конфигурация.
+    .AddProductionConfiguration(configuration, JwtOptions.Read(configuration).Secret)
+    .AddJwtAuthentication(configuration)
+    .AddEmailDelivery(configuration)
+    .AddAuth(configuration)
+    .AddFamilies()
+    .AddRecipes()
+    .AddPlans()
+    .AddSettings()
+    .AddShared();
+
+builder.AddObservability(configuration);
 
 var app = builder.Build();
 
@@ -197,12 +45,8 @@ if (AdminBootstrapArgs.IsCommand(args))
     return;
 }
 
-// X-Forwarded-* принимаются только когда задан доверенный прокси. Без него
-// middleware не подключается вовсе: пустой список известных прокси в ASP.NET
-// Core трактуется как «доверять всем», что позволило бы подделать IP.
-var forwardedHeaders = ForwardedHeaderConfiguration.Build(app.Configuration);
-if (ForwardedHeaderConfiguration.HasTrustedProxies(forwardedHeaders))
-    app.UseForwardedHeaders(forwardedHeaders);
+// X-Forwarded-* принимаются только когда задан доверенный прокси.
+app.UseTrustedForwardedHeaders();
 
 // Одна структурированная запись на запрос (operation/trace-id/release-id);
 // оборачивает обработчик сбоев, поэтому пишется и для успешных, и для ошибочных.
@@ -211,6 +55,7 @@ app.UseRequestLogging();
 // Неожиданный сбой отдаётся одним JSON-ответом с trace-id, без stack trace/SQL.
 app.UseApiExceptionHandling();
 
+var observability = app.Services.GetRequiredService<ObservabilityOptions>();
 var startupLogger = app.Services.GetRequiredService<ILoggerFactory>()
     .CreateLogger("MenuPlanner.Startup");
 startupLogger.LogInformation(
@@ -225,71 +70,11 @@ if (!observability.Release.IsKnown)
 
 app.Services.GetRequiredService<IRecipeFileStore>();
 
-app.MapGet("/health", () => Results.Json(
-    new { status = "ok", service = "menu-planner-api", release = observability.Release.Id }));
+app.MapFeatureEndpoints();
 
-app.MapGet("/ready", ReadinessEndpoint.GetReadinessAsync);
-
-app.MapAuthEndpoints();
-app.MapEmailVerificationEndpoints();
-app.MapPasswordResetEndpoints();
-app.MapAdminEndpoints();
-app.MapFamilyEndpoints();
-app.MapRecipeEndpoints();
-app.MapRecipeShareEndpoints();
-app.MapSharedRecipeEndpoints();
-app.MapIngredientEndpoints();
-app.MapPlanEndpoints();
-app.MapSettingsEndpoints();
-app.MapShoppingListEndpoints();
-
-await using (var scope = app.Services.CreateAsyncScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    if (db.Database.IsRelational())
-        await db.Database.MigrateAsync();
-}
+// Схема БД ведётся миграциями и применяется на старте (для реляционных провайдеров).
+await app.UseDatabaseMigration();
 
 app.Run();
-
-static ResourceBuilder AddReleaseResource(ResourceBuilder resource, string releaseId) =>
-    resource
-        .AddService("menu-planner-api", serviceVersion: releaseId)
-        .AddAttributes(new[] { new KeyValuePair<string, object>("release.id", releaseId) });
-
-static JwtOptions ReadJwtOptions(ConfigurationManager configuration)
-{
-    var options = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
-        ?? new JwtOptions();
-
-    if (configuration["JWT_SECRET"] is { Length: > 0 } secret) options.Secret = secret;
-    if (configuration["JWT_ISSUER"] is { Length: > 0 } issuer) options.Issuer = issuer;
-    if (configuration["JWT_AUDIENCE"] is { Length: > 0 } audience) options.Audience = audience;
-    if (int.TryParse(configuration["JWT_EXPIRY_MINUTES"], out var minutes)) options.ExpiryMinutes = minutes;
-
-    if (options.Secret.Length < 32)
-        throw new InvalidOperationException(
-            "Jwt:Secret (или env JWT_SECRET) должен быть не короче 32 символов.");
-
-    return options;
-}
-
-static AuthCodeOptions ReadAuthCodeOptions(ConfigurationManager configuration)
-{
-    var options = configuration.GetSection(AuthCodeOptions.SectionName).Get<AuthCodeOptions>()
-        ?? new AuthCodeOptions();
-
-    if (int.TryParse(configuration["AUTH_CODE_MAX_ATTEMPTS"], out var maxAttempts))
-        options.MaxAttempts = maxAttempts;
-    if (int.TryParse(configuration["AUTH_CODE_LOCK_DAYS"], out var lockDays))
-        options.LockDurationDays = lockDays;
-    if (int.TryParse(configuration["AUTH_CODE_RESEND_COOLDOWN_MINUTES"], out var cooldownMinutes))
-        options.ResendCooldownMinutes = cooldownMinutes;
-    if (int.TryParse(configuration["AUTH_CODE_RESEND_RATE_LIMIT_PER_HOUR"], out var rateLimit))
-        options.ResendRateLimitPerHour = rateLimit;
-
-    options.Validate();
-    return options;
-}
 
 public partial class Program { }

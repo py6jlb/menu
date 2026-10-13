@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using MenuPlanner.Domain.Accounts;
+using MenuPlanner.Infrastructure.Configuration;
 
 namespace MenuPlanner.Api.Features.Auth.Sessions;
 
