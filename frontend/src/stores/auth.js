@@ -107,6 +107,11 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
   window.addEventListener('storage', onStorage)
 }
 
+/**
+ * Единый стор сессии: токен и пользователь (кэш в localStorage), статус
+ * инициализации и операции входа/выхода. Состояние общее на вкладку, между
+ * вкладками синхронизируется только чтением события `storage`.
+ */
 export function useAuth() {
   const isAuthenticated = computed(() => Boolean(state.token))
   const isEmailVerified = computed(() => state.user?.isEmailVerified === true)

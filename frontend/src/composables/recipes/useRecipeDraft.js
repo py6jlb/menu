@@ -14,6 +14,10 @@ import { LOAD_FAILED, SAVE_FAILED, NOT_FOUND, CONFLICT } from '../../constants/m
 import { useRequestTracker } from '../common/useRequestTracker'
 import { LEAVE_MESSAGE } from '../common/draftMessages'
 
+/**
+ * Канонические тексты ошибок сохранения рецепта: пустое имя и неудачные действия
+ * с фото/PDF, когда сам рецепт уже сохранён.
+ */
 export const EMPTY_NAME_MESSAGE = 'Укажите название рецепта.'
 export const PHOTO_ERROR_MESSAGE =
   'Рецепт сохранён, но фото не удалось сохранить. Повторите действие с фото.'
@@ -34,6 +38,7 @@ export function nextIngredientId() {
   return `ingredient-${ingredientSequence}`
 }
 
+/** Пустая строка ингредиента со свежим локальным uid. */
 export function newIngredientDraft() {
   return { uid: nextIngredientId(), name: '', amount: '', unit: 'g', note: '', category: '' }
 }

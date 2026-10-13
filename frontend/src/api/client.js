@@ -7,6 +7,11 @@ const PUBLIC_PATHS = [
   '/api/auth/reset'
 ]
 
+/**
+ * Базовый fetch к API: проставляет `Authorization` по текущему токену (кроме
+ * публичных путей), выводит `Content-Type` для JSON-тела и гасит сессию только
+ * того токена, чей запрос получил 401. Возвращает сырой `Response`.
+ */
 export async function apiFetch(path, options = {}) {
   const { state, invalidateSession } = useAuth()
 
@@ -32,6 +37,11 @@ export async function apiFetch(path, options = {}) {
   return response
 }
 
+/**
+ * `apiFetch` плюс разбор тела: возвращает `{ response, data }`. Неразобранное
+ * или пустое тело даёт `data: null` — статус остаётся единственным источником
+ * истины для вызывающего.
+ */
 export async function apiJson(path, options = {}) {
   const response = await apiFetch(path, options)
   const text = await response.text()

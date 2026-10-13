@@ -66,4 +66,9 @@ router.beforeEach(async (to) => {
   return true
 })
 
+/**
+ * Корневой роутер приложения. Перед каждым переходом дожидается инициализации
+ * сессии и применяет метамаршруты: `requiresAuth`, `guestOnly`, `requiresAdmin`
+ * и `requiresVerified`; `returnTo` сохраняется для возврата после входа.
+ */
 export default router

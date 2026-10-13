@@ -2,6 +2,7 @@ import { reactive } from 'vue'
 import { autocompleteIngredients } from '../../api/ingredients'
 import { useRequestTracker } from '../common/useRequestTracker'
 
+/** Дебаунс запроса автодополнения по умолчанию, в миллисекундах. */
 export const AUTOCOMPLETE_DELAY = 150
 
 /** Пустое состояние подсказок для одной строки ингредиента. */

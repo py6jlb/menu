@@ -5,9 +5,11 @@ import { LOAD_FAILED, SAVE_FAILED, NOT_IN_FAMILY, CONFLICT } from '../../constan
 import { useRequestTracker } from '../common/useRequestTracker'
 import { LEAVE_MESSAGE } from '../common/draftMessages'
 
+/** Текст подтверждения замены черновика более новой версией с сервера. */
 export const RELOAD_CONFIRM_MESSAGE =
   'На сервере более новая версия плана. Загрузить её и заменить текущий черновик?'
 
+/** Ключ ячейки недели: «день:приём пищи». */
 export function slotKey(day, mealType) {
   return `${day}:${mealType}`
 }
@@ -28,6 +30,7 @@ export function serializeDraft(draft) {
   return JSON.stringify(entriesFromDraft(draft))
 }
 
+/** Черновик из серверных записей: карта «день:приём пищи» → запись слота. */
 export function draftFromEntries(entries) {
   const map = {}
   for (const entry of entries || []) {

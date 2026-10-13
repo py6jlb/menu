@@ -1,3 +1,4 @@
+/** Внешние состояния блюда и их подписи для бейджа и слота плана. */
 export const EXTERNAL_STATES = {
   broken: {
     variant: 'broken',
@@ -15,6 +16,7 @@ export const EXTERNAL_STATES = {
   }
 }
 
+/** Описание внешнего состояния по коду; неизвестный код и пустое значение — `null`. */
 export function externalState(state) {
   if (!state) return null
   return EXTERNAL_STATES[state] || null
