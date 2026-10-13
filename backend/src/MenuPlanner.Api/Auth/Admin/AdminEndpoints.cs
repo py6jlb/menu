@@ -1,10 +1,13 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth.RateLimiting;
+using MenuPlanner.Api.Auth.Sessions;
+using MenuPlanner.Api.Auth.Verification;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Admin;
 
 public static class AdminEndpoints
 {

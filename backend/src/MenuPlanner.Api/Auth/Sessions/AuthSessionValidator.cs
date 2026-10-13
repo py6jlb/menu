@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Sessions;
 
 /// <summary>
 /// Проверяет, что версия токена сессии совпадает с текущей у пользователя.

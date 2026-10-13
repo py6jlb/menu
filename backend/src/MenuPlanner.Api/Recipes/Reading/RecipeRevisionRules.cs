@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Reading;
 
 /// <summary>
 /// Чистое правило проверяемой ревизии рецепта: без БД и HTTP. Чтение отдаёт

@@ -1,10 +1,11 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Sharing;
 
 /// <summary>Результат операции над ссылкой на рецепт.</summary>
 public enum RecipeShareOutcome

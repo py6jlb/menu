@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using Microsoft.AspNetCore.Authentication;

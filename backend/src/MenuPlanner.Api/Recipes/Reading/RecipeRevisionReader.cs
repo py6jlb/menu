@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Reading;
 
 /// <summary>
 /// Текущая ревизия рецепта из БД — единая точка чтения для сервисов, которые

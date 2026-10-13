@@ -1,4 +1,5 @@
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Tests;

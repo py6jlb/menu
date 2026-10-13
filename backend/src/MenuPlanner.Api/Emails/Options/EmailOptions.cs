@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Emails;
+namespace MenuPlanner.Api.Emails.Options;
 
 /// <summary>Куда уходит письмо: защищённый SMTP или запись в лог (только dev/test).</summary>
 public enum EmailTransportMode

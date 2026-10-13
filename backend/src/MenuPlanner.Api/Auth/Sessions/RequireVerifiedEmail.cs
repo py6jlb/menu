@@ -3,7 +3,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Sessions;
 
 public sealed class RequireVerifiedEmailFilter : IEndpointFilter
 {

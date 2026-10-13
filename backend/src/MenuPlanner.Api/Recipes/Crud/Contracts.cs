@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Crud;
 
 public sealed record RecipeStepRequest(string? Text);
 

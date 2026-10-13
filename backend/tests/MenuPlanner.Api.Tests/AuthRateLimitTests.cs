@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.RateLimiting;
 using MenuPlanner.Api.Configuration;
 
 namespace MenuPlanner.Api.Tests;

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Codes;
+using MenuPlanner.Api.Auth.PasswordReset;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 

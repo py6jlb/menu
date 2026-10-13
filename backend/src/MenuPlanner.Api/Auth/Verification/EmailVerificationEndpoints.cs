@@ -1,7 +1,10 @@
 using System.Security.Claims;
+using MenuPlanner.Api.Auth.Codes;
+using MenuPlanner.Api.Auth.RateLimiting;
+using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Emails.Outbox;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Verification;
 
 public static class EmailVerificationEndpoints
 {

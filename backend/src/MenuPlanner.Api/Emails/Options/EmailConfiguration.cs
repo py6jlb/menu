@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace MenuPlanner.Api.Emails;
+namespace MenuPlanner.Api.Emails.Options;
 
 /// <summary>
 /// Чтение и проверка SMTP-настроек. Защита обязательна: открытого текста и

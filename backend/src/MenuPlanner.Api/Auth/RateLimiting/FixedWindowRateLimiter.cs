@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.RateLimiting;
 
 /// <summary>
 /// Буфер фиксированных окон в памяти процесса. Потокобезопасен, число хранимых

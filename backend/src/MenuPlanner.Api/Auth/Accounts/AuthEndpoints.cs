@@ -1,9 +1,12 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
+using MenuPlanner.Api.Auth.RateLimiting;
+using MenuPlanner.Api.Auth.Sessions;
+using MenuPlanner.Api.Auth.Verification;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails.Outbox;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Accounts;
 
 public static class AuthEndpoints
 {

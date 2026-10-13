@@ -3,7 +3,7 @@ using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails.Outbox;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.PasswordReset;
 
 public enum PasswordResetRequestOutcome
 {

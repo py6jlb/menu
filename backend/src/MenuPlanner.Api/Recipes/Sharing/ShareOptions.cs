@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Sharing;
 
 public sealed class ShareOptions
 {

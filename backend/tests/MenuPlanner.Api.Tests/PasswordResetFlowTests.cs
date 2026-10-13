@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Contracts;
 
 namespace MenuPlanner.Api.Tests;
 

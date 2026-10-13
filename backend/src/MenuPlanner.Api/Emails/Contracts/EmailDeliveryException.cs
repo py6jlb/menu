@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Emails;
+namespace MenuPlanner.Api.Emails.Contracts;
 
 /// <summary>
 /// Причина сбоя транспорта. Подставляется в понятный ответ и безопасный лог

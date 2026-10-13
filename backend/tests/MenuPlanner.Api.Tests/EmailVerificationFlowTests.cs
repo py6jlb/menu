@@ -10,6 +10,7 @@ using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Contracts;
 
 namespace MenuPlanner.Api.Tests;
 

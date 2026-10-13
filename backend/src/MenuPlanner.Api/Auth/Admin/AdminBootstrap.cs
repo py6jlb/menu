@@ -1,11 +1,12 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using MenuPlanner.Api.Auth.Verification;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails.Outbox;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Admin;
 
 public enum AdminBootstrapOutcome
 {

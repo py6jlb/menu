@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Options;
 
 namespace MenuPlanner.Api.Configuration;
 

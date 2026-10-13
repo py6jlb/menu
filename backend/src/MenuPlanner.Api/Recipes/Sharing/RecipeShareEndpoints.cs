@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Recipes.Crud;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Sharing;
 
 public static class RecipeShareEndpoints
 {
