@@ -13,7 +13,7 @@ using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Options;
 using MenuPlanner.Api.Emails.Outbox;
 using MenuPlanner.Api.Emails.Services;
-using MenuPlanner.Api.Tests;
+using MenuPlanner.Api.Tests.Support;
 
 namespace MenuPlanner.Api.Tests.Postgres;
 

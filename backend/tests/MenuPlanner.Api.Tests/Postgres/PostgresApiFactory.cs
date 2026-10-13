@@ -1,5 +1,5 @@
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Tests;
+using MenuPlanner.Api.Tests.Support;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
