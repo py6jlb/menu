@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { useRouteResource } from './useRouteResource'
-import { LOAD_FAILED } from '../constants/messages'
+import { LOAD_FAILED } from '../../constants/messages'
 
 function deferred() {
   let resolve

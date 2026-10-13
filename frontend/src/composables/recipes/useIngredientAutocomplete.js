@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
-import { autocompleteIngredients } from '../api/ingredients'
-import { useRequestTracker } from './useRequestTracker'
+import { autocompleteIngredients } from '../../api/ingredients'
+import { useRequestTracker } from '../common/useRequestTracker'
 
 export const AUTOCOMPLETE_DELAY = 150
 

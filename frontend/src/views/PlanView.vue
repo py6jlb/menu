@@ -2,16 +2,16 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { DAYS, MEALS, mondayOf, weekDays, weekRangeLabel, parseIso, toIso, mealLabel } from '../constants/plan'
-import { useWeekDraft } from '../composables/useWeekDraft'
-import { useRecipePicker } from '../composables/useRecipePicker'
+import { useWeekDraft } from '../composables/plan/useWeekDraft'
+import { useRecipePicker } from '../composables/recipes/useRecipePicker'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 import WeekNav from '../components/WeekNav.vue'
 import { SEASONS, DIETS } from '../constants/recipe'
 import { externalState } from '../constants/external'
 import { repetitionChip, repetitionTitle, repetitionWindowNote } from '../constants/repetition'
-import { useDialog } from '../composables/useDialog'
+import { useDialog } from '../composables/common/useDialog'
 import { useAuth } from '../stores/auth'
-import { useOnlineStatus } from '../composables/useOnlineStatus'
+import { useOnlineStatus } from '../composables/common/useOnlineStatus'
 
 const { isEmailVerified } = useAuth()
 const { online } = useOnlineStatus()

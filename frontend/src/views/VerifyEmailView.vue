@@ -9,7 +9,7 @@ import {
   rateLimitMessage,
   retryAfterSeconds,
   useCooldown
-} from '../composables/useCooldown'
+} from '../composables/common/useCooldown'
 
 const route = useRoute()
 const router = useRouter()

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { useSettings } from './useSettings'
-import { DEFAULT_WINDOW_WEEKS } from '../constants/settings'
-import { LOAD_FAILED, SAVE_FAILED } from '../constants/messages'
+import { DEFAULT_WINDOW_WEEKS } from '../../constants/settings'
+import { LOAD_FAILED, SAVE_FAILED } from '../../constants/messages'
 
 function deferred() {
   let resolve

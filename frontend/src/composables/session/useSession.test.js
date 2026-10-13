@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('../api/auth', () => ({
+vi.mock('../../api/auth', () => ({
   getMe: vi.fn()
 }))
 
@@ -20,8 +20,8 @@ async function setup({ token, user } = {}) {
   if (token) localStorage.setItem(TOKEN_KEY, token)
   if (user) localStorage.setItem(USER_KEY, JSON.stringify(user))
   vi.resetModules()
-  const authModule = await import('../stores/auth')
-  const apiModule = await import('../api/auth')
+  const authModule = await import('../../stores/auth')
+  const apiModule = await import('../../api/auth')
   const sessionModule = await import('./useSession')
   return {
     useAuth: authModule.useAuth,

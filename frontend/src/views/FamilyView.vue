@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useFamily } from '../composables/useFamily'
+import { useFamily } from '../composables/family/useFamily'
 import { useAuth } from '../stores/auth'
 
 const { state, isEmailVerified } = useAuth()

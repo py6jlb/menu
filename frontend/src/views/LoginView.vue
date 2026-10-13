@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../stores/auth'
 import { login } from '../api/auth'
 import { sanitizeReturnTo } from '../router/returnTo'
-import { rateLimitMessage } from '../composables/useCooldown'
+import { rateLimitMessage } from '../composables/common/useCooldown'
 
 const route = useRoute()
 const router = useRouter()

@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
-import { mondayOf, addDays, toIso, parseIso } from '../constants/plan'
-import { getShoppingList } from '../api/shopping'
-import { LOAD_FAILED, NOT_IN_FAMILY } from '../constants/messages'
-import { useRequestTracker } from './useRequestTracker'
+import { mondayOf, addDays, toIso, parseIso } from '../../constants/plan'
+import { getShoppingList } from '../../api/shopping'
+import { LOAD_FAILED, NOT_IN_FAMILY } from '../../constants/messages'
+import { useRequestTracker } from '../common/useRequestTracker'
 
 /**
  * Список покупок выбранной недели, устойчивый к поздним ответам и сетевым ошибкам.

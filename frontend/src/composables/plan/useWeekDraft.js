@@ -1,9 +1,9 @@
 import { ref, computed } from 'vue'
-import { addDays, toIso } from '../constants/plan'
-import { getWeekPlan, saveWeekPlan } from '../api/plans'
-import { LOAD_FAILED, SAVE_FAILED, NOT_IN_FAMILY, CONFLICT } from '../constants/messages'
-import { useRequestTracker } from './useRequestTracker'
-import { LEAVE_MESSAGE } from './draftMessages'
+import { addDays, toIso } from '../../constants/plan'
+import { getWeekPlan, saveWeekPlan } from '../../api/plans'
+import { LOAD_FAILED, SAVE_FAILED, NOT_IN_FAMILY, CONFLICT } from '../../constants/messages'
+import { useRequestTracker } from '../common/useRequestTracker'
+import { LEAVE_MESSAGE } from '../common/draftMessages'
 
 export const RELOAD_CONFIRM_MESSAGE =
   'На сервере более новая версия плана. Загрузить её и заменить текущий черновик?'

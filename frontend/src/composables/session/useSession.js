@@ -1,5 +1,5 @@
-import { useAuth, SESSION_STATUS } from '../stores/auth'
-import { getMe } from '../api/auth'
+import { useAuth, SESSION_STATUS } from '../../stores/auth'
+import { getMe } from '../../api/auth'
 
 let restorePromise = null
 
