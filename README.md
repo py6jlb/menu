@@ -82,6 +82,8 @@ scripts/release-gate.sh --list           # список этапов
 
 ## Разработка
 
+Изолированная среда — devcontainer ([`.devcontainer/`](.devcontainer/README.md)): .NET 10 SDK, Node 24 и Docker-in-Docker в одном контейнере, одинаково на любой машине с Docker. Открыть в VS Code/Cursor — **Dev Containers: Reopen in Container**.
+
 Backend запускается в контейнере (`mcr.microsoft.com/dotnet/sdk:10.0`) — на хосте .NET SDK не требуется. Для команд `dotnet` используйте, например:
 
 ```bash

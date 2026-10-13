@@ -1,0 +1,40 @@
+{
+  "name": "menu-planner",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  "features": {
+    "ghcr.io/devcontainers/features/dotnet:2": { "version": "10.0" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "24" },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  "privileged": true,
+
+  "containerEnv": {
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1"
+  },
+
+  "forwardPorts": [8080, 8081, 5432],
+  "portsAttributes": {
+    "8080": { "label": "backend", "onAutoForward": "silent" },
+    "8081": { "label": "frontend (nginx)", "onAutoForward": "notify" },
+    "5432": { "label": "postgres", "onAutoForward": "silent" }
+  },
+
+  "postCreateCommand": "dotnet tool restore && npm ci --prefix frontend",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csdevkit",
+        "Vue.volar",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  },
+
+  "hostRequirements": { "cpus": 2, "memory": "4gb", "storage": "16gb" }
+}
