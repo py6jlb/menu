@@ -4,8 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { getSharedRecipe, importSharedRecipe } from '../api/recipes'
 import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
-import { useRouteResource } from '../composables/useRouteResource'
-import { useRecipeAction } from '../composables/useRecipeAction'
+import { useRouteResource } from '../composables/common/useRouteResource'
+import { useRecipeAction } from '../composables/recipes/useRecipeAction'
 import RecipeBody from '../components/RecipeBody.vue'
 
 const route = useRoute()

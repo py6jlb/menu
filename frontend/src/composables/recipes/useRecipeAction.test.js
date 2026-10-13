@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { useRecipeAction } from './useRecipeAction'
-import { CONFLICT, SERVER_UNAVAILABLE } from '../constants/messages'
+import { CONFLICT, SERVER_UNAVAILABLE } from '../../constants/messages'
 
 function deferred() {
   let resolve

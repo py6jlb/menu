@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('../api/recipes', () => ({
+vi.mock('../../api/recipes', () => ({
   getRecipeShare: vi.fn(),
   createRecipeShare: vi.fn(),
   revokeRecipeShare: vi.fn(),
@@ -12,7 +12,7 @@ import {
   createRecipeShare,
   revokeRecipeShare,
   regenerateRecipeShare
-} from '../api/recipes'
+} from '../../api/recipes'
 import { useRecipeShare } from './useRecipeShare'
 
 const RECIPE = 'recipe-1'

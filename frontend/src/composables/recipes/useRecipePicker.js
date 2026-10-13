@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
-import { matchRecipes } from '../api/recipes'
-import { LOAD_FAILED } from '../constants/messages'
-import { useRequestTracker } from './useRequestTracker'
+import { matchRecipes } from '../../api/recipes'
+import { LOAD_FAILED } from '../../constants/messages'
+import { useRequestTracker } from '../common/useRequestTracker'
 
 export const BROKEN_SELECTION_MESSAGE =
   'Блюдо недоступно: источник удалён, контент не читается. Уберите его из плана или замените на другое.'

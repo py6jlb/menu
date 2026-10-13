@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { getMyFamily, createFamily, joinFamily, regenerateInviteCode, removeMember } from '../api/families'
+import { getMyFamily, createFamily, joinFamily, regenerateInviteCode, removeMember } from '../../api/families'
 
 export const FAMILY_LOAD_ERROR = 'Не удалось загрузить семью. Проверьте соединение и попробуйте снова.'
 export const FAMILY_CREATE_ERROR = 'Не удалось создать семью.'

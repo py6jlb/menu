@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { unlockUser } from '../api/admin'
-import { rateLimitMessage } from '../composables/useCooldown'
+import { rateLimitMessage } from '../composables/common/useCooldown'
 
 const email = ref('')
 const pending = ref(false)

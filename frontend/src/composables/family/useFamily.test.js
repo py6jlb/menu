@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('../api/families', () => ({
+vi.mock('../../api/families', () => ({
   getMyFamily: vi.fn(),
   createFamily: vi.fn(),
   joinFamily: vi.fn(),
@@ -14,7 +14,7 @@ import {
   joinFamily,
   regenerateInviteCode,
   removeMember
-} from '../api/families'
+} from '../../api/families'
 import {
   useFamily,
   FAMILY_LOAD_ERROR,

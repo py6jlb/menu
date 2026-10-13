@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { useShoppingList } from './useShoppingList'
-import { toIso } from '../constants/plan'
-import { LOAD_FAILED, NOT_IN_FAMILY } from '../constants/messages'
+import { toIso } from '../../constants/plan'
+import { LOAD_FAILED, NOT_IN_FAMILY } from '../../constants/messages'
 
 const WEEK_A = new Date(2026, 0, 5)
 const WEEK_B = new Date(2026, 0, 12)

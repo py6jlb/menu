@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { LOAD_FAILED, NOT_FOUND } from '../constants/messages'
+import { LOAD_FAILED, NOT_FOUND } from '../../constants/messages'
 import { useRequestTracker } from './useRequestTracker'
 
 /**

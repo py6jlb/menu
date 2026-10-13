@@ -6,7 +6,7 @@ import {
   rateLimitMessage,
   retryAfterSeconds,
   useCooldown
-} from '../composables/useCooldown'
+} from '../composables/common/useCooldown'
 
 const email = ref('')
 const sent = ref(false)

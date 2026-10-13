@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted } from 'vue'
-import { useSettings } from '../composables/useSettings'
+import { useSettings } from '../composables/settings/useSettings'
 import { useAuth } from '../stores/auth'
 import { MAX_WINDOW_WEEKS, MIN_WINDOW_WEEKS, isValidWindowWeeks } from '../constants/settings'
 

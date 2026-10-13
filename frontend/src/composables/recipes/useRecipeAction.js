@@ -1,7 +1,7 @@
 import { ref } from 'vue'
-import { CONFLICT, SERVER_UNAVAILABLE } from '../constants/messages'
-import { revisionOf } from '../api/revision'
-import { useRequestTracker } from './useRequestTracker'
+import { CONFLICT, SERVER_UNAVAILABLE } from '../../constants/messages'
+import { revisionOf } from '../../api/revision'
+import { useRequestTracker } from '../common/useRequestTracker'
 
 /**
  * Оркестрация одного действия над рецептом: `pending`/`error`/`conflict` плюс

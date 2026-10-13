@@ -6,7 +6,7 @@ import {
   toPickerItem,
   BROKEN_SELECTION_MESSAGE
 } from './useRecipePicker'
-import { LOAD_FAILED } from '../constants/messages'
+import { LOAD_FAILED } from '../../constants/messages'
 
 function deferred() {
   let resolve

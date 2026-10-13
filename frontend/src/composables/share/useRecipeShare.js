@@ -4,8 +4,8 @@ import {
   createRecipeShare,
   revokeRecipeShare,
   regenerateRecipeShare
-} from '../api/recipes'
-import { useRequestTracker } from './useRequestTracker'
+} from '../../api/recipes'
+import { useRequestTracker } from '../common/useRequestTracker'
 
 const LOAD_ERROR = 'Не удалось получить ссылку.'
 const CREATE_ERROR = 'Не удалось создать ссылку.'

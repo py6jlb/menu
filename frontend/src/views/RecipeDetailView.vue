@@ -9,9 +9,9 @@ import {
 } from '../api/recipes'
 import { getMyFamily } from '../api/families'
 import { useAuth } from '../stores/auth'
-import { useRouteResource } from '../composables/useRouteResource'
-import { useRecipeAction } from '../composables/useRecipeAction'
-import { useRecipeShare } from '../composables/useRecipeShare'
+import { useRouteResource } from '../composables/common/useRouteResource'
+import { useRecipeAction } from '../composables/recipes/useRecipeAction'
+import { useRecipeShare } from '../composables/share/useRecipeShare'
 import RecipeBody from '../components/RecipeBody.vue'
 import ExternalStateBadge from '../components/ExternalStateBadge.vue'
 

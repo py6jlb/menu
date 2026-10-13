@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuth } from '../stores/auth'
-import { ensureSession } from '../composables/useSession'
+import { ensureSession } from '../composables/session/useSession'
 import { sanitizeReturnTo, returnToQuery } from './returnTo'
 import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'

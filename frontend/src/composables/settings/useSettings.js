@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
-import { getSettings, updateSettings } from '../api/settings'
-import { DEFAULT_WINDOW_WEEKS } from '../constants/settings'
-import { LOAD_FAILED, SAVE_FAILED } from '../constants/messages'
-import { useRequestTracker } from './useRequestTracker'
+import { getSettings, updateSettings } from '../../api/settings'
+import { DEFAULT_WINDOW_WEEKS } from '../../constants/settings'
+import { LOAD_FAILED, SAVE_FAILED } from '../../constants/messages'
+import { useRequestTracker } from '../common/useRequestTracker'
 
 function hasWindow(data) {
   return data != null && Number.isInteger(data.repetitionWindowWeeks)

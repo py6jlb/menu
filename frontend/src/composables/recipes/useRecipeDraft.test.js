@@ -12,7 +12,7 @@ import {
   PHOTO_ERROR_MESSAGE,
   PHOTO_UNKNOWN_MESSAGE
 } from './useRecipeDraft'
-import { LOAD_FAILED, SAVE_FAILED } from '../constants/messages'
+import { LOAD_FAILED, SAVE_FAILED } from '../../constants/messages'
 
 function deferred() {
   let resolve

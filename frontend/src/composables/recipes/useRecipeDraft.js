@@ -7,12 +7,12 @@ import {
   deleteRecipePhoto,
   uploadRecipeDocument,
   deleteRecipeDocument
-} from '../api/recipes'
-import { revisionOf } from '../api/revision'
-import { parseList, joinList, combineDiets, splitDiets } from '../constants/recipe'
-import { LOAD_FAILED, SAVE_FAILED, NOT_FOUND, CONFLICT } from '../constants/messages'
-import { useRequestTracker } from './useRequestTracker'
-import { LEAVE_MESSAGE } from './draftMessages'
+} from '../../api/recipes'
+import { revisionOf } from '../../api/revision'
+import { parseList, joinList, combineDiets, splitDiets } from '../../constants/recipe'
+import { LOAD_FAILED, SAVE_FAILED, NOT_FOUND, CONFLICT } from '../../constants/messages'
+import { useRequestTracker } from '../common/useRequestTracker'
+import { LEAVE_MESSAGE } from '../common/draftMessages'
 
 export const EMPTY_NAME_MESSAGE = 'Укажите название рецепта.'
 export const PHOTO_ERROR_MESSAGE =

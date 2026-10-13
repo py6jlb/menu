@@ -1,9 +1,9 @@
 <script setup>
 import { computed, onMounted } from 'vue'
-import { useShoppingList } from '../composables/useShoppingList'
+import { useShoppingList } from '../composables/shopping/useShoppingList'
 import { dayLabel, mealLabel, weekRangeLabel, toIso } from '../constants/plan'
 import { CATEGORIES, OTHER_CATEGORY } from '../constants/recipe'
-import { useOnlineStatus } from '../composables/useOnlineStatus'
+import { useOnlineStatus } from '../composables/common/useOnlineStatus'
 import WeekNav from '../components/WeekNav.vue'
 
 const KNOWN_CATEGORIES = new Set(CATEGORIES.map((c) => c.code))

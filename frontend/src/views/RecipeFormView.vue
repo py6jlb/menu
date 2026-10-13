@@ -17,8 +17,8 @@ import {
   validateDocumentFile,
   recipeFieldLabel
 } from '../constants/recipe'
-import { useRecipeDraft, newIngredientDraft } from '../composables/useRecipeDraft'
-import { useIngredientAutocomplete } from '../composables/useIngredientAutocomplete'
+import { useRecipeDraft, newIngredientDraft } from '../composables/recipes/useRecipeDraft'
+import { useIngredientAutocomplete } from '../composables/recipes/useIngredientAutocomplete'
 
 const route = useRoute()
 const router = useRouter()
