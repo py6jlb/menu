@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Auth.Codes;
-using MenuPlanner.Api.Auth.PasswordReset;
+using MenuPlanner.Api.Features.Auth;
+using MenuPlanner.Api.Features.Auth.Codes;
+using MenuPlanner.Api.Features.Auth.PasswordReset;
 using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Tests.Support;
 using MenuPlanner.Domain.Accounts;

@@ -1,4 +1,4 @@
-using MenuPlanner.Api.Auth.Codes;
+using MenuPlanner.Api.Features.Auth.Codes;
 
 namespace MenuPlanner.Api.Tests.Support;
 

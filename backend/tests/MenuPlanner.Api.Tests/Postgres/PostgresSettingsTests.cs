@@ -1,5 +1,5 @@
 using MenuPlanner.Infrastructure.Data;
-using MenuPlanner.Api.Settings;
+using MenuPlanner.Api.Features.Settings;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using MenuPlanner.Domain.Accounts;

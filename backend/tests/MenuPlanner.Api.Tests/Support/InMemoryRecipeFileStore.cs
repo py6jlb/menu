@@ -1,4 +1,4 @@
-using MenuPlanner.Api.Recipes.Files;
+using MenuPlanner.Api.Features.Recipes.Files;
 
 namespace MenuPlanner.Api.Tests.Support;
 

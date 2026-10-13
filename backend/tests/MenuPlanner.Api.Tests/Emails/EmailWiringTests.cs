@@ -3,7 +3,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Features.Auth;
 using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Infrastructure.Emails;
 using MenuPlanner.Infrastructure.Emails.Contracts;

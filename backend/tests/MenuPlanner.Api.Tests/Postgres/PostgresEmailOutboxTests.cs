@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
-using MenuPlanner.Api.Auth.Codes;
+using MenuPlanner.Api.Features.Auth.Codes;
 using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Infrastructure.Emails;
 using MenuPlanner.Infrastructure.Emails.Contracts;
