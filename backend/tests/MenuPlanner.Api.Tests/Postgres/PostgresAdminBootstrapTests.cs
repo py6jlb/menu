@@ -6,11 +6,11 @@ using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Admin;
 using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Auth.Verification;
-using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Emails;
-using MenuPlanner.Api.Emails.Options;
-using MenuPlanner.Api.Emails.Outbox;
-using MenuPlanner.Api.Emails.Services;
+using MenuPlanner.Infrastructure.Data;
+using MenuPlanner.Infrastructure.Emails;
+using MenuPlanner.Infrastructure.Emails.Options;
+using MenuPlanner.Infrastructure.Emails.Outbox;
+using MenuPlanner.Infrastructure.Emails.Services;
 using MenuPlanner.Api.Tests.Support;
 using MenuPlanner.Domain.Accounts;
 

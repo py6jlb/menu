@@ -1,7 +1,7 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 
 namespace MenuPlanner.Api.Auth.Admin;
 

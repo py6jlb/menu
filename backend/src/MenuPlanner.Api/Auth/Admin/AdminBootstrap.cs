@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using MenuPlanner.Api.Auth.Verification;
-using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Data;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.Admin;

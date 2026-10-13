@@ -4,7 +4,7 @@
 
 ## Стек и структура
 
-- **Backend**: .NET 10 Minimal APIs + EF Core (Npgsql), `backend/`; solution `MenuPlanner.sln` в корне. Код — в feature-папках (`Auth`, `Families`, `Recipes`, `Plans`, `Settings`, `ShoppingList`, `Ingredients`, `Data`, `Domain`).
+- **Backend**: .NET 10 Minimal APIs + EF Core (Npgsql), `backend/`; solution `MenuPlanner.sln` в корне. Код — в feature-папках (`Auth`, `Families`, `Recipes`, `Plans`, `Settings`, `ShoppingList`, `Ingredients`); домен — в библиотеке `MenuPlanner.Domain`, инфраструктура (EF/`DbContext`, миграции, почта, наблюдаемость) — в `MenuPlanner.Infrastructure`.
 - **Frontend**: Vue 3 + Vite, `frontend/`; экраны в `src/views/`, API-клиенты в `src/api/`, роутер в `src/router/`.
 - **Инфраструктура (dev)**: Docker Compose (`db` Postgres :5432, `backend` :8080, `frontend` :8081), nginx раздаёт SPA и проксирует `/api`. Карта API и запуск — в `README.md`.
 - **Инфраструктура (prod)**: собственный VPS/VDS (Ubuntu 24.04 LTS, Docker Compose), Caddy — единый край (80/443), своя Postgres без публикации порта, образы из Docker Hub. Скрипты и конвенция — `deploy/`, разбор — `deploy/README.md`, решение — `docs/adr/0006-self-hosted-vps-deploy.md`. Наблюдаемость — OpenTelemetry (логи + trace-id) через `otel-collector`.
@@ -21,7 +21,7 @@
 
 - **Frontend**: `cd frontend && npm run build` (зависимости уже в `node_modules`).
 - **Живой стек**: `docker compose up --build`; фронт http://localhost:8081, health http://localhost:8080/health.
-- Схема БД ведётся EF Core миграциями (`backend/src/MenuPlanner.Api/Migrations/`), применяются автоматически на старте (`MigrateAsync`). Новую миграцию генерируют из корня через SDK-контейнер: `dotnet tool restore` (локальный манифест `.config/dotnet-tools.json`) и `dotnet ef migrations add <Name> --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api`. При переходе существующей dev-БД со старого `EnsureCreated` — разово пересоздать том: `docker compose down -v`.
+- Схема БД ведётся EF Core миграциями (`backend/src/MenuPlanner.Infrastructure/Migrations/`), применяются автоматически на старте (`MigrateAsync`). Новую миграцию генерируют из корня через SDK-контейнер: `dotnet tool restore` (локальный манифест `.config/dotnet-tools.json`) и `dotnet ef migrations add <Name> --project backend/src/MenuPlanner.Infrastructure --startup-project backend/src/MenuPlanner.Api`. При переходе существующей dev-БД со старого `EnsureCreated` — разово пересоздать том: `docker compose down -v`.
 
 ## Конвенции
 

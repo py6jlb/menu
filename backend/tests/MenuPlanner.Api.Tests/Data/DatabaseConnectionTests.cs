@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using Npgsql;
 using Xunit;
 

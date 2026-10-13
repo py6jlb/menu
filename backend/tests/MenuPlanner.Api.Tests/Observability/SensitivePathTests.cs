@@ -1,5 +1,5 @@
 using Xunit;
-using MenuPlanner.Api.Observability;
+using MenuPlanner.Infrastructure.Observability;
 
 namespace MenuPlanner.Api.Tests.Observability;
 

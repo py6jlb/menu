@@ -130,7 +130,7 @@ docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD":/app -w /app/front
 
   ```bash
   docker run --rm -v "$(pwd)":/app -w /app mcr.microsoft.com/dotnet/sdk:10.0 \
-    sh -c "dotnet tool restore && dotnet ef migrations add <Name> --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api"
+    sh -c "dotnet tool restore && dotnet ef migrations add <Name> --project backend/src/MenuPlanner.Infrastructure --startup-project backend/src/MenuPlanner.Api"
   ```
 
   **Разовая миграция при переходе:** если dev-БД была создана прежним `EnsureCreated`, пересоздать том — `docker compose down -v` и поднять заново.

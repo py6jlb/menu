@@ -1,5 +1,5 @@
 using System.Data.Common;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Crud;
 using MenuPlanner.Api.Recipes.External;

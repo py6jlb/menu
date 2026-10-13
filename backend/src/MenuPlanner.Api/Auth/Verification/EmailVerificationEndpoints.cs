@@ -2,7 +2,7 @@ using System.Security.Claims;
 using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Auth.RateLimiting;
 using MenuPlanner.Api.Auth.Sessions;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.Verification;

@@ -1,4 +1,4 @@
-using MenuPlanner.Api.Emails.Contracts;
+using MenuPlanner.Infrastructure.Emails.Contracts;
 
 namespace MenuPlanner.Api.Tests.Support;
 

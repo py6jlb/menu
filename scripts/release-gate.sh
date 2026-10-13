@@ -197,7 +197,7 @@ stage_migrations() {
     -e DOTNET_CLI_HOME=/tmp/dotnet-home \
     -e NUGET_PACKAGES=/tmp/nuget \
     -v "$ROOT":/app -w /app \
-    "$RELEASE_SDK_IMAGE" sh -c "dotnet tool restore && dotnet ef migrations has-pending-model-changes --project backend/src/MenuPlanner.Api --startup-project backend/src/MenuPlanner.Api"
+    "$RELEASE_SDK_IMAGE" sh -c "dotnet tool restore && dotnet ef migrations has-pending-model-changes --project backend/src/MenuPlanner.Infrastructure --startup-project backend/src/MenuPlanner.Api"
 }
 
 stage_frontend() {

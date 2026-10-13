@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth.RateLimiting;
 using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Auth.Verification;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.Admin;

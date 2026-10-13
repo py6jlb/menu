@@ -4,10 +4,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Emails;
-using MenuPlanner.Api.Emails.Contracts;
-using MenuPlanner.Api.Emails.Services;
+using MenuPlanner.Infrastructure.Data;
+using MenuPlanner.Infrastructure.Emails;
+using MenuPlanner.Infrastructure.Emails.Contracts;
+using MenuPlanner.Infrastructure.Emails.Services;
 using MenuPlanner.Api.Tests.Support;
 using MenuPlanner.Domain.Emails;
 

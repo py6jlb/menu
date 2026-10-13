@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using Xunit;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 using MenuPlanner.Api.Tests.Support;
 
 namespace MenuPlanner.Api.Tests.Emails;

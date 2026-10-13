@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 
 namespace MenuPlanner.Api.Recipes.Files;
 

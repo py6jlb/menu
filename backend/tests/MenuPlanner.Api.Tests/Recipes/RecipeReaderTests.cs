@@ -1,4 +1,4 @@
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Reading;
