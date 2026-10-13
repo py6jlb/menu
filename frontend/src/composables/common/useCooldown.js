@@ -1,7 +1,9 @@
 import { ref, computed, onBeforeUnmount } from 'vue'
 
+/** Длительность обратного отсчёта повторной отправки кода по умолчанию, в секундах. */
 export const RESEND_COOLDOWN_SECONDS = 300
 
+/** Секунды ожидания из текста ошибки вида «… через N сек»; иначе 0. */
 export function parseCooldownSeconds(message) {
   const match = /(\d+)\s*сек/.exec(message || '')
   return match ? Number(match[1]) : 0

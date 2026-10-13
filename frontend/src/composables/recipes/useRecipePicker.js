@@ -3,9 +3,11 @@ import { matchRecipes } from '../../api/recipes'
 import { LOAD_FAILED } from '../../constants/messages'
 import { useRequestTracker } from '../common/useRequestTracker'
 
+/** Текст предупреждения о недоступном (сломанном) источнике выбранного блюда. */
 export const BROKEN_SELECTION_MESSAGE =
   'Блюдо недоступно: источник удалён, контент не читается. Уберите его из плана или замените на другое.'
 
+/** Пустой набор фильтров подбора: без ограничений и предпочтений. */
 export function emptyFilters() {
   return {
     maxDifficulty: null,
@@ -22,6 +24,7 @@ export function emptyFilters() {
   }
 }
 
+/** Есть ли хотя бы один активный фильтр или предпочтение. */
 export function hasAnyFilter(filters) {
   return Boolean(
     filters.maxDifficulty ||
@@ -38,6 +41,7 @@ export function hasAnyFilter(filters) {
   )
 }
 
+/** Нормализация элемента выдачи подбора к форме карточки выбора. */
 export function toPickerItem(item) {
   return {
     id: item.recipeId,

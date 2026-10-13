@@ -1,3 +1,4 @@
+/** Единицы измерения ингредиентов; код — как в API, порядок задаёт список выбора. */
 export const UNITS = [
   { code: 'g', label: 'г' },
   { code: 'kg', label: 'кг' },
@@ -10,8 +11,10 @@ export const UNITS = [
   { code: 'pinch', label: 'щепотка' }
 ]
 
-// Конечный справочник категорий продуктов. Коды должны совпадать с
-// RecipeCatalog.IngredientCategories на бэкенде; порядок задаёт порядок отделов.
+/**
+ * Конечный справочник категорий продуктов. Коды должны совпадать с
+ * RecipeCatalog.IngredientCategories на бэкенде; порядок задаёт порядок отделов.
+ */
 export const CATEGORIES = [
   { code: 'vegetables', label: 'Овощи, фрукты, зелень', icon: '🥦' },
   { code: 'meat', label: 'Мясо, птица', icon: '🥩' },
@@ -26,9 +29,10 @@ export const CATEGORIES = [
   { code: 'drinks', label: 'Напитки', icon: '☕' }
 ]
 
-// Пустая категория: не выбирается в форме, но группирует продукты в конце списка покупок.
+/** Пустая категория: не выбирается в форме, но группирует продукты в конце списка покупок. */
 export const OTHER_CATEGORY = { code: '', label: 'Прочее', icon: '🧺' }
 
+/** Сезонность блюда. */
 export const SEASONS = [
   { code: 'winter', label: 'Зима' },
   { code: 'spring', label: 'Весна' },
@@ -36,6 +40,7 @@ export const SEASONS = [
   { code: 'autumn', label: 'Осень' }
 ]
 
+/** Стандартные метки диеты. */
 export const DIETS = [
   { code: 'vegetarian', label: 'Вегетарианское' },
   { code: 'gluten_free', label: 'Безглютеновое' },
@@ -45,6 +50,7 @@ export const DIETS = [
 
 const DIET_CODES = DIETS.map((d) => d.code)
 
+/** Подпись диеты по коду; неизвестный код возвращается как есть. */
 export function dietLabel(code) {
   return DIETS.find((d) => d.code === code)?.label || code
 }
@@ -90,10 +96,12 @@ export function combineDiets(diets, text) {
   return uniqueByLower([...(diets || []), ...parseList(text)])
 }
 
+/** Подпись единицы измерения по коду; неизвестный код возвращается как есть. */
 export function unitLabel(code) {
   return UNITS.find((u) => u.code === code)?.label || code
 }
 
+/** Подпись сезона по коду; неизвестный код возвращается как есть. */
 export function seasonLabel(code) {
   return SEASONS.find((s) => s.code === code)?.label || code
 }
@@ -108,6 +116,10 @@ export function categoryIcon(code) {
   return CATEGORIES.find((c) => c.code === code)?.icon || OTHER_CATEGORY.icon
 }
 
+/**
+ * Допустимые типы и лимиты фото рецепта; те же ограничения проверяет сервер.
+ * Подписи — для подсказок формы.
+ */
 export const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 export const PHOTO_ACCEPT = PHOTO_TYPES.join(',')
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024
@@ -117,6 +129,7 @@ export const PHOTO_MAX_DIMENSION = 8000
 export const PHOTO_MAX_PIXELS = 25000000
 export const PHOTO_DIMENSIONS_LABEL = '8000 пикселей по стороне и 25 мегапикселей'
 
+/** Тип, лимит размера и подпись допустимого PDF-документа рецепта. */
 export const DOCUMENT_TYPE = 'application/pdf'
 export const DOCUMENT_ACCEPT = DOCUMENT_TYPE
 export const DOCUMENT_MAX_BYTES = 20 * 1024 * 1024
@@ -162,6 +175,7 @@ export function validatePhotoDimensions(width, height) {
   return ''
 }
 
+/** Разбор строки, разделённой запятыми, в список непустых обрезанных меток. */
 export function parseList(value) {
   return (value || '')
     .split(',')
@@ -169,6 +183,7 @@ export function parseList(value) {
     .filter((item) => item.length > 0)
 }
 
+/** Обратный к `parseList`: список меток в строку через запятую. */
 export function joinList(items) {
   return (items || []).join(', ')
 }

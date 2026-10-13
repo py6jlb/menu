@@ -32,5 +32,7 @@ function safeStore(getStore) {
   }
 }
 
+/** Обёртка над `localStorage`; недоступное хранилище деградирует в память вкладки. */
 export const localStore = safeStore(() => window.localStorage)
+/** Обёртка над `sessionStorage`; недоступное хранилище деградирует в память вкладки. */
 export const sessionStore = safeStore(() => window.sessionStorage)
