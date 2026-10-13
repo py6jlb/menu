@@ -1,21 +1,15 @@
-import { apiJson } from './client'
+import { apiJson, postJson } from './client'
 
 export async function getMyFamily() {
   return apiJson('/api/families/my')
 }
 
 export async function createFamily(name) {
-  return apiJson('/api/families', {
-    method: 'POST',
-    body: JSON.stringify({ name })
-  })
+  return postJson('/api/families', { name })
 }
 
 export async function joinFamily(inviteCode) {
-  return apiJson('/api/families/join', {
-    method: 'POST',
-    body: JSON.stringify({ inviteCode })
-  })
+  return postJson('/api/families/join', { inviteCode })
 }
 
 export async function regenerateInviteCode(familyId) {

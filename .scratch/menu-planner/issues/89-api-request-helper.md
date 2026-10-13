@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved (ticket/89-api-request-helper)
 
 ## Design (из grilling)
 
@@ -16,15 +16,18 @@
 
 ## Checklist
 
-- [ ] `postJson`/`putJson`/`revisionQuery` в `api/client.js`.
-- [ ] `login`/`register` в `api/auth.js`; `LoginView`/`RegisterView` переведены.
-- [ ] `HomeView` ходит через client.
-- [ ] `recipes.js`/`plans.js`/`families.js`/`settings.js`/`auth.js`/`admin.js` используют хелперы; `JSON.stringify` и inline revision-query не дублируются.
-- [ ] `api/client.test.js`: `revisionQuery` (чистый), `postJson` кладёт JSON + `Content-Type: application/json`, `FormData` не оборачивается (мок `fetch`).
-- [ ] `npm run test` и `npm run build` зелёные.
+- [x] `postJson`/`putJson`/`revisionQuery` в `api/client.js`.
+- [x] `login`/`register` в `api/auth.js`; `LoginView`/`RegisterView` переведены.
+- [x] `HomeView` ходит через client.
+- [x] `recipes.js`/`plans.js`/`families.js`/`settings.js`/`auth.js`/`admin.js` используют хелперы; `JSON.stringify` и inline revision-query не дублируются.
+- [x] `api/client.test.js`: `revisionQuery` (чистый), `postJson` кладёт JSON + `Content-Type: application/json`, `FormData` не оборачивается (мок `fetch`).
+- [x] `npm run test` и `npm run build` зелёные.
 
 ## Evidence
 
-_(заполняется при реализации)_
+- `api/client.js`: `postJson`/`putJson` (JSON-тело поверх `apiJson`), `revisionQuery(param, revision)` (`''`/`?param=value`; `0` — валидная ревизия).
+- `api/auth.js`: `login`/`register`; `LoginView`/`RegisterView` без хардкода путей; `HomeView` — `apiJson('/health')` вместо сырого `fetch`.
+- Модули `recipes.js` (`revisionQuery('revision', …)`)/`plans.js` (`revisionQuery('expectedRevision', …)`)/`families.js`/`settings.js`/`auth.js`/`admin.js` переведены; `FormData`-загрузки не оборачиваются.
+- Тесты: `api/client.test.js` (5). `npm run test` — 283 passed (24 files); `npm run build` — успешно (Node 22.21.1, PWA SW собран).
 
 ## Comments

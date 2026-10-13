@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../stores/auth'
-import { apiJson } from '../api/client'
+import { register } from '../api/auth'
 import { sanitizeReturnTo } from '../router/returnTo'
 import { rateLimitMessage } from '../composables/useCooldown'
 
@@ -19,10 +19,7 @@ async function submit() {
   error.value = ''
   pending.value = true
   try {
-    const { response, data } = await apiJson('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email: email.value, password: password.value })
-    })
+    const { response, data } = await register(email.value, password.value)
     if (response.status === 201) {
       setSession(data.token, data.user)
       router.push(sanitizeReturnTo(route.query.returnTo) || { name: 'verify' })

@@ -1,12 +1,9 @@
-import { apiJson } from './client'
+import { apiJson, putJson } from './client'
 
 export async function getSettings() {
   return apiJson('/api/settings')
 }
 
 export async function updateSettings(settings) {
-  return apiJson('/api/settings', {
-    method: 'PUT',
-    body: JSON.stringify(settings)
-  })
+  return putJson('/api/settings', settings)
 }
