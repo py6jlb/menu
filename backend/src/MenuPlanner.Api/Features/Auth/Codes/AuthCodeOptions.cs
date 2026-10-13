@@ -18,6 +18,25 @@ public sealed class AuthCodeOptions
     public int ResendCooldownMinutes { get; set; } = DefaultResendCooldownMinutes;
     public int ResendRateLimitPerHour { get; set; } = DefaultResendRateLimitPerHour;
 
+    /// <summary>Читает секцию AuthCode и env-переопределения, проверяя значения на старте.</summary>
+    public static AuthCodeOptions Read(IConfiguration configuration)
+    {
+        var options = configuration.GetSection(SectionName).Get<AuthCodeOptions>()
+            ?? new AuthCodeOptions();
+
+        if (int.TryParse(configuration["AUTH_CODE_MAX_ATTEMPTS"], out var maxAttempts))
+            options.MaxAttempts = maxAttempts;
+        if (int.TryParse(configuration["AUTH_CODE_LOCK_DAYS"], out var lockDays))
+            options.LockDurationDays = lockDays;
+        if (int.TryParse(configuration["AUTH_CODE_RESEND_COOLDOWN_MINUTES"], out var cooldownMinutes))
+            options.ResendCooldownMinutes = cooldownMinutes;
+        if (int.TryParse(configuration["AUTH_CODE_RESEND_RATE_LIMIT_PER_HOUR"], out var rateLimit))
+            options.ResendRateLimitPerHour = rateLimit;
+
+        options.Validate();
+        return options;
+    }
+
     /// <summary>Проверяет значения на старте понятной ошибкой без секретов.</summary>
     public void Validate()
     {
