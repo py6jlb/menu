@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using MenuPlanner.Api.Auth.Codes;
+using MenuPlanner.Api.Auth.RateLimiting;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Emails.Outbox;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.PasswordReset;
 
 public static class PasswordResetEndpoints
 {

@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Data;
+using MenuPlanner.Api.Recipes.Crud;
 using MenuPlanner.Api.Recipes.External;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Sharing;
 
 public static class SharedRecipeEndpoints
 {

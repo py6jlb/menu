@@ -1,5 +1,6 @@
 using Xunit;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.RateLimiting;
 
 namespace MenuPlanner.Api.Tests;
 

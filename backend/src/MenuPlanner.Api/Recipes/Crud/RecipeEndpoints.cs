@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Files;
+using MenuPlanner.Api.Recipes.Reading;
 using MenuPlanner.Api.Recipes.Repetition;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Crud;
 
 public static class RecipeEndpoints
 {

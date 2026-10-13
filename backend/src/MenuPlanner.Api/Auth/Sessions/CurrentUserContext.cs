@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Sessions;
 
 /// <summary>
 /// Текущий пользователь и его членство: scoped-сервис, читающий БД. В отличие от

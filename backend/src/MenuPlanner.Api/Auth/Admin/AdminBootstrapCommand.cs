@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MenuPlanner.Api.Data;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Admin;
 
 /// <summary>Разобранные аргументы закрытой CLI-команды административного bootstrap.</summary>
 public sealed record AdminBootstrapArgs(string? Email, string? Error)

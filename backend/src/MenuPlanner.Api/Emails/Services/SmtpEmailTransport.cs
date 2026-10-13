@@ -2,8 +2,10 @@ using System.Net.Sockets;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
+using MenuPlanner.Api.Emails.Contracts;
+using MenuPlanner.Api.Emails.Options;
 
-namespace MenuPlanner.Api.Emails;
+namespace MenuPlanner.Api.Emails.Services;
 
 /// <summary>
 /// Отправка через SMTP с обязательной защитой: либо явно требуемый STARTTLS,

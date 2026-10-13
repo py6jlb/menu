@@ -4,7 +4,7 @@ using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using MenuPlanner.Api.Domain;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Sessions;
 
 public sealed class JwtTokenService
 {

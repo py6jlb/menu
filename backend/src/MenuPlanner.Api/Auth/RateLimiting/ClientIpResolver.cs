@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Http;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.RateLimiting;
 
 /// <summary>
 /// Клиентский IP после доверенного proxy middleware. Заголовки

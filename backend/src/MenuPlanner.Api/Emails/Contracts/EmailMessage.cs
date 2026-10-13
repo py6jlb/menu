@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Emails;
+namespace MenuPlanner.Api.Emails.Contracts;
 
 public sealed record EmailMessage(
     string To,

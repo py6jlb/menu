@@ -1,7 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Sessions;
 
 /// <summary>
 /// Чистые хелперы по вызывающему: кто он по claim. Членство в семье (чтение БД)

@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.RateLimiting;
 
 /// <summary>
 /// Значения лимитов для аутентификационных операций. Читаются из секции

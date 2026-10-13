@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Files;
 
 /// <summary>
 /// Проверяет, что загруженный файл — действительно PDF, по сигнатуре в начале

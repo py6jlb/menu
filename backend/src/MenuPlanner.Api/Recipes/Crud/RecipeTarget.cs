@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Crud;
 
 /// <summary>
 /// Идентичность рецепта в рамках семьи: пара, которая всегда путешествует вместе.

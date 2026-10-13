@@ -7,6 +7,8 @@ using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Contracts;
+using MenuPlanner.Api.Emails.Services;
 
 namespace MenuPlanner.Api.Tests;
 

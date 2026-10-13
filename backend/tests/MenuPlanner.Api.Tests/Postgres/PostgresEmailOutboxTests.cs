@@ -9,7 +9,10 @@ using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Contracts;
+using MenuPlanner.Api.Emails.Options;
 using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Api.Emails.Services;
 using MenuPlanner.Api.Tests;
 
 namespace MenuPlanner.Api.Tests.Postgres;

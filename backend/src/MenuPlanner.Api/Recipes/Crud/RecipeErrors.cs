@@ -1,4 +1,5 @@
-namespace MenuPlanner.Api.Recipes;
+using MenuPlanner.Api.Recipes.Reading;
+namespace MenuPlanner.Api.Recipes.Crud;
 
 /// <summary>
 /// Общие ответы-ошибки для операций над рецептами.

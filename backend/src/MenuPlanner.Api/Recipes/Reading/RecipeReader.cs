@@ -3,7 +3,7 @@ using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.External;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Reading;
 
 /// <summary>Срез списка рецептов: все, только собственные или только внешние.</summary>
 public enum RecipeScope

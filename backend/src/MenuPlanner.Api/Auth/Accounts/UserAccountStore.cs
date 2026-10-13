@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Accounts;
 
 /// <summary>
 /// Запись и чтение учётных записей по email/id: scoped-сервис, читающий БД.

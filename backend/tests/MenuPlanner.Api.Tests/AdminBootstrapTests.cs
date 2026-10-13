@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Admin;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 

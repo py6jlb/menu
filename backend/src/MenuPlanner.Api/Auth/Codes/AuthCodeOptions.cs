@@ -1,6 +1,6 @@
 using MenuPlanner.Api.Auth.Codes;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Codes;
 
 public sealed class AuthCodeOptions
 {

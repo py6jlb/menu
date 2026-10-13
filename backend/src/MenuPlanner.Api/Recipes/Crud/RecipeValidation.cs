@@ -1,6 +1,6 @@
 using MenuPlanner.Api.Domain;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Crud;
 
 /// <summary>
 /// Ошибка ввода рецепта: машинный код, русский текст и путь поля формы. Поле —

@@ -2,8 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 using MenuPlanner.Api.Recipes.Files;
+using MenuPlanner.Api.Recipes.Reading;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Crud;
 
 /// <summary>Исход правки/удаления рецепта с проверяемой ревизией.</summary>
 public enum RecipeMutationOutcome

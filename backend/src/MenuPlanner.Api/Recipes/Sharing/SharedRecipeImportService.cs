@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Sharing;
 
 /// <summary>Исход импорта внешнего рецепта по ссылке на рецепт.</summary>
 public enum SharedRecipeImportOutcome

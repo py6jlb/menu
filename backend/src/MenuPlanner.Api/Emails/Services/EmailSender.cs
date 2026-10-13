@@ -1,4 +1,6 @@
-namespace MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Contracts;
+using MenuPlanner.Api.Emails.Options;
+namespace MenuPlanner.Api.Emails.Services;
 
 public sealed class EmailSender
 {

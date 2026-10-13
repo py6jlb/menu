@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Xunit;
 using MenuPlanner.Api.Emails;
+using MenuPlanner.Api.Emails.Contracts;
+using MenuPlanner.Api.Emails.Services;
 
 namespace MenuPlanner.Api.Tests;
 

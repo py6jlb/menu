@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.RateLimiting;
 
 /// <summary>
 /// Единый порядок проверки лимитов для аутентификационных операций: сначала

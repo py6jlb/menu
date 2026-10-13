@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Auth;
+namespace MenuPlanner.Api.Auth.Sessions;
 
 public sealed class JwtOptions
 {

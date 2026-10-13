@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using MenuPlanner.Api.Auth;
+using MenuPlanner.Api.Auth.Sessions;
 
 namespace MenuPlanner.Api.Families;
 

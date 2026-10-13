@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace MenuPlanner.Api.Emails;
+namespace MenuPlanner.Api.Emails.Services;
 
 public static class EmailTemplates
 {

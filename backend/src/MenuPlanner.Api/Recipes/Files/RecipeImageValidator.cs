@@ -2,7 +2,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
 using MenuPlanner.Api.Domain;
 
-namespace MenuPlanner.Api.Recipes;
+namespace MenuPlanner.Api.Recipes.Files;
 
 /// <summary>
 /// Проверяет, что загруженный файл — действительно декодируемое изображение

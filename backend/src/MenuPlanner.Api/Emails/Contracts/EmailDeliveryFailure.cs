@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace MenuPlanner.Api.Emails;
+namespace MenuPlanner.Api.Emails.Contracts;
 
 /// <summary>
 /// Безопасная диагностика и пользовательский текст при сбое доставки.

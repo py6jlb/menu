@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
+using MenuPlanner.Api.Emails.Contracts;
 
-namespace MenuPlanner.Api.Emails;
+namespace MenuPlanner.Api.Emails.Services;
 
 /// <summary>
 /// Dev/test-транспорт: полное письмо (включая код и HTML) пишется в журнал.
