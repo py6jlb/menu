@@ -1,10 +1,10 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Auth.Sessions;
+using MenuPlanner.Api.Features.Auth;
+using MenuPlanner.Api.Features.Auth.Sessions;
 using MenuPlanner.Infrastructure.Data;
-using MenuPlanner.Api.Recipes;
-using MenuPlanner.Api.Recipes.Sharing;
+using MenuPlanner.Api.Features.Recipes;
+using MenuPlanner.Api.Features.Recipes.Sharing;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using MenuPlanner.Domain.Accounts;

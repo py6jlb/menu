@@ -1,7 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using MenuPlanner.Infrastructure.Data;
-using MenuPlanner.Api.Families;
+using MenuPlanner.Api.Features.Families;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using MenuPlanner.Domain.Families;

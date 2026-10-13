@@ -1,10 +1,10 @@
 using System.Data.Common;
 using MenuPlanner.Infrastructure.Data;
-using MenuPlanner.Api.Recipes;
-using MenuPlanner.Api.Recipes.Crud;
-using MenuPlanner.Api.Recipes.External;
-using MenuPlanner.Api.Recipes.Files;
-using MenuPlanner.Api.Recipes.Reading;
+using MenuPlanner.Api.Features.Recipes;
+using MenuPlanner.Api.Features.Recipes.Crud;
+using MenuPlanner.Api.Features.Recipes.External;
+using MenuPlanner.Api.Features.Recipes.Files;
+using MenuPlanner.Api.Features.Recipes.Reading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
