@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth;
 

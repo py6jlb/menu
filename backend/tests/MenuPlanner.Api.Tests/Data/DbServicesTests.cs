@@ -10,10 +10,10 @@ using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.Settings;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using MenuPlanner.Api.Domain.Accounts;
-using MenuPlanner.Api.Domain.Families;
-using MenuPlanner.Api.Domain.Plans;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Accounts;
+using MenuPlanner.Domain.Families;
+using MenuPlanner.Domain.Plans;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Data;
 

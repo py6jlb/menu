@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Settings;
-using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Domain.Plans;
 
 namespace MenuPlanner.Api.Recipes.Repetition;
 

@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain.Families;
+namespace MenuPlanner.Domain.Families;
 
 /// <summary>
 /// Ограничения семьи, согласованные с хранилищем. Статические правила без

@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain.Recipes;
+namespace MenuPlanner.Domain.Recipes;
 
 /// <summary>Публичная ссылка на рецепт: токен и момент отзыва.</summary>
 public sealed class RecipeShare

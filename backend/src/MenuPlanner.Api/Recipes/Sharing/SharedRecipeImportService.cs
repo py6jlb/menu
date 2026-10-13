@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Sharing;
 

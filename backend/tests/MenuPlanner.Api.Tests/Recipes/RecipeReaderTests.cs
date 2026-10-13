@@ -4,8 +4,8 @@ using MenuPlanner.Api.Recipes.External;
 using MenuPlanner.Api.Recipes.Reading;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using MenuPlanner.Api.Domain.Families;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Families;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Recipes;
 

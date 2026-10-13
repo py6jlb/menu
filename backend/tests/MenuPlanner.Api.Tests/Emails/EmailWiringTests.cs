@@ -9,7 +9,7 @@ using MenuPlanner.Api.Emails;
 using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Services;
 using MenuPlanner.Api.Tests.Support;
-using MenuPlanner.Api.Domain.Emails;
+using MenuPlanner.Domain.Emails;
 
 namespace MenuPlanner.Api.Tests.Emails;
 

@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain.Recipes;
+namespace MenuPlanner.Domain.Recipes;
 
 /// <summary>Ингредиент рецепта: порядок, название, количество, единица и категория.</summary>
 public sealed class RecipeIngredient

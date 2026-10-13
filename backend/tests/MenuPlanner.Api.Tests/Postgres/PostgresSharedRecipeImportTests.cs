@@ -3,8 +3,8 @@ using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Sharing;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using MenuPlanner.Api.Domain.Families;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Families;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Postgres;
 

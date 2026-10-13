@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Tests.Support;
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Auth;
 

@@ -1,5 +1,5 @@
-using MenuPlanner.Api.Domain.Accounts;
-using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Domain.Accounts;
+using MenuPlanner.Domain.Families;
 
 namespace MenuPlanner.Api.Families;
 

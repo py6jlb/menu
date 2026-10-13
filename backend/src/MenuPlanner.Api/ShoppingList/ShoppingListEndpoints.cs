@@ -2,7 +2,7 @@ using System.Security.Claims;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Plans;
-using MenuPlanner.Api.Domain.Plans;
+using MenuPlanner.Domain.Plans;
 
 namespace MenuPlanner.Api.ShoppingList;
 

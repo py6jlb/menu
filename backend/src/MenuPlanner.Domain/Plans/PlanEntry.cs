@@ -1,6 +1,6 @@
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Recipes;
 
-namespace MenuPlanner.Api.Domain.Plans;
+namespace MenuPlanner.Domain.Plans;
 
 /// <summary>Запись недельного плана: день, приём пищи, рецепт и число порций.</summary>
 public sealed class PlanEntry

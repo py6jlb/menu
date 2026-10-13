@@ -12,8 +12,8 @@ using MenuPlanner.Api.Recipes.Crud;
 using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.ShoppingList;
 using MenuPlanner.Api.Tests.Support;
-using MenuPlanner.Api.Domain.Plans;
-using MenuPlanner.Api.Domain.Recipes;
+using MenuPlanner.Domain.Plans;
+using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Tests.Recipes;
 

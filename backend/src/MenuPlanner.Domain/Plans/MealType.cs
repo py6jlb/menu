@@ -1,4 +1,4 @@
-namespace MenuPlanner.Api.Domain.Plans;
+namespace MenuPlanner.Domain.Plans;
 
 /// <summary>Приём пищи в слоте недели: завтрак, два перекуса, обед и ужин.</summary>
 public enum MealType

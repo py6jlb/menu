@@ -1,6 +1,6 @@
-using MenuPlanner.Api.Domain.Accounts;
+using MenuPlanner.Domain.Accounts;
 
-namespace MenuPlanner.Api.Domain.Families;
+namespace MenuPlanner.Domain.Families;
 
 /// <summary>Членство пользователя в семье (составной ключ FamilyId + UserId).</summary>
 public sealed class FamilyMember

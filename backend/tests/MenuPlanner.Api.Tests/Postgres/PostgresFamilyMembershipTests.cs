@@ -4,7 +4,7 @@ using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Families;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using MenuPlanner.Api.Domain.Families;
+using MenuPlanner.Domain.Families;
 
 namespace MenuPlanner.Api.Tests.Postgres;
 
