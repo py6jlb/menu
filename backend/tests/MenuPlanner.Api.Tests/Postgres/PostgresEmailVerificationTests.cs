@@ -6,6 +6,7 @@ using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Auth.Verification;
 using MenuPlanner.Api.Data;
 using MenuPlanner.Api.Domain;
+using MenuPlanner.Api.Tests.Support;
 
 namespace MenuPlanner.Api.Tests.Postgres;
 
