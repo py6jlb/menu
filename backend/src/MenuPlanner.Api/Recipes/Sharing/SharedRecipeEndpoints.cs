@@ -8,6 +8,7 @@ using MenuPlanner.Api.Recipes.External;
 
 namespace MenuPlanner.Api.Recipes.Sharing;
 
+/// <summary>Публичные маршруты /api/shared: просмотр общего рецепта и импорт его в свою семью.</summary>
 public static class SharedRecipeEndpoints
 {
     public static IEndpointRouteBuilder MapSharedRecipeEndpoints(this IEndpointRouteBuilder app)

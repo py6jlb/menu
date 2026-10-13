@@ -6,6 +6,7 @@ using MenuPlanner.Api.Recipes.Crud;
 
 namespace MenuPlanner.Api.Recipes.Sharing;
 
+/// <summary>Маршруты /api/recipes/{id}/share: чтение, создание, отзыв и перегенерация ссылки.</summary>
 public static class RecipeShareEndpoints
 {
     public static IEndpointRouteBuilder MapRecipeShareEndpoints(this IEndpointRouteBuilder app)

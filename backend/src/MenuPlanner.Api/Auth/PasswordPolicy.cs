@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Auth;
 
+/// <summary>Правила пароля: минимальная длина и сообщение об ошибке.</summary>
 public static class PasswordPolicy
 {
     public const int MinLength = 6;

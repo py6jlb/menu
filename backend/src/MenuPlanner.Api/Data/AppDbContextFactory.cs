@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace MenuPlanner.Api.Data;
 
+/// <summary>Фабрика контекста для design-time инструментов EF Core (миграции), читающая параметры из окружения.</summary>
 public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)

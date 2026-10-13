@@ -1,10 +1,13 @@
 namespace MenuPlanner.Api.Recipes.Crud;
 
+/// <summary>Шаг рецепта во входящем запросе.</summary>
 public sealed record RecipeStepRequest(string? Text);
 
+/// <summary>Ингредиент рецепта во входящем запросе.</summary>
 public sealed record RecipeIngredientRequest(
     string? Name, decimal? Amount, string? Unit, string? Note, string? Category = null);
 
+/// <summary>Создание/правка рецепта: поля, шаги, ингредиенты и ожидаемая ревизия.</summary>
 public sealed record RecipeRequest(
     string? Name,
     string? Description,
@@ -21,6 +24,7 @@ public sealed record RecipeRequest(
     // изменение с устаревшей ревизией не выполняется. Для создания не нужна.
     int? Revision = null);
 
+/// <summary>Краткая карточка рецепта для списка: ключевые поля, повторяемость и внешнее состояние.</summary>
 public sealed record RecipeSummaryDto(
     Guid Id,
     string Name,
@@ -38,6 +42,7 @@ public sealed record RecipeSummaryDto(
     string? State = null,
     string? CopiedFromFamilyName = null);
 
+/// <summary>Ингредиент рецепта в ответе.</summary>
 public sealed record RecipeIngredientDto(
     Guid Id,
     string Name,
@@ -46,6 +51,7 @@ public sealed record RecipeIngredientDto(
     string? Note,
     string? Category = null);
 
+/// <summary>Полная карточка рецепта в ответе.</summary>
 public sealed record RecipeDto(
     Guid Id,
     string Name,
@@ -93,10 +99,12 @@ public sealed record RecipeMatchItemDto(
     string? State = null,
     int RepetitionCount = 0);
 
+/// <summary>Ответ подбора рецептов: элементы и окно повторяемости.</summary>
 public sealed record RecipeMatchResponse(
     IReadOnlyList<RecipeMatchItemDto> Items,
     int RepetitionWindowWeeks = 0);
 
+/// <summary>Простой текстовый ответ об ошибке рецепта.</summary>
 public sealed record RecipeErrorDto(string Error);
 
 /// <summary>
@@ -111,10 +119,13 @@ public sealed record RecipeValidationErrorDto(string Error, string Code, string?
 /// </summary>
 public sealed record RecipeConflictDto(string Error, int Revision = 0);
 
+/// <summary>Результат импорта общего рецепта: id созданного рецепта.</summary>
 public sealed record RecipeImportResultDto(Guid RecipeId);
 
+/// <summary>Конфликт импорта: рецепт уже добавлен в семью.</summary>
 public sealed record RecipeImportConflictDto(string Error, Guid RecipeId);
 
+/// <summary>Состояние публичной ссылки на рецепт: токен, URL и признак отзыва.</summary>
 public sealed record RecipeShareDto(
     Guid RecipeId,
     string Token,

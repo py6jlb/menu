@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Шаг рецепта: порядок и текст.</summary>
 public sealed class RecipeStep
 {
     public Guid Id { get; set; }

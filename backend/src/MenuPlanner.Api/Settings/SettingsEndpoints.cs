@@ -4,6 +4,7 @@ using MenuPlanner.Api.Auth.Sessions;
 
 namespace MenuPlanner.Api.Settings;
 
+/// <summary>Маршруты группы /api/settings: чтение и обновление настроек пользователя.</summary>
 public static class SettingsEndpoints
 {
     public static IEndpointRouteBuilder MapSettingsEndpoints(this IEndpointRouteBuilder app)

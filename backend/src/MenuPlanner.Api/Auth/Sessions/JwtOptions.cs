@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Auth.Sessions;
 
+/// <summary>Настройки JWT из секции Jwt: издатель, аудитория, секрет и срок жизни.</summary>
 public sealed class JwtOptions
 {
     public const string SectionName = "Jwt";

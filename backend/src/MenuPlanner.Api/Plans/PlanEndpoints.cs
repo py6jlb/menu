@@ -5,6 +5,7 @@ using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Plans;
 
+/// <summary>Маршруты группы /api/plans: чтение, полная замена и удаление недельного плана.</summary>
 public static class PlanEndpoints
 {
     private const string ConflictMessage =

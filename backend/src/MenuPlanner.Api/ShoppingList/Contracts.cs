@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.ShoppingList;
 
+/// <summary>Позиция списка покупок: название, количество, единица и отображаемый текст.</summary>
 public sealed record ShoppingListItemDto(
     string Name,
     decimal Amount,
@@ -28,4 +29,5 @@ public sealed record ShoppingListDto(
     IReadOnlyList<ShoppingListItemDto> Items,
     IReadOnlyList<ShoppingListExcludedDto> Excluded);
 
+/// <summary>Простой текстовый ответ об ошибке списка покупок.</summary>
 public sealed record ShoppingListErrorDto(string Error);

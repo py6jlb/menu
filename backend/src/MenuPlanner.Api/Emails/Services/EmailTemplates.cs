@@ -2,6 +2,7 @@ using System.Net;
 
 namespace MenuPlanner.Api.Emails.Services;
 
+/// <summary>HTML-шаблоны писем с кодами: подтверждение почты и сброс пароля.</summary>
 public static class EmailTemplates
 {
     public static (string Subject, string HtmlBody) Verification(string code) =>

@@ -8,6 +8,7 @@ using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth.Admin;
 
+/// <summary>Исход попытки назначения первоначального администратора.</summary>
 public enum AdminBootstrapOutcome
 {
     /// <summary>Первый администратор создан и получил письмо с кодом.</summary>
@@ -26,6 +27,7 @@ public enum AdminBootstrapOutcome
     InvalidInput
 }
 
+/// <summary>Результат bootstrap: исход и id созданного администратора.</summary>
 public readonly record struct AdminBootstrapResult(AdminBootstrapOutcome Outcome, Guid? UserId);
 
 /// <summary>

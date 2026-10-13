@@ -5,6 +5,7 @@ using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth.Verification;
 
+/// <summary>Исход потребления кода подтверждения почты.</summary>
 public enum VerifyEmailOutcome
 {
     Verified,
@@ -15,8 +16,10 @@ public enum VerifyEmailOutcome
     Locked
 }
 
+/// <summary>Результат подтверждения: исход и подтверждённый пользователь.</summary>
 public readonly record struct VerifyEmailResult(VerifyEmailOutcome Outcome, User? User);
 
+/// <summary>Исход повторной отправки кода подтверждения.</summary>
 public enum ResendEmailOutcome
 {
     Sent,
@@ -25,6 +28,7 @@ public enum ResendEmailOutcome
     Locked
 }
 
+/// <summary>Результат повторной отправки: исход, код и остаток cooldown.</summary>
 public readonly record struct ResendEmailResult(ResendEmailOutcome Outcome, string? Code, int RetryAfterSeconds);
 
 /// <summary>

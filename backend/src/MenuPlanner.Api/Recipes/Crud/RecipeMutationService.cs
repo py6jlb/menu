@@ -97,7 +97,6 @@ public sealed class RecipeMutationService
             return new(RecipeMutationOutcome.Conflict, Revision: recipe.Revision);
 
         RecipeValidation.Apply(recipe, request);
-        // Правка рецепта стирает метку происхождения «скопировано из семьи X».
         recipe.CopiedFromFamilyName = null;
         recipe.Revision = RecipeRevisionRules.Next(recipe.Revision);
         recipe.UpdatedAt = _clock.GetUtcNow().UtcDateTime;

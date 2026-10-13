@@ -3,6 +3,7 @@ using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Data;
 
+/// <summary>Контекст EF Core: наборы сущностей и их конфигурация (индексы, каскады, токены ревизий).</summary>
 public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)

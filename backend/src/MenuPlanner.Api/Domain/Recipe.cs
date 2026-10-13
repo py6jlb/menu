@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Рецепт семьи: состав, шаги, файлы и связь с внешним источником.</summary>
 public sealed class Recipe
 {
     public Guid Id { get; set; }

@@ -3,6 +3,7 @@ using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.ShoppingList;
 
+/// <summary>Группа единиц для приведения количества к базовой единице.</summary>
 public enum UnitGroup
 {
     Weight,
@@ -11,11 +12,14 @@ public enum UnitGroup
     Household
 }
 
+/// <summary>Ингредиент для расчёта списка: название, количество, единица и категория.</summary>
 public sealed record IngredientLine(string Name, decimal Amount, string Unit, string? Category = null);
 
+/// <summary>Свёрнутая позиция списка покупок.</summary>
 public sealed record ShoppingListItem(
     string Name, decimal Amount, string Unit, string Display, string? Category = null);
 
+/// <summary>Чистая сборка списка покупок: нормализация названий, приведение единиц и склейка с выбором категории по большинству.</summary>
 public static class ShoppingListBuilder
 {
     private const decimal BaseUnitThreshold = 1000m;

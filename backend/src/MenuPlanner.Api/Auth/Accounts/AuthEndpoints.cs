@@ -8,6 +8,7 @@ using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth.Accounts;
 
+/// <summary>Маршруты группы /api/auth: регистрация, вход и текущий пользователь.</summary>
 public static class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)

@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Справочник планирования: границы дня/порций и коды приёмов пищи.</summary>
 public static class PlanningCatalog
 {
     public const int DayMin = 0;

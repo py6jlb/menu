@@ -3,6 +3,7 @@ using System.Text;
 
 namespace MenuPlanner.Api.Families;
 
+/// <summary>Генерация инвайт-кода семьи: 8 символов без неоднозначных букв и цифр.</summary>
 public static class InviteCodeGenerator
 {
     private const string Alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

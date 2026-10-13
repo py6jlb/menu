@@ -4,6 +4,7 @@ using MenuPlanner.Api.Auth.Sessions;
 
 namespace MenuPlanner.Api.Families;
 
+/// <summary>Маршруты группы /api/families: создание, чтение своей семьи, вступление, инвайт-код и удаление участника.</summary>
 public static class FamilyEndpoints
 {
     public static IEndpointRouteBuilder MapFamilyEndpoints(this IEndpointRouteBuilder app)
