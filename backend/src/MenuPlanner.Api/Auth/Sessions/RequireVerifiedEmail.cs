@@ -5,6 +5,7 @@ using MenuPlanner.Api.Data;
 
 namespace MenuPlanner.Api.Auth.Sessions;
 
+/// <summary>Фильтр endpoint: пропускает только пользователей с подтверждённой почтой.</summary>
 public sealed class RequireVerifiedEmailFilter : IEndpointFilter
 {
     public async ValueTask<object?> InvokeAsync(
@@ -31,6 +32,7 @@ public sealed class RequireVerifiedEmailFilter : IEndpointFilter
     }
 }
 
+/// <summary>Расширение для подключения фильтра подтверждённой почты к endpoint.</summary>
 public static class VerifiedEmailEndpointExtensions
 {
     public static IEndpointConventionBuilder RequireVerifiedEmail(this IEndpointConventionBuilder builder) =>

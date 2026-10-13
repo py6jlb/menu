@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Жёсткие фильтры подбора: отсекают рецепты, не подходящие под пределы и метки.</summary>
 public sealed record MatchFilters(
     int? MaxDifficulty = null,
     int? MaxCalories = null,
@@ -9,24 +10,29 @@ public sealed record MatchFilters(
     List<string>? IncludeIngredients = null,
     List<string>? Tags = null);
 
+/// <summary>Мягкие предпочтения подбора: повышают оценку подходящих рецептов без отсечения.</summary>
 public sealed record MatchPreferences(
     List<string>? PreferSeasons = null,
     List<string>? PreferDiets = null,
     bool PreferLowCalories = false,
     bool PreferLowComplexity = false);
 
-// Search (поиск по имени) выполняется на сервере до ограничения выдачи, поэтому
-// рецепт за пределами первых MaxResults всё равно находится. Жёсткий фильтр.
-// WeekStart — понедельник планируемой недели: повторяемость считается по окну,
-// заканчивающемуся этой неделей включительно, а не текущей неделей сервера.
+/// <summary>
+/// Запрос подбора рецептов: фильтры, предпочтения, поиск по имени и неделя для повторяемости.
+/// Search выполняется на сервере до ограничения выдачи, поэтому рецепт за пределами первых
+/// MaxResults всё равно находится. WeekStart — понедельник планируемой недели: повторяемость
+/// считается по окну, заканчивающемуся этой неделей включительно, а не текущей неделей сервера.
+/// </summary>
 public sealed record RecipeMatchRequest(
     MatchFilters? Filters = null,
     MatchPreferences? Preferences = null,
     string? Search = null,
     DateOnly? WeekStart = null);
 
+/// <summary>Рецепт с набранной оценкой подбора.</summary>
 public sealed record RecipeMatch(Recipe Recipe, int MatchScore);
 
+/// <summary>Чистый подбор рецептов: фильтрация, поиск и ранжирование по оценке и предпочтениям.</summary>
 public static class RecipeMatcher
 {
     public const int MaxResults = 100;

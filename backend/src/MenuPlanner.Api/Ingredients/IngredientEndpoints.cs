@@ -6,6 +6,7 @@ using MenuPlanner.Api.Recipes.Reading;
 
 namespace MenuPlanner.Api.Ingredients;
 
+/// <summary>Маршруты группы /api/ingredients: автодополнение названий ингредиентов.</summary>
 public static class IngredientEndpoints
 {
     public static IEndpointRouteBuilder MapIngredientEndpoints(this IEndpointRouteBuilder app)

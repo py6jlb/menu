@@ -9,6 +9,7 @@ using MenuPlanner.Api.Recipes.Repetition;
 
 namespace MenuPlanner.Api.Recipes.Crud;
 
+/// <summary>Маршруты группы /api/recipes: список, карточки, подбор, правки, файлы и отдача фото/документов.</summary>
 public static class RecipeEndpoints
 {
     public static IEndpointRouteBuilder MapRecipeEndpoints(this IEndpointRouteBuilder app)

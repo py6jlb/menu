@@ -7,6 +7,7 @@ using MenuPlanner.Api.Emails.Services;
 
 namespace MenuPlanner.Api.Emails.Outbox;
 
+/// <summary>Исход обработки одной записи очереди писем.</summary>
 public enum OutboxDeliveryOutcome
 {
     Delivered,
@@ -14,6 +15,7 @@ public enum OutboxDeliveryOutcome
     Abandoned
 }
 
+/// <summary>Сводка прохода очереди: сколько писем захвачено, доставлено, отложено и отброшено.</summary>
 public readonly record struct OutboxDispatchResult(int Claimed, int Delivered, int Rescheduled, int Abandoned);
 
 /// <summary>

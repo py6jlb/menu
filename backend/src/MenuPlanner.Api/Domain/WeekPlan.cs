@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Недельный план семьи: начало недели, ревизия и записи.</summary>
 public sealed class WeekPlan
 {
     public Guid Id { get; set; }

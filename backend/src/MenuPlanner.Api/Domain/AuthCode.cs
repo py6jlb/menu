@@ -1,11 +1,13 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Тип одноразового кода: подтверждение почты или сброс пароля.</summary>
 public enum AuthCodeType
 {
     Verify,
     Reset
 }
 
+/// <summary>Одноразовый код пользователя: хэш, срок действия, признак использования и счётчик попыток.</summary>
 public sealed class AuthCode
 {
     public Guid Id { get; set; }

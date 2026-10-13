@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Публичная ссылка на рецепт: токен и момент отзыва.</summary>
 public sealed class RecipeShare
 {
     public Guid Id { get; set; }

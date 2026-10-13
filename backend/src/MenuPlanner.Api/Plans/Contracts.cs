@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Plans;
 
+/// <summary>Запись недели во входящем запросе: день, приём пищи, рецепт и порции.</summary>
 public sealed record PlanEntryRequest(int Day, string MealType, Guid RecipeId, int Portions);
 
 /// <summary>
@@ -10,6 +11,7 @@ public sealed record SaveWeekPlanRequest(
     IReadOnlyList<PlanEntryRequest>? Entries,
     int ExpectedRevision = WeekPlanRevisions.Initial);
 
+/// <summary>Запись недели в ответе: рецепт, порции и внешнее состояние.</summary>
 public sealed record PlanEntryDto(
     int Day,
     string MealType,
@@ -18,6 +20,7 @@ public sealed record PlanEntryDto(
     int Portions,
     string? State = null);
 
+/// <summary>Недельный план в ответе: начало недели, ревизия и записи.</summary>
 public sealed record WeekPlanDto(
     string WeekStart,
     int Revision,

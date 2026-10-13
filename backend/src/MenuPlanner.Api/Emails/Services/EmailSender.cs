@@ -2,6 +2,7 @@ using MenuPlanner.Api.Emails.Contracts;
 using MenuPlanner.Api.Emails.Options;
 namespace MenuPlanner.Api.Emails.Services;
 
+/// <summary>Сборка писем с кодами (подтверждение, сброс) и передача их транспорту.</summary>
 public sealed class EmailSender
 {
     private readonly EmailOptions _options;

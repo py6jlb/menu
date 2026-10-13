@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Справочник рецептов: лимиты полей и коллекций, единицы измерения, сезоны и категории продуктов.</summary>
 public static class RecipeCatalog
 {
     public const int NameMaxLength = 200;

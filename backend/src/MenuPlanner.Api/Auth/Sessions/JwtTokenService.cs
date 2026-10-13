@@ -6,6 +6,7 @@ using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Auth.Sessions;
 
+/// <summary>Выпуск подписанного JWT-токена сессии с субъектом, ролью и версией токена.</summary>
 public sealed class JwtTokenService
 {
     public const string TokenVersionClaim = "tv";

@@ -10,6 +10,7 @@ public interface IAuthCodeGenerator
     string Generate();
 }
 
+/// <summary>Криптографически стойкая генерация кодов для продакшна.</summary>
 public sealed class RandomAuthCodeGenerator : IAuthCodeGenerator
 {
     public string Generate() => AuthCodePolicy.GenerateCode();

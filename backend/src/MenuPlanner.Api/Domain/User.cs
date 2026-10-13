@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Учётная запись: email, хэш пароля, роль, состояние подтверждения и блокировки.</summary>
 public sealed class User
 {
     public Guid Id { get; set; }

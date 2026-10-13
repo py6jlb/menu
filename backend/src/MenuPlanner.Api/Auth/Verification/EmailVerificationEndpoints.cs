@@ -6,6 +6,7 @@ using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth.Verification;
 
+/// <summary>Маршруты группы /api/auth подтверждения почты: ввод кода и повторная отправка.</summary>
 public static class EmailVerificationEndpoints
 {
     public static IEndpointRouteBuilder MapEmailVerificationEndpoints(this IEndpointRouteBuilder app)

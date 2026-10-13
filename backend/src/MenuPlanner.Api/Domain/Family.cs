@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Семья: владелец, инвайт-код и связанные участники, рецепты и недельные планы.</summary>
 public sealed class Family
 {
     public Guid Id { get; set; }

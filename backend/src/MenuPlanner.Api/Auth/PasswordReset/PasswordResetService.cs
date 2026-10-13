@@ -5,6 +5,7 @@ using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth.PasswordReset;
 
+/// <summary>Исход запроса кода сброса пароля.</summary>
 public enum PasswordResetRequestOutcome
 {
     Sent,
@@ -12,9 +13,11 @@ public enum PasswordResetRequestOutcome
     NotEligible
 }
 
+/// <summary>Результат запроса кода: исход, отправленный код и остаток cooldown.</summary>
 public readonly record struct PasswordResetRequestResult(
     PasswordResetRequestOutcome Outcome, string? Code, int RetryAfterSeconds);
 
+/// <summary>Исход потребления кода сброса пароля.</summary>
 public enum PasswordResetOutcome
 {
     Reset,
@@ -24,6 +27,7 @@ public enum PasswordResetOutcome
     ChallengeClosed
 }
 
+/// <summary>Результат сброса пароля: исход и обновлённый пользователь.</summary>
 public readonly record struct PasswordResetResult(PasswordResetOutcome Outcome, User? User);
 
 /// <summary>

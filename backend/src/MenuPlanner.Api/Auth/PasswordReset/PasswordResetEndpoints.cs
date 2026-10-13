@@ -6,6 +6,7 @@ using MenuPlanner.Api.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth.PasswordReset;
 
+/// <summary>Маршруты группы /api/auth сброса пароля: запрос кода и его потребление.</summary>
 public static class PasswordResetEndpoints
 {
     private const string NeutralMessage =

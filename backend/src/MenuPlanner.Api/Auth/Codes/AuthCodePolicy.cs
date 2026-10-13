@@ -4,6 +4,7 @@ using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Auth.Codes;
 
+/// <summary>Исход проверки одноразового кода.</summary>
 public enum CodeCheckResult
 {
     Ok,
@@ -12,6 +13,7 @@ public enum CodeCheckResult
     AlreadyUsed
 }
 
+/// <summary>Чистые правила одноразовых кодов: генерация, хэширование, сроки, попытки и блокировка.</summary>
 public static class AuthCodePolicy
 {
     public const int CodeLength = 6;

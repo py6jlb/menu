@@ -11,6 +11,7 @@ public interface IDatabaseReadinessProbe
     Task<bool> CanConnectAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>Проверка доступности БД через CanConnect для readiness-пробы.</summary>
 public sealed class DatabaseReadinessProbe : IDatabaseReadinessProbe
 {
     private readonly AppDbContext _db;

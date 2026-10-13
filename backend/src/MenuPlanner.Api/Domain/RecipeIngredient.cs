@@ -1,5 +1,6 @@
 namespace MenuPlanner.Api.Domain;
 
+/// <summary>Ингредиент рецепта: порядок, название, количество, единица и категория.</summary>
 public sealed class RecipeIngredient
 {
     public Guid Id { get; set; }

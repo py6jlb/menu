@@ -17,6 +17,7 @@ public enum SmtpSecurity
     Ssl
 }
 
+/// <summary>Настройки SMTP: хост, порт, учётные данные, отправитель, защита и таймаут.</summary>
 public sealed class EmailOptions
 {
     public string Host { get; set; } = "";

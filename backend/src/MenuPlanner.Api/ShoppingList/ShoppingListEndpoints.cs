@@ -6,6 +6,7 @@ using MenuPlanner.Api.Plans;
 
 namespace MenuPlanner.Api.ShoppingList;
 
+/// <summary>Маршруты группы /api/shopping-list: список покупок на неделю.</summary>
 public static class ShoppingListEndpoints
 {
     public static IEndpointRouteBuilder MapShoppingListEndpoints(this IEndpointRouteBuilder app)

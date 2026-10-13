@@ -9,6 +9,7 @@ using MenuPlanner.Api.Domain;
 
 namespace MenuPlanner.Api.Auth.Admin;
 
+/// <summary>Административные маршруты /api/admin: разблокировка пользователя.</summary>
 public static class AdminEndpoints
 {
     private static readonly TimeSpan UnlockRateWindow = TimeSpan.FromMinutes(1);

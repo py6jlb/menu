@@ -2,6 +2,7 @@ using MenuPlanner.Api.Auth.Codes;
 
 namespace MenuPlanner.Api.Auth.Codes;
 
+/// <summary>Настройки одноразовых кодов из секции AuthCode: лимиты попыток, блокировки и повторной отправки.</summary>
 public sealed class AuthCodeOptions
 {
     public const string SectionName = "AuthCode";
