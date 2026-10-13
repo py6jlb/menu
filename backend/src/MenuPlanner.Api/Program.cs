@@ -68,6 +68,7 @@ if (!observability.Release.IsKnown)
         observability.ManifestPath ?? "(не задан)",
         observability.Release.Id);
 
+//fail-fast (каталог файлового хранилища должен существовать/создаться на старте, иначе падаем сразу)
 app.Services.GetRequiredService<IRecipeFileStore>();
 
 app.MapFeatureEndpoints();
