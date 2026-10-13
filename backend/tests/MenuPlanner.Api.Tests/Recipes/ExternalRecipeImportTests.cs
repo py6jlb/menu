@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Crud;

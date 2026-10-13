@@ -6,7 +6,7 @@ using Xunit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Families;
 using MenuPlanner.Api.Recipes;
 using MenuPlanner.Api.Recipes.Crud;

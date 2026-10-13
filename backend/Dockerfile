@@ -2,6 +2,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 COPY src/MenuPlanner.Api/MenuPlanner.Api.csproj src/MenuPlanner.Api/
+COPY src/MenuPlanner.Domain/MenuPlanner.Domain.csproj src/MenuPlanner.Domain/
+COPY src/MenuPlanner.Infrastructure/MenuPlanner.Infrastructure.csproj src/MenuPlanner.Infrastructure/
 RUN dotnet restore src/MenuPlanner.Api/MenuPlanner.Api.csproj
 
 COPY src/ src/

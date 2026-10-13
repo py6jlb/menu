@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Xunit;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Settings;
 using MenuPlanner.Api.Tests.Support;
 using Microsoft.EntityFrameworkCore;

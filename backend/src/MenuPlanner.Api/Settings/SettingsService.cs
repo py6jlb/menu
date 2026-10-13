@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Settings;

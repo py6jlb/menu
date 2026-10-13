@@ -1,4 +1,4 @@
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Recipes.Repetition;
 using MenuPlanner.Api.Settings;
 using Microsoft.EntityFrameworkCore;

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using MenuPlanner.Api.Auth.RateLimiting;
 using MenuPlanner.Api.Auth.Sessions;
 using MenuPlanner.Api.Auth.Verification;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.Accounts;

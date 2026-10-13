@@ -2,7 +2,7 @@ using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Sessions;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Domain.Recipes;
 
 namespace MenuPlanner.Api.Recipes.Sharing;

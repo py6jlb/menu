@@ -7,8 +7,8 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Data;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Support;

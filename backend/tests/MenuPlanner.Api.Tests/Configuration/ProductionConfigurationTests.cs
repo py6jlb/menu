@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Xunit;
-using MenuPlanner.Api.Configuration;
+using MenuPlanner.Infrastructure.Configuration;
 using MenuPlanner.Api.Tests.Support;
 
 namespace MenuPlanner.Api.Tests.Configuration;

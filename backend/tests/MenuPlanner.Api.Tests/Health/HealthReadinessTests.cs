@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using MenuPlanner.Api.Health;
+using MenuPlanner.Infrastructure.Health;
 using MenuPlanner.Api.Tests.Support;
 
 namespace MenuPlanner.Api.Tests.Health;

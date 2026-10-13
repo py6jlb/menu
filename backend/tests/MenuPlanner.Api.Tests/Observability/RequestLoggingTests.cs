@@ -14,7 +14,7 @@ public sealed class RequestLoggingTests
         const string token = "secret-share-token-9f2c";
         using var factory = new ApiFactory();
         var capture = new CapturingLoggerProvider();
-        factory.Settings[MenuPlanner.Api.Observability.ReleaseIdentity.IdVariable] = "release-42";
+        factory.Settings[MenuPlanner.Infrastructure.Observability.ReleaseIdentity.IdVariable] = "release-42";
         factory.ConfigureTestServices = services =>
             services.AddSingleton<ILoggerProvider>(capture);
         using var client = factory.CreateClient();
@@ -46,7 +46,7 @@ public sealed class RequestLoggingTests
         await client.GetAsync("/health");
 
         var entry = Assert.Single(capture.Logs, l => l.Properties.ContainsKey("Operation"));
-        Assert.Equal(MenuPlanner.Api.Observability.ReleaseIdentity.UnknownId, entry.Properties["ReleaseId"]);
+        Assert.Equal(MenuPlanner.Infrastructure.Observability.ReleaseIdentity.UnknownId, entry.Properties["ReleaseId"]);
     }
 
     [Fact]

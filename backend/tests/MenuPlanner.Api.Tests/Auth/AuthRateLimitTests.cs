@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.RateLimiting;
-using MenuPlanner.Api.Configuration;
+using MenuPlanner.Infrastructure.Configuration;
 using MenuPlanner.Api.Tests.Support;
 
 namespace MenuPlanner.Api.Tests.Auth;

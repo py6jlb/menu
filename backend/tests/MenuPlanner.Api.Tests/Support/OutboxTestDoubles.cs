@@ -1,6 +1,6 @@
-using MenuPlanner.Api.Emails;
-using MenuPlanner.Api.Emails.Contracts;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Emails;
+using MenuPlanner.Infrastructure.Emails.Contracts;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 
 namespace MenuPlanner.Api.Tests.Support;
 

@@ -28,12 +28,12 @@ _Avoid_: Роль в семье
 
 **Письмо**:
 HTML-сообщение на русском, отправляемое пользователю по email при подтверждении почты или сбросе пароля. Без вложений; содержит одноразовый 6-значный код.
-_Код_: `EmailMessage`, `EmailSender`, шаблоны `EmailTemplates` (`Emails/`).
+_Код_: `EmailMessage`, `EmailSender`, шаблоны `EmailTemplates` (`MenuPlanner.Infrastructure/Emails/`).
 _Avoid_: Сообщение, Email, Уведомление
 
 **Очередь писем**:
 Надёжная очередь принятых к отправке писем (outbox без отдельного брокера): запись живёт в PostgreSQL, ставится в одной транзакции с изменением аккаунта/challenge и доводится фоновой отправкой с ограниченными повторами; переживает перезапуск. Содержимое кода хранится зашифрованным, не логируется и удаляется после завершения.
-_Код_: `EmailOutboxMessage`, `EmailOutbox`, `EmailOutboxProcessor`, `EmailDeliveryWorker` (`Emails/Outbox/`).
+_Код_: `EmailOutboxMessage`, `EmailOutbox`, `EmailOutboxProcessor`, `EmailDeliveryWorker` (`MenuPlanner.Infrastructure/Emails/Outbox/`).
 _Avoid_: Спам-очередь, Брокер, Job
 
 **Принятая доставка**:

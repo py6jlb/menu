@@ -2,7 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 
 namespace MenuPlanner.Api.Auth.Sessions;
 

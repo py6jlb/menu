@@ -2,10 +2,10 @@ using System.Diagnostics;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Xunit;
-using MenuPlanner.Api.Emails;
-using MenuPlanner.Api.Emails.Contracts;
-using MenuPlanner.Api.Emails.Options;
-using MenuPlanner.Api.Emails.Services;
+using MenuPlanner.Infrastructure.Emails;
+using MenuPlanner.Infrastructure.Emails.Contracts;
+using MenuPlanner.Infrastructure.Emails.Options;
+using MenuPlanner.Infrastructure.Emails.Services;
 using MenuPlanner.Api.Tests.Support;
 
 namespace MenuPlanner.Api.Tests.Emails;

@@ -4,7 +4,7 @@ using Xunit;
 using MenuPlanner.Api.Auth;
 using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Auth.PasswordReset;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Tests.Support;
 using MenuPlanner.Domain.Accounts;
 

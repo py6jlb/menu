@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MenuPlanner.Api.Auth.Codes;
 using MenuPlanner.Api.Auth.RateLimiting;
-using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Data;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 
 namespace MenuPlanner.Api.Auth.PasswordReset;
 

@@ -4,8 +4,8 @@ using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using Xunit;
 using MenuPlanner.Api.Auth;
-using MenuPlanner.Api.Emails;
-using MenuPlanner.Api.Emails.Contracts;
+using MenuPlanner.Infrastructure.Emails;
+using MenuPlanner.Infrastructure.Emails.Contracts;
 
 namespace MenuPlanner.Api.Tests.Auth;
 

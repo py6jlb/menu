@@ -1,4 +1,4 @@
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 using MenuPlanner.Api.Recipes.External;
 using Microsoft.EntityFrameworkCore;
 using Xunit;

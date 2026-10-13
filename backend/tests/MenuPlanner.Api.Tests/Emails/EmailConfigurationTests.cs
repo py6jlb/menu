@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Xunit;
-using MenuPlanner.Api.Emails;
-using MenuPlanner.Api.Emails.Options;
+using MenuPlanner.Infrastructure.Emails;
+using MenuPlanner.Infrastructure.Emails.Options;
 
 namespace MenuPlanner.Api.Tests.Emails;
 

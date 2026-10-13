@@ -4,7 +4,7 @@ using Xunit;
 namespace MenuPlanner.Api.Tests.Postgres;
 
 /// <summary>
-/// Настоящий <see cref="MenuPlanner.Api.Health.DatabaseReadinessProbe"/> поверх
+/// Настоящий <see cref="MenuPlanner.Infrastructure.Health.DatabaseReadinessProbe"/> поверх
 /// PostgreSQL: недоступная БД даёт 503, возвращение БД — снова 200 без
 /// перезапуска процесса. Недоступность эмулируется снятием БД (DROP ... FORCE),
 /// поэтому проверяется реальный путь Npgsql и восстановление пула соединений.

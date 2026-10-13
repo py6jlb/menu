@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
-using MenuPlanner.Api.Data;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Data;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 
 namespace MenuPlanner.Api.Tests.Support;
 

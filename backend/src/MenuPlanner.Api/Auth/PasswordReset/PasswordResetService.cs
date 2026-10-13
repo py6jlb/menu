@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using MenuPlanner.Api.Auth.Codes;
-using MenuPlanner.Api.Emails.Outbox;
+using MenuPlanner.Infrastructure.Emails.Outbox;
 using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Auth.PasswordReset;

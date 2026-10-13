@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using MenuPlanner.Api.Data;
+using MenuPlanner.Infrastructure.Data;
 
 namespace MenuPlanner.Api.Recipes.Reading;
 
