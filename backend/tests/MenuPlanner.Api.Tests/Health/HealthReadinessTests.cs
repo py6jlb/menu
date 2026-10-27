@@ -18,10 +18,10 @@ public sealed class HealthReadinessTests
         factory.Probe.Ready = false;
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/health");
+        var response = await client.GetAsync("/health", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("\"status\":\"ok\"", body);
     }
 
@@ -32,10 +32,10 @@ public sealed class HealthReadinessTests
         factory.Probe.Ready = true;
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/ready");
+        var response = await client.GetAsync("/ready", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("\"status\":\"ready\"", body);
         Assert.Contains("\"service\":\"menu-planner-api\"", body);
     }
@@ -47,10 +47,10 @@ public sealed class HealthReadinessTests
         factory.Probe.Ready = false;
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/ready");
+        var response = await client.GetAsync("/ready", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("\"status\":\"not-ready\"", body);
     }
 
@@ -61,13 +61,13 @@ public sealed class HealthReadinessTests
         using var client = factory.CreateClient();
 
         factory.Probe.Ready = false;
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/ready")).StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/ready", TestContext.Current.CancellationToken)).StatusCode);
 
         factory.Probe.Ready = true;
-        var recovered = await client.GetAsync("/ready");
+        var recovered = await client.GetAsync("/ready", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, recovered.StatusCode);
-        Assert.Contains("\"status\":\"ready\"", await recovered.Content.ReadAsStringAsync());
+        Assert.Contains("\"status\":\"ready\"", await recovered.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -78,10 +78,10 @@ public sealed class HealthReadinessTests
         factory.Probe.Throw = new InvalidOperationException(secret);
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/ready");
+        var response = await client.GetAsync("/ready", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.DoesNotContain("super-secret-value", body);
         Assert.DoesNotContain("InvalidOperationException", body);
         Assert.DoesNotContain("Password", body);
@@ -95,7 +95,7 @@ public sealed class HealthReadinessTests
         using var client = factory.CreateClient();
 
         var started = Stopwatch.GetTimestamp();
-        var response = await client.GetAsync("/ready");
+        var response = await client.GetAsync("/ready", TestContext.Current.CancellationToken);
         var elapsed = Stopwatch.GetElapsedTime(started);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);

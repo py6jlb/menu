@@ -30,7 +30,7 @@ public sealed class DurableEmailDeliveryFlowTests
         var email = $"durable-{Guid.NewGuid():N}@example.com";
 
         var response = await RegisterAsync(client, email);
-        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.NotNull(auth);
@@ -38,8 +38,8 @@ public sealed class DurableEmailDeliveryFlowTests
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.Empty(await db.EmailOutboxMessages.ToListAsync());
-        var challenge = await db.AuthCodes.SingleAsync();
+        Assert.Empty(await db.EmailOutboxMessages.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var challenge = await db.AuthCodes.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(challenge.Used);
 
         var letter = Assert.Single(transport.Sent);
@@ -71,7 +71,7 @@ public sealed class DurableEmailDeliveryFlowTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var queued = await db.EmailOutboxMessages.SingleAsync();
+            var queued = await db.EmailOutboxMessages.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(EmailOutboxStatus.Pending, queued.Status);
             Assert.DoesNotContain("123456", queued.ProtectedPayload);
         }
@@ -82,15 +82,15 @@ public sealed class DurableEmailDeliveryFlowTests
         clock.Advance(TimeSpan.FromMinutes(5));
         using (var scope = factory.Services.CreateScope())
         {
-            await scope.ServiceProvider.GetRequiredService<EmailDispatchTrigger>().TryDispatchAsync();
+            await scope.ServiceProvider.GetRequiredService<EmailDispatchTrigger>().TryDispatchAsync(TestContext.Current.CancellationToken);
         }
 
         Assert.Single(transport.Sent);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            Assert.Empty(await db.EmailOutboxMessages.ToListAsync());
-            Assert.Single(await db.AuthCodes.ToListAsync());
+            Assert.Empty(await db.EmailOutboxMessages.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Single(await db.AuthCodes.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
     }
 
@@ -104,16 +104,15 @@ public sealed class DurableEmailDeliveryFlowTests
         using var client = factory.CreateClient();
         var email = $"atomic-{Guid.NewGuid():N}@example.com";
 
-        var response = await client.PostAsJsonAsync(
-            "/api/auth/register", new { email, password = "secret1" });
+        var response = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.False(await db.Users.AnyAsync(u => u.Email == email));
-        Assert.Empty(await db.AuthCodes.ToListAsync());
-        Assert.Empty(await db.EmailOutboxMessages.ToListAsync());
+        Assert.False(await db.Users.AnyAsync(u => u.Email == email, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.AuthCodes.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.EmailOutboxMessages.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -125,20 +124,20 @@ public sealed class DurableEmailDeliveryFlowTests
         using var client = factory.CreateClient();
         var email = $"resend-durable-{Guid.NewGuid():N}@example.com";
         var auth = await RegisterAsync(client, email);
-        var token = (await auth.Content.ReadFromJsonAsync<AuthResponse>())!.Token;
+        var token = (await auth.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: TestContext.Current.CancellationToken))!.Token;
 
         transport.FailureFactory = _ => SwitchableEmailTransport.Transient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/verify/resend");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         request.Content = JsonContent.Create(new { });
-        using var resend = await client.SendAsync(request);
+        using var resend = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, resend.StatusCode);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.Single(await db.EmailOutboxMessages.ToListAsync());
+        Assert.Single(await db.EmailOutboxMessages.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static ApiFactory NewFactory(SwitchableEmailTransport transport) =>

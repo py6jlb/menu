@@ -133,10 +133,10 @@ public sealed class RecipeShareFlowTests
         using var client = new ApiFactory().CreateClient();
         var recipeId = Guid.NewGuid();
 
-        var get = await client.GetAsync($"/api/recipes/{recipeId}/share");
-        var create = await client.PostAsJsonAsync($"/api/recipes/{recipeId}/share", new { });
-        var revoke = await client.DeleteAsync($"/api/recipes/{recipeId}/share");
-        var regenerate = await client.PostAsJsonAsync($"/api/recipes/{recipeId}/share/regenerate", new { });
+        var get = await client.GetAsync($"/api/recipes/{recipeId}/share", TestContext.Current.CancellationToken);
+        var create = await client.PostAsJsonAsync($"/api/recipes/{recipeId}/share", new { }, cancellationToken: TestContext.Current.CancellationToken);
+        var revoke = await client.DeleteAsync($"/api/recipes/{recipeId}/share", TestContext.Current.CancellationToken);
+        var regenerate = await client.PostAsJsonAsync($"/api/recipes/{recipeId}/share/regenerate", new { }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, get.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, create.StatusCode);

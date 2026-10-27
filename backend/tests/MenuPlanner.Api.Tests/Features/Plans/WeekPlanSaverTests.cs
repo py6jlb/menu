@@ -23,15 +23,15 @@ public sealed class WeekPlanSaverTests
         var familyId = Guid.NewGuid();
         var recipe = NewRecipe(familyId, "Свой");
         db.Recipes.Add(recipe);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var outcome = await new WeekPlanSaver(db).SaveAsync(
             familyId, Monday,
             new[] { new PlanEntryRequest(0, "breakfast", recipe.Id, 2) },
-            WeekPlanRevisions.Initial, DateTime.UtcNow);
+            WeekPlanRevisions.Initial, DateTime.UtcNow, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(WeekPlanMutationOutcome.Success, outcome);
-        var plan = await db.WeekPlans.Include(p => p.Entries).SingleAsync(p => p.FamilyId == familyId);
+        var plan = await db.WeekPlans.Include(p => p.Entries).SingleAsync(p => p.FamilyId == familyId, cancellationToken: TestContext.Current.CancellationToken);
         var entry = Assert.Single(plan.Entries);
         Assert.Equal(recipe.Id, entry.RecipeId);
     }
@@ -44,16 +44,16 @@ public sealed class WeekPlanSaverTests
         var foreignFamilyId = Guid.NewGuid();
         var foreign = NewRecipe(foreignFamilyId, "Чужой");
         db.Recipes.Add(foreign);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var outcome = await new WeekPlanSaver(db).SaveAsync(
             familyId, Monday,
             new[] { new PlanEntryRequest(0, "breakfast", foreign.Id, 2) },
-            WeekPlanRevisions.Initial, DateTime.UtcNow);
+            WeekPlanRevisions.Initial, DateTime.UtcNow, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(WeekPlanMutationOutcome.NotOwnedRecipes, outcome);
-        Assert.Empty(await db.WeekPlans.ToListAsync());
-        Assert.Empty(await db.PlanEntries.ToListAsync());
+        Assert.Empty(await db.WeekPlans.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.PlanEntries.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class WeekPlanSaverTests
         var owned = NewRecipe(familyId, "Свой");
         var foreign = NewRecipe(Guid.NewGuid(), "Чужой");
         db.Recipes.AddRange(owned, foreign);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var outcome = await new WeekPlanSaver(db).SaveAsync(
             familyId, Monday,
@@ -73,10 +73,10 @@ public sealed class WeekPlanSaverTests
                 new PlanEntryRequest(0, "breakfast", owned.Id, 2),
                 new PlanEntryRequest(1, "lunch", foreign.Id, 2)
             },
-            WeekPlanRevisions.Initial, DateTime.UtcNow);
+            WeekPlanRevisions.Initial, DateTime.UtcNow, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(WeekPlanMutationOutcome.NotOwnedRecipes, outcome);
-        Assert.Empty(await db.WeekPlans.ToListAsync());
+        Assert.Empty(await db.WeekPlans.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -88,10 +88,10 @@ public sealed class WeekPlanSaverTests
         var outcome = await new WeekPlanSaver(db).SaveAsync(
             familyId, Monday,
             new[] { new PlanEntryRequest(0, "breakfast", Guid.NewGuid(), 2) },
-            WeekPlanRevisions.Initial, DateTime.UtcNow);
+            WeekPlanRevisions.Initial, DateTime.UtcNow, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(WeekPlanMutationOutcome.NotOwnedRecipes, outcome);
-        Assert.Empty(await db.WeekPlans.ToListAsync());
+        Assert.Empty(await db.WeekPlans.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -102,14 +102,14 @@ public sealed class WeekPlanSaverTests
         var foreign = NewRecipe(Guid.NewGuid(), "Чужой");
         db.Recipes.Add(foreign);
         db.WeekPlans.Add(NewWeekPlan(familyId, revision: 1));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Ревизия заведомо устарела, но принадлежность проверяется первой:
         // исход должен остаться отказом по рецепту, а не конфликтом.
         var outcome = await new WeekPlanSaver(db).SaveAsync(
             familyId, Monday,
             new[] { new PlanEntryRequest(0, "breakfast", foreign.Id, 2) },
-            expectedRevision: 0, DateTime.UtcNow);
+            expectedRevision: 0, DateTime.UtcNow, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(WeekPlanMutationOutcome.NotOwnedRecipes, outcome);
     }

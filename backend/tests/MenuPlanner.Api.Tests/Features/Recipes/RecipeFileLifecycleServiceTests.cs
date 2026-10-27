@@ -39,7 +39,7 @@ public sealed class RecipeFileLifecycleServiceTests
         }
 
         await using var db = NewDb(dbName, new ThrowOnRecipeFileUpdateInterceptor(PathProperty(kind)));
-        var recipe = await db.Recipes.SingleAsync(r => r.Id == recipeId);
+        var recipe = await db.Recipes.SingleAsync(r => r.Id == recipeId, cancellationToken: TestContext.Current.CancellationToken);
         var service = NewService(db, store);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -48,7 +48,7 @@ public sealed class RecipeFileLifecycleServiceTests
         // Новый файл убран компенсацией, БД осталась прежней.
         Assert.Empty(store.Names(kind));
         await using var verify = NewDb(dbName);
-        var stored = await verify.Recipes.SingleAsync(r => r.Id == recipeId);
+        var stored = await verify.Recipes.SingleAsync(r => r.Id == recipeId, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Null(GetPath(stored, kind));
         Assert.Equal(1, stored.Revision);
     }
@@ -73,7 +73,7 @@ public sealed class RecipeFileLifecycleServiceTests
         // Завершённое изменение не стало неуспешным; старый файл остался уборке.
         Assert.True(store.Contains(kind, oldName));
         Assert.Equal(2, store.Names(kind).Count);
-        var stored = await db.Recipes.SingleAsync(r => r.Id == recipe.Id);
+        var stored = await db.Recipes.SingleAsync(r => r.Id == recipe.Id, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, stored.Revision);
         Assert.Equal(GetPath(result.Recipe!, kind), GetPath(stored, kind));
         Assert.True(store.Contains(kind, GetPath(stored, kind)!));
@@ -97,7 +97,7 @@ public sealed class RecipeFileLifecycleServiceTests
 
         Assert.Equal(RecipeMutationOutcome.Ok, result.Outcome);
         Assert.True(store.Contains(kind, oldName));
-        var stored = await db.Recipes.SingleAsync(r => r.Id == recipe.Id);
+        var stored = await db.Recipes.SingleAsync(r => r.Id == recipe.Id, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Null(GetPath(stored, kind));
         Assert.Equal(2, stored.Revision);
     }
@@ -126,7 +126,7 @@ public sealed class RecipeFileLifecycleServiceTests
             wrapper.SourceToken = "tok";
             seed.Families.AddRange(sourceFamily, recipientFamily);
             seed.Recipes.AddRange(source, wrapper);
-            await seed.SaveChangesAsync();
+            await seed.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
             wrapperId = wrapper.Id;
             recipientFamilyId = recipientFamily.Id;
         }
@@ -140,7 +140,7 @@ public sealed class RecipeFileLifecycleServiceTests
             new RecipeRevisionReader(db));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            promotion.PromoteAsync(new RecipeTarget(wrapperId, recipientFamilyId), 1));
+            promotion.PromoteAsync(new RecipeTarget(wrapperId, recipientFamilyId), 1, cancellationToken: TestContext.Current.CancellationToken));
 
         // Скопированный файл убран компенсацией, файл источника не тронут.
         Assert.Equal(new[] { oldName }, store.Names(kind));
@@ -158,7 +158,7 @@ public sealed class RecipeFileLifecycleServiceTests
 
         var created = await lifecycle.ReplaceAsync(
             kind, Guid.NewGuid(), Extension(kind), new MemoryStream(new byte[] { 7 }), oldName,
-            staged => Task.FromResult(new RecipeFileCommit<string>(true, staged)));
+            staged => Task.FromResult(new RecipeFileCommit<string>(true, staged)), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.False(store.Contains(kind, oldName));
         Assert.Single(store.Names(kind));
@@ -177,7 +177,7 @@ public sealed class RecipeFileLifecycleServiceTests
 
         await lifecycle.ReplaceAsync(
             kind, Guid.NewGuid(), Extension(kind), new MemoryStream(new byte[] { 7 }), oldName,
-            staged => Task.FromResult(new RecipeFileCommit<string>(false, staged)));
+            staged => Task.FromResult(new RecipeFileCommit<string>(false, staged)), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(store.Contains(kind, oldName));
         Assert.Single(store.Names(kind));

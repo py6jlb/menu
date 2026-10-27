@@ -381,13 +381,13 @@ public sealed class RepetitionFlowTests
     {
         using var client = new ApiFactory().CreateClient();
 
-        var getSettings = await client.GetAsync("/api/settings");
+        var getSettings = await client.GetAsync("/api/settings", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, getSettings.StatusCode);
 
-        var putSettings = await client.PutAsJsonAsync("/api/settings", new UserSettingsRequest(5));
+        var putSettings = await client.PutAsJsonAsync("/api/settings", new UserSettingsRequest(5), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, putSettings.StatusCode);
 
-        var repetition = await client.GetAsync("/api/recipes/repetition");
+        var repetition = await client.GetAsync("/api/recipes/repetition", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, repetition.StatusCode);
     }
 

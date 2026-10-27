@@ -35,7 +35,7 @@ public sealed class LoggingEmailTransportTests
 
         await transport.SendAsync(new EmailMessage(
             "user@example.com", "noreply@menu.local", "Меню для домохозяек",
-            "Код подтверждения почты", "<p>123456</p>"));
+            "Код подтверждения почты", "<p>123456</p>"), cancellationToken: TestContext.Current.CancellationToken);
 
         var info = Assert.Single(logger.Messages, m => m.StartsWith("Information"));
         Assert.Contains("user@example.com", info);

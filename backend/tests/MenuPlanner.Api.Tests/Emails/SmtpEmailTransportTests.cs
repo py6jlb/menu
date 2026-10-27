@@ -44,7 +44,7 @@ public sealed class SmtpEmailTransportTests
         var transport = new SmtpEmailTransport(Options(server.Port));
 
         var error = await Assert.ThrowsAsync<EmailDeliveryException>(
-            () => transport.SendAsync(Message()));
+            () => transport.SendAsync(Message(), cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(EmailFailureReason.TlsUnavailable, error.Reason);
         Assert.False(server.MessageReceived);
@@ -57,7 +57,7 @@ public sealed class SmtpEmailTransportTests
         var transport = new SmtpEmailTransport(Options(server.Port));
 
         var error = await Assert.ThrowsAsync<EmailDeliveryException>(
-            () => transport.SendAsync(Message()));
+            () => transport.SendAsync(Message(), cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(EmailFailureReason.Certificate, error.Reason);
         Assert.False(server.MessageReceived);
@@ -78,7 +78,7 @@ public sealed class SmtpEmailTransportTests
                 ServerCertificateValidationCallback = (_, _, _, _) => true
             });
 
-        await transport.SendAsync(Message());
+        await transport.SendAsync(Message(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(server.TlsUsed);
         Assert.True(server.MessageReceived);
@@ -94,7 +94,7 @@ public sealed class SmtpEmailTransportTests
 
         var stopwatch = Stopwatch.StartNew();
         var error = await Assert.ThrowsAsync<EmailDeliveryException>(
-            () => transport.SendAsync(Message()));
+            () => transport.SendAsync(Message(), cancellationToken: TestContext.Current.CancellationToken));
         stopwatch.Stop();
 
         Assert.Equal(EmailFailureReason.Timeout, error.Reason);

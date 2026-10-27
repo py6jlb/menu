@@ -282,11 +282,11 @@ public sealed class PlanFlowTests
     {
         using var client = new ApiFactory().CreateClient();
 
-        var get = await client.GetAsync($"/api/plans/week/{Monday}");
+        var get = await client.GetAsync($"/api/plans/week/{Monday}", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, get.StatusCode);
 
         var put = await client.PutAsJsonAsync($"/api/plans/week/{Monday}",
-            new SaveWeekPlanRequest(new[] { new PlanEntryRequest(0, "breakfast", Guid.NewGuid(), 1) }));
+            new SaveWeekPlanRequest(new[] { new PlanEntryRequest(0, "breakfast", Guid.NewGuid(), 1) }), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, put.StatusCode);
     }
 

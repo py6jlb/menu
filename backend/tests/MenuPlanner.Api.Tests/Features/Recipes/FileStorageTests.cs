@@ -24,7 +24,7 @@ public sealed class FileStorageTests : IDisposable
         var store = NewStorage();
         var recipeId = Guid.NewGuid();
 
-        var name = await store.SaveAsync(kind, recipeId, extension, new MemoryStream(new byte[] { 1, 2, 3 }));
+        var name = await store.SaveAsync(kind, recipeId, extension, new MemoryStream(new byte[] { 1, 2, 3 }), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(RecipeFileNames.IsManaged(kind, name));
         Assert.Equal(Path.Combine(KindRoot(kind), name), store.ResolveReadPath(kind, name));
@@ -41,7 +41,7 @@ public sealed class FileStorageTests : IDisposable
     public async Task CopyAsync_WhenSourceMissing_ReturnsNull(RecipeFileKind kind, string sourceName)
     {
         var store = NewStorage();
-        Assert.Null(await store.CopyAsync(kind, Guid.NewGuid(), sourceName));
+        Assert.Null(await store.CopyAsync(kind, Guid.NewGuid(), sourceName, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -52,7 +52,7 @@ public sealed class FileStorageTests : IDisposable
         var store = NewStorage();
 
         await Assert.ThrowsAnyAsync<IOException>(() =>
-            store.SaveAsync(kind, Guid.NewGuid(), extension, new FailingStream()));
+            store.SaveAsync(kind, Guid.NewGuid(), extension, new FailingStream(), cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Empty(Directory.GetFiles(KindRoot(kind)));
     }

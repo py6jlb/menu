@@ -169,15 +169,15 @@ public sealed class ExternalRecipePromotionTests
         var copiedFile = Path.Combine(factory.PhotosDir, Path.GetFileName(copied.PhotoUrl!));
         Assert.True(File.Exists(sourceFile));
         Assert.True(File.Exists(copiedFile));
-        Assert.Equal(await File.ReadAllBytesAsync(sourceFile), await File.ReadAllBytesAsync(copiedFile));
+        Assert.Equal(await File.ReadAllBytesAsync(sourceFile, cancellationToken: TestContext.Current.CancellationToken), await File.ReadAllBytesAsync(copiedFile, cancellationToken: TestContext.Current.CancellationToken));
 
         await DeleteAuthorizedAsync(client, owner.Token,
             $"/api/recipes/{imported.SourceId}?revision={source!.Revision}");
         Assert.False(File.Exists(sourceFile));
 
-        var served = await client.GetAsync(copied.PhotoUrl!);
+        var served = await client.GetAsync(copied.PhotoUrl!, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, served.StatusCode);
-        Assert.Equal(bytes, await served.Content.ReadAsByteArrayAsync());
+        Assert.Equal(bytes, await served.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

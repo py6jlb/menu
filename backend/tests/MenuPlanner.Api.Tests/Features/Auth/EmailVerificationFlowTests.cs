@@ -27,10 +27,10 @@ public sealed class EmailVerificationFlowTests
         using var client = factory.CreateClient();
         var email = $"verify-{Guid.NewGuid():N}@example.com";
 
-        var register = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" });
+        var register = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, register.StatusCode);
 
-        var auth = await register.Content.ReadFromJsonAsync<AuthResponse>();
+        var auth = await register.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(auth);
         Assert.Equal(email, auth.User.Email);
         Assert.False(auth.User.IsEmailVerified);
@@ -53,7 +53,7 @@ public sealed class EmailVerificationFlowTests
 
         var verify = await PostVerifyAsync(client, token, code);
         Assert.Equal(HttpStatusCode.OK, verify.StatusCode);
-        var verified = await verify.Content.ReadFromJsonAsync<UserDto>();
+        var verified = await verify.Content.ReadFromJsonAsync<UserDto>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(verified);
         Assert.True(verified.IsEmailVerified);
 
@@ -169,7 +169,7 @@ public sealed class EmailVerificationFlowTests
         var wrong = await PostVerifyAsync(client, token, "000000");
 
         Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
-        var error = await wrong.Content.ReadFromJsonAsync<VerifyErrorDto>();
+        var error = await wrong.Content.ReadFromJsonAsync<VerifyErrorDto>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(error);
         Assert.Equal("invalid", error.Code);
         Assert.Contains("Неверный код", error.Error);
@@ -189,7 +189,7 @@ public sealed class EmailVerificationFlowTests
         var verify = await PostVerifyAsync(client, token, "222222");
 
         Assert.Equal(HttpStatusCode.BadRequest, verify.StatusCode);
-        var error = await verify.Content.ReadFromJsonAsync<VerifyErrorDto>();
+        var error = await verify.Content.ReadFromJsonAsync<VerifyErrorDto>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(error);
         Assert.Equal("expired", error.Code);
         Assert.Contains("истёк", error.Error);
@@ -205,15 +205,15 @@ public sealed class EmailVerificationFlowTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var stored = await db.AuthCodes.SingleAsync();
+            var stored = await db.AuthCodes.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             stored.Used = true;
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
         var verify = await PostVerifyAsync(client, token, "333333");
 
         Assert.Equal(HttpStatusCode.BadRequest, verify.StatusCode);
-        var error = await verify.Content.ReadFromJsonAsync<VerifyErrorDto>();
+        var error = await verify.Content.ReadFromJsonAsync<VerifyErrorDto>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(error);
         Assert.Equal("used", error.Code);
     }

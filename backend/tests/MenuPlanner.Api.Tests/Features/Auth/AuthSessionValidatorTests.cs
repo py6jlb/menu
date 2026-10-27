@@ -39,7 +39,7 @@ public sealed class AuthSessionValidatorTests
             TokenVersion = 2
         };
         db.Users.Add(user);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var validator = new AuthSessionValidator(db);
 

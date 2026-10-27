@@ -171,7 +171,7 @@ public sealed class ExternalRecipeImportTests
     {
         using var client = new ApiFactory().CreateClient();
         var response = await client.PostAsJsonAsync(
-            $"/api/shared/{Guid.NewGuid():N}/import", new { });
+            $"/api/shared/{Guid.NewGuid():N}/import", new { }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

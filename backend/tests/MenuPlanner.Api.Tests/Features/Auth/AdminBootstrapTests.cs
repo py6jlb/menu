@@ -22,12 +22,12 @@ public sealed class AdminBootstrapTests
         using var scope = factory.Services.CreateScope();
         var bootstrap = scope.ServiceProvider.GetRequiredService<AdminBootstrap>();
 
-        var result = await bootstrap.RunAsync("Admin@Example.com", "secret1");
+        var result = await bootstrap.RunAsync("Admin@Example.com", "secret1", TestContext.Current.CancellationToken);
 
         Assert.Equal(AdminBootstrapOutcome.Created, result.Outcome);
 
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var admin = await db.Users.SingleAsync();
+        var admin = await db.Users.SingleAsync(TestContext.Current.CancellationToken);
         Assert.Equal("admin@example.com", admin.Email);
         Assert.Equal(UserRole.Admin, admin.Role);
         Assert.False(admin.IsEmailVerified);
@@ -47,14 +47,13 @@ public sealed class AdminBootstrapTests
         using (var scope = factory.Services.CreateScope())
         {
             var bootstrap = scope.ServiceProvider.GetRequiredService<AdminBootstrap>();
-            var result = await bootstrap.RunAsync(email, "secret1");
+            var result = await bootstrap.RunAsync(email, "secret1", TestContext.Current.CancellationToken);
             Assert.Equal(AdminBootstrapOutcome.Created, result.Outcome);
         }
 
-        var login = await client.PostAsJsonAsync("/api/auth/login",
-            new { email, password = "secret1" });
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { email, password = "secret1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
-        var auth = await login.Content.ReadFromJsonAsync<AuthResponse>();
+        var auth = await login.Content.ReadFromJsonAsync<AuthResponse>(TestContext.Current.CancellationToken);
         Assert.NotNull(auth);
         Assert.Equal("Admin", auth.User.Role);
         Assert.False(auth.User.IsEmailVerified);
@@ -66,10 +65,10 @@ public sealed class AdminBootstrapTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/verify");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
         request.Content = JsonContent.Create(new { code = match.Groups[1].Value });
-        using var verify = await client.SendAsync(request);
+        using var verify = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, verify.StatusCode);
-        var verified = await verify.Content.ReadFromJsonAsync<UserDto>();
+        var verified = await verify.Content.ReadFromJsonAsync<UserDto>(TestContext.Current.CancellationToken);
         Assert.NotNull(verified);
         Assert.True(verified.IsEmailVerified);
     }
@@ -82,14 +81,14 @@ public sealed class AdminBootstrapTests
         var bootstrap = scope.ServiceProvider.GetRequiredService<AdminBootstrap>();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var first = await bootstrap.RunAsync("admin@example.com", "secret1");
+        var first = await bootstrap.RunAsync("admin@example.com", "secret1", TestContext.Current.CancellationToken);
         Assert.Equal(AdminBootstrapOutcome.Created, first.Outcome);
 
-        var second = await bootstrap.RunAsync("admin@example.com", "other-password");
+        var second = await bootstrap.RunAsync("admin@example.com", "other-password", TestContext.Current.CancellationToken);
         Assert.Equal(AdminBootstrapOutcome.AlreadyInitialized, second.Outcome);
 
-        Assert.Equal(1, await db.Users.CountAsync());
-        var admin = await db.Users.SingleAsync();
+        Assert.Equal(1, await db.Users.CountAsync(TestContext.Current.CancellationToken));
+        var admin = await db.Users.SingleAsync(TestContext.Current.CancellationToken);
         var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher<User>>();
         Assert.NotEqual(
             PasswordVerificationResult.Failed,
@@ -113,14 +112,14 @@ public sealed class AdminBootstrapTests
             Role = UserRole.Admin,
             CreatedAt = DateTime.UtcNow
         });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var bootstrap = scope.ServiceProvider.GetRequiredService<AdminBootstrap>();
-        var result = await bootstrap.RunAsync("another@example.com", "secret1");
+        var result = await bootstrap.RunAsync("another@example.com", "secret1", TestContext.Current.CancellationToken);
 
         Assert.Equal(AdminBootstrapOutcome.AlreadyInitialized, result.Outcome);
-        Assert.Equal(1, await db.Users.CountAsync(u => u.Role == UserRole.Admin));
-        Assert.Equal("existing@example.com", (await db.Users.SingleAsync()).Email);
+        Assert.Equal(1, await db.Users.CountAsync(u => u.Role == UserRole.Admin, TestContext.Current.CancellationToken));
+        Assert.Equal("existing@example.com", (await db.Users.SingleAsync(TestContext.Current.CancellationToken)).Email);
     }
 
     [Fact]
@@ -138,13 +137,13 @@ public sealed class AdminBootstrapTests
             Role = UserRole.User,
             CreatedAt = DateTime.UtcNow
         });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var bootstrap = scope.ServiceProvider.GetRequiredService<AdminBootstrap>();
-        var result = await bootstrap.RunAsync("taken@example.com", "other-password");
+        var result = await bootstrap.RunAsync("taken@example.com", "other-password", TestContext.Current.CancellationToken);
 
         Assert.Equal(AdminBootstrapOutcome.EmailTaken, result.Outcome);
-        var user = await db.Users.SingleAsync();
+        var user = await db.Users.SingleAsync(TestContext.Current.CancellationToken);
         Assert.Equal(UserRole.User, user.Role);
         Assert.Equal(
             PasswordVerificationResult.Success,
@@ -160,11 +159,11 @@ public sealed class AdminBootstrapTests
         using var scope = factory.Services.CreateScope();
         var bootstrap = scope.ServiceProvider.GetRequiredService<AdminBootstrap>();
 
-        var result = await bootstrap.RunAsync(email, password);
+        var result = await bootstrap.RunAsync(email, password, TestContext.Current.CancellationToken);
 
         Assert.Equal(AdminBootstrapOutcome.InvalidInput, result.Outcome);
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.Empty(await db.Users.ToListAsync());
+        Assert.Empty(await db.Users.ToListAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -179,7 +178,8 @@ public sealed class AdminBootstrapTests
             new[] { "admin-bootstrap", "--email", "operator@example.com" },
             readPassword: () => "super-secret",
             output,
-            error);
+            error,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(0, exit);
         Assert.Contains("создан", output.ToString());
@@ -188,7 +188,7 @@ public sealed class AdminBootstrapTests
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.Equal(UserRole.Admin, (await db.Users.SingleAsync()).Role);
+        Assert.Equal(UserRole.Admin, (await db.Users.SingleAsync(TestContext.Current.CancellationToken)).Role);
     }
 
     [Fact]
@@ -198,16 +198,16 @@ public sealed class AdminBootstrapTests
         var args = new[] { "admin-bootstrap", "--email=operator@example.com" };
 
         var first = await AdminBootstrapCommand.RunAsync(
-            factory.Services, args, () => "secret1", new StringWriter(), new StringWriter());
+            factory.Services, args, () => "secret1", new StringWriter(), new StringWriter(), TestContext.Current.CancellationToken);
         var second = await AdminBootstrapCommand.RunAsync(
-            factory.Services, args, () => "secret1", new StringWriter(), new StringWriter());
+            factory.Services, args, () => "secret1", new StringWriter(), new StringWriter(), TestContext.Current.CancellationToken);
 
         Assert.Equal(0, first);
         Assert.Equal(0, second);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        Assert.Equal(1, await db.Users.CountAsync());
+        Assert.Equal(1, await db.Users.CountAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

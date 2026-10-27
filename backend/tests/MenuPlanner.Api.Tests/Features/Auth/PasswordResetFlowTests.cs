@@ -28,7 +28,7 @@ public sealed class PasswordResetFlowTests
         var resetRequest = await RequestPasswordResetAsync(client, email);
 
         Assert.Equal(HttpStatusCode.OK, resetRequest.StatusCode);
-        var message = await resetRequest.Content.ReadFromJsonAsync<MessageDto>();
+        var message = await resetRequest.Content.ReadFromJsonAsync<MessageDto>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(message);
         Assert.Equal(NeutralMessage, message.Message);
 
@@ -46,13 +46,13 @@ public sealed class PasswordResetFlowTests
 
         var unknown = await RequestPasswordResetAsync(client, $"reset-none-{Guid.NewGuid():N}@example.com");
         Assert.Equal(HttpStatusCode.OK, unknown.StatusCode);
-        Assert.Equal(NeutralMessage, (await unknown.Content.ReadFromJsonAsync<MessageDto>())!.Message);
+        Assert.Equal(NeutralMessage, (await unknown.Content.ReadFromJsonAsync<MessageDto>(cancellationToken: TestContext.Current.CancellationToken))!.Message);
 
         var email = $"reset-unverified-{Guid.NewGuid():N}@example.com";
         await RegisterAsync(client, email);
         var unverified = await RequestPasswordResetAsync(client, email);
         Assert.Equal(HttpStatusCode.OK, unverified.StatusCode);
-        Assert.Equal(NeutralMessage, (await unverified.Content.ReadFromJsonAsync<MessageDto>())!.Message);
+        Assert.Equal(NeutralMessage, (await unverified.Content.ReadFromJsonAsync<MessageDto>(cancellationToken: TestContext.Current.CancellationToken))!.Message);
 
         Assert.Empty(ResetEmails(factory));
     }
@@ -135,7 +135,7 @@ public sealed class PasswordResetFlowTests
         Assert.Equal(HttpStatusCode.OK, resetRequest.StatusCode);
         Assert.Equal(
             NeutralMessage,
-            (await resetRequest.Content.ReadFromJsonAsync<MessageDto>())!.Message);
+            (await resetRequest.Content.ReadFromJsonAsync<MessageDto>(cancellationToken: TestContext.Current.CancellationToken))!.Message);
         Assert.Equal(2, ResetEmails(factory).Count());
     }
 
@@ -160,9 +160,9 @@ public sealed class PasswordResetFlowTests
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await GetMeAsync(client, token)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized,
-            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = oldPassword })).StatusCode);
+            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = oldPassword }, cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
-            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = newPassword })).StatusCode);
+            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = newPassword }, cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public sealed class PasswordResetFlowTests
 
         var closed = await ResetAsync(client, email, "000000", "newsecret1");
         Assert.Equal(HttpStatusCode.BadRequest, closed.StatusCode);
-        var closedError = await closed.Content.ReadFromJsonAsync<ResetErrorDto>();
+        var closedError = await closed.Content.ReadFromJsonAsync<ResetErrorDto>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(closedError);
         Assert.Equal("closed", closedError.Code);
 
@@ -209,7 +209,7 @@ public sealed class PasswordResetFlowTests
         {
             var result = await ResetAsync(client, email, "000000", "newsecret1");
             Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
-            var error = await result.Content.ReadFromJsonAsync<ResetErrorDto>();
+            var error = await result.Content.ReadFromJsonAsync<ResetErrorDto>(cancellationToken: TestContext.Current.CancellationToken);
             Assert.NotNull(error);
             Assert.Equal("invalid", error.Code);
         }
@@ -219,7 +219,7 @@ public sealed class PasswordResetFlowTests
         var code = ResetCodeFrom(factory);
         Assert.Equal(HttpStatusCode.OK, (await ResetAsync(client, email, code, "newsecret2")).StatusCode);
         Assert.Equal(HttpStatusCode.OK,
-            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "newsecret2" })).StatusCode);
+            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "newsecret2" }, cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public sealed class PasswordResetFlowTests
         Assert.Equal(HttpStatusCode.BadRequest, tooShort.StatusCode);
 
         Assert.Equal(HttpStatusCode.OK,
-            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "secret1" })).StatusCode);
+            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "secret1" }, cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
     }
 
     [Fact]
@@ -258,7 +258,7 @@ public sealed class PasswordResetFlowTests
         Assert.Equal(HttpStatusCode.BadRequest, unverified.StatusCode);
 
         Assert.Equal(HttpStatusCode.OK,
-            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "secret1" })).StatusCode);
+            (await client.PostAsJsonAsync("/api/auth/login", new { email, password = "secret1" }, cancellationToken: TestContext.Current.CancellationToken)).StatusCode);
     }
 
     private static Task<HttpResponseMessage> RequestPasswordResetAsync(HttpClient client, string email) =>

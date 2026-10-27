@@ -39,7 +39,7 @@ public sealed class RecipeGarbageCollectorTests
         var collector = new RecipeGarbageCollector(
             db, store, TimeProvider.System, NullLogger<RecipeGarbageCollector>.Instance);
 
-        var result = await collector.CollectAsync(kind, TimeSpan.FromHours(1));
+        var result = await collector.CollectAsync(kind, TimeSpan.FromHours(1), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(3, result.Scanned);
         Assert.Equal(1, result.Deleted);
@@ -66,7 +66,7 @@ public sealed class RecipeGarbageCollectorTests
         var collector = new RecipeGarbageCollector(
             db, store, TimeProvider.System, NullLogger<RecipeGarbageCollector>.Instance);
 
-        var result = await collector.CollectAsync(kind, TimeSpan.FromHours(1));
+        var result = await collector.CollectAsync(kind, TimeSpan.FromHours(1), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, result.Failed);
         Assert.Equal(0, result.Deleted);

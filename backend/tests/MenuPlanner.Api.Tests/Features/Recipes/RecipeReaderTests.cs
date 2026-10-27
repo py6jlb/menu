@@ -27,9 +27,9 @@ public sealed class RecipeReaderTests
         own.Servings = 4;
         own.SourceRecipeId = null;
         db.Recipes.Add(own);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var summaries = await Reader(db).ReadSummariesAsync(family.Id, RecipeScope.Own);
+        var summaries = await Reader(db).ReadSummariesAsync(family.Id, RecipeScope.Own, cancellationToken: TestContext.Current.CancellationToken);
 
         var summary = Assert.Single(summaries);
         Assert.Equal(own.Id, summary.Id);
@@ -56,9 +56,9 @@ public sealed class RecipeReaderTests
         wrapper.SourceToken = "tok";
         db.Recipes.Add(wrapper);
         db.RecipeShares.Add(NewShare(source.Id, "tok"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var summaries = await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.External);
+        var summaries = await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.External, cancellationToken: TestContext.Current.CancellationToken);
 
         var summary = Assert.Single(summaries);
         Assert.Equal(wrapper.Id, summary.Id);
@@ -69,7 +69,7 @@ public sealed class RecipeReaderTests
         Assert.Equal(ExternalRecipeState.Ok, summary.State);
         Assert.Equal(sourceFamily.Name, summary.SourceFamilyName);
 
-        var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id);
+        var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Свежее имя", stored.Name);
     }
 
@@ -88,9 +88,9 @@ public sealed class RecipeReaderTests
         wrapper.SourceToken = "stale";
         db.Recipes.Add(wrapper);
         db.RecipeShares.Add(NewShare(source.Id, "fresh"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var summary = Assert.Single(await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.All));
+        var summary = Assert.Single(await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.All, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal(ExternalRecipeState.Warning, summary.State);
         Assert.Equal("Борщ", summary.Name);
@@ -108,9 +108,9 @@ public sealed class RecipeReaderTests
         wrapper.SourceFamilyId = sourceFamily.Id;
         wrapper.SourceToken = "tok";
         db.Recipes.Add(wrapper);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var summary = Assert.Single(await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.External));
+        var summary = Assert.Single(await Reader(db).ReadSummariesAsync(recipientFamily.Id, RecipeScope.External, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Equal("Кэш имени", summary.Name);
         Assert.True(summary.IsExternal);
@@ -126,9 +126,9 @@ public sealed class RecipeReaderTests
         db.Families.AddRange(mine, other);
         db.Recipes.Add(NewRecipe(other.Id, "Чужой"));
         db.Recipes.Add(NewRecipe(mine.Id, "Мой"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var summaries = await Reader(db).ReadSummariesAsync(mine.Id, RecipeScope.All);
+        var summaries = await Reader(db).ReadSummariesAsync(mine.Id, RecipeScope.All, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("Мой", Assert.Single(summaries).Name);
     }
@@ -150,9 +150,9 @@ public sealed class RecipeReaderTests
         wrapper.SourceToken = "tok";
         db.Recipes.Add(wrapper);
         db.RecipeShares.Add(NewShare(source.Id, "tok"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var candidates = await Reader(db).ReadMatchCandidatesAsync(recipientFamily.Id);
+        var candidates = await Reader(db).ReadMatchCandidatesAsync(recipientFamily.Id, cancellationToken: TestContext.Current.CancellationToken);
 
         var candidate = Assert.Single(candidates);
         Assert.Equal(wrapper.Id, candidate.Recipe.Id);
@@ -183,9 +183,9 @@ public sealed class RecipeReaderTests
         warning.SourceFamilyId = sourceFamily.Id;
         warning.SourceToken = "stale";
         db.Recipes.Add(warning);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var candidates = await Reader(db).ReadMatchCandidatesAsync(recipientFamily.Id);
+        var candidates = await Reader(db).ReadMatchCandidatesAsync(recipientFamily.Id, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(candidates, c => c.Recipe.Id == broken.Id);
         var kept = Assert.Single(candidates);
@@ -202,9 +202,9 @@ public sealed class RecipeReaderTests
         var own = NewRecipe(family.Id, "Свой суп");
         own.Ingredients.Add(new RecipeIngredient { Order = 0, Name = "Лук", Amount = 1m, Unit = "pcs" });
         db.Recipes.Add(own);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var candidate = Assert.Single(await Reader(db).ReadMatchCandidatesAsync(family.Id));
+        var candidate = Assert.Single(await Reader(db).ReadMatchCandidatesAsync(family.Id, cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.False(candidate.IsExternal);
         Assert.Null(candidate.State);
@@ -232,9 +232,9 @@ public sealed class RecipeReaderTests
         wrapper.SourceToken = "tok";
         db.Recipes.Add(wrapper);
         db.RecipeShares.Add(NewShare(source.Id, "tok"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(detail);
         Assert.Equal(wrapper.Id, detail!.Recipe.Id);
@@ -266,9 +266,9 @@ public sealed class RecipeReaderTests
         wrapper.SourceToken = "stale";
         db.Recipes.Add(wrapper);
         db.RecipeShares.Add(NewShare(source.Id, "fresh"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(detail);
         Assert.Equal(ExternalRecipeState.Warning, detail!.State);
@@ -285,9 +285,9 @@ public sealed class RecipeReaderTests
         var wrapper = NewRecipe(recipientFamily.Id, "Кэш имени");
         wrapper.SourceRecipeId = Guid.NewGuid();
         db.Recipes.Add(wrapper);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+        var detail = await Reader(db).ReadDetailAsync(recipientFamily.Id, wrapper.Id, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(detail);
         Assert.Equal("Кэш имени", detail!.Recipe.Name);
@@ -305,11 +305,11 @@ public sealed class RecipeReaderTests
         db.Families.AddRange(mine, other);
         var foreign = NewRecipe(other.Id, "Чужой");
         db.Recipes.Add(foreign);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var reader = Reader(db);
-        Assert.Null(await reader.ReadDetailAsync(mine.Id, Guid.NewGuid()));
-        Assert.Null(await reader.ReadDetailAsync(mine.Id, foreign.Id));
+        Assert.Null(await reader.ReadDetailAsync(mine.Id, Guid.NewGuid(), cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Null(await reader.ReadDetailAsync(mine.Id, foreign.Id, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -328,17 +328,17 @@ public sealed class RecipeReaderTests
         wrapper.SourceToken = "tok";
         db.Recipes.Add(wrapper);
         db.RecipeShares.Add(NewShare(source.Id, "tok"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var reader = Reader(db);
-        var before = await reader.ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+        var before = await reader.ReadDetailAsync(recipientFamily.Id, wrapper.Id, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(ExternalRecipeState.Ok, before!.State);
         Assert.Single(before.Recipe.Steps);
 
         db.Recipes.Remove(source);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var after = await reader.ReadDetailAsync(recipientFamily.Id, wrapper.Id);
+        var after = await reader.ReadDetailAsync(recipientFamily.Id, wrapper.Id, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(ExternalRecipeState.Broken, after!.State);
         Assert.Empty(after.Recipe.Steps);
         Assert.Equal("Борщ", after.Recipe.Name);
@@ -367,9 +367,9 @@ public sealed class RecipeReaderTests
         own.Ingredients.Add(Ingredient("Яблоко"));
         own.Ingredients.Add(Ingredient("Яблоко"));
         db.Recipes.Add(own);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null, cancellationToken: TestContext.Current.CancellationToken);
 
         // «Яблоко» встречается чаще, но идёт позже «Абрикоса» по алфавиту.
         Assert.Equal("Яблоко", items[0].Name);
@@ -399,9 +399,9 @@ public sealed class RecipeReaderTests
         var own = NewRecipe(recipientFamily.Id, "Свой");
         own.Ingredients.Add(Ingredient("Помидор"));
         db.Recipes.Add(own);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(items);
         Assert.Equal("Помидор", items[0].Name, ignoreCase: true);
@@ -433,9 +433,9 @@ public sealed class RecipeReaderTests
         db.Recipes.Add(broken);
 
         db.RecipeShares.Add(NewShare(liveSource.Id, "fresh"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(recipientFamily.Id, null, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(items, i => i.Name == "Морковь");
         Assert.DoesNotContain(items, i => i.Name == "Устаревшее");
@@ -460,16 +460,16 @@ public sealed class RecipeReaderTests
         wrapper.SourceToken = "tok";
         db.Recipes.Add(wrapper);
         db.RecipeShares.Add(NewShare(source.Id, "tok"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var reader = Reader(db);
-        var before = await reader.ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+        var before = await reader.ReadIngredientSuggestionsAsync(recipientFamily.Id, null, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(before, i => i.Name == "Свёкла");
 
         ingredient.Name = "Капуста";
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var after = await reader.ReadIngredientSuggestionsAsync(recipientFamily.Id, null);
+        var after = await reader.ReadIngredientSuggestionsAsync(recipientFamily.Id, null, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(after, i => i.Name == "Капуста");
         Assert.DoesNotContain(after, i => i.Name == "Свёкла");
     }
@@ -486,10 +486,10 @@ public sealed class RecipeReaderTests
             own.Ingredients.Add(Ingredient($"Продукт {i:D2}"));
         own.Ingredients.Add(Ingredient(" Продукт 00 "));
         db.Recipes.Add(own);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var reader = Reader(db);
-        var items = await reader.ReadIngredientSuggestionsAsync(family.Id, "  ПРОДУКТ  ");
+        var items = await reader.ReadIngredientSuggestionsAsync(family.Id, "  ПРОДУКТ  ", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(10, items.Count);
         Assert.Equal("Продукт 00", items[0].Name);
@@ -509,9 +509,9 @@ public sealed class RecipeReaderTests
         var foreign = NewRecipe(other.Id, "Чужой");
         foreign.Ingredients.Add(Ingredient("Чужое"));
         db.Recipes.AddRange(own, foreign);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var items = await Reader(db).ReadIngredientSuggestionsAsync(mine.Id, null);
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(mine.Id, null, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(items, i => i.Name == "Своё");
         Assert.DoesNotContain(items, i => i.Name == "Чужое");
@@ -530,9 +530,9 @@ public sealed class RecipeReaderTests
         var drink = NewRecipe(family.Id, "Напиток");
         drink.Ingredients.Add(Ingredient("Молоко", "drinks"));
         db.Recipes.AddRange(dairyHeavy, drink);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var items = await Reader(db).ReadIngredientSuggestionsAsync(family.Id, null);
+        var items = await Reader(db).ReadIngredientSuggestionsAsync(family.Id, null, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("dairy", Assert.Single(items).Category);
     }

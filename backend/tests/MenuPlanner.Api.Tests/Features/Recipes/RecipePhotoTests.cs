@@ -38,10 +38,10 @@ public sealed class RecipePhotoTests
         var storedFile = Path.Combine(factory.PhotosDir, Path.GetFileName(dto.PhotoUrl!));
         Assert.True(File.Exists(storedFile));
 
-        var getResponse = await client.GetAsync(dto.PhotoUrl!);
+        var getResponse = await client.GetAsync(dto.PhotoUrl!, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         Assert.Equal("image/png", getResponse.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(bytes, await getResponse.Content.ReadAsByteArrayAsync());
+        Assert.Equal(bytes, await getResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
 
         var (listResponse, list) = await GetAuthorizedAsync<List<RecipeSummaryDto>>(client, owner.Token, "/api/recipes");
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
@@ -74,10 +74,10 @@ public sealed class RecipePhotoTests
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.EndsWith(sample.Extension, dto!.PhotoUrl);
 
-            var getResponse = await client.GetAsync(dto.PhotoUrl!);
+            var getResponse = await client.GetAsync(dto.PhotoUrl!, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
             Assert.Equal(sample.ContentType, getResponse.Content.Headers.ContentType?.MediaType);
-            Assert.Equal(sample.Bytes, await getResponse.Content.ReadAsByteArrayAsync());
+            Assert.Equal(sample.Bytes, await getResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
         }
     }
 
@@ -97,8 +97,8 @@ public sealed class RecipePhotoTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.EndsWith(".gif", dto!.PhotoUrl);
-        var getResponse = await client.GetAsync(dto.PhotoUrl!);
-        Assert.Equal(bytes, await getResponse.Content.ReadAsByteArrayAsync());
+        var getResponse = await client.GetAsync(dto.PhotoUrl!, TestContext.Current.CancellationToken);
+        Assert.Equal(bytes, await getResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public sealed class RecipePhotoTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.EndsWith(".png", dto!.PhotoUrl);
 
-        var getResponse = await client.GetAsync(dto.PhotoUrl!);
+        var getResponse = await client.GetAsync(dto.PhotoUrl!, TestContext.Current.CancellationToken);
         Assert.Equal("image/png", getResponse.Content.Headers.ContentType?.MediaType);
     }
 
@@ -363,10 +363,10 @@ public sealed class RecipePhotoTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
 
-        var upload = await client.PutAsync($"/api/recipes/{Guid.NewGuid()}/photo", new ByteArrayContent(Array.Empty<byte>()));
+        var upload = await client.PutAsync($"/api/recipes/{Guid.NewGuid()}/photo", new ByteArrayContent(Array.Empty<byte>()), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, upload.StatusCode);
 
-        var delete = await client.DeleteAsync($"/api/recipes/{Guid.NewGuid()}/photo");
+        var delete = await client.DeleteAsync($"/api/recipes/{Guid.NewGuid()}/photo", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, delete.StatusCode);
     }
 
@@ -376,7 +376,7 @@ public sealed class RecipePhotoTests
         using var factory = new ApiFactory();
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/api/photos/does-not-exist.png");
+        var response = await client.GetAsync("/api/photos/does-not-exist.png", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 

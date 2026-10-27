@@ -18,7 +18,7 @@ public sealed class RecipeFileUploadTests
     [Fact]
     public async Task NullFile_ReturnsEmptyError()
     {
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, null);
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, null, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(RecipeFileUploadOutcome.Empty, result.Outcome);
         Assert.False(result.Succeeded);
@@ -30,7 +30,7 @@ public sealed class RecipeFileUploadTests
     public async Task EmptyDocument_ReturnsEmptyError()
     {
         var result = await RecipeFileUpload.ReadAsync(
-            RecipeFileCatalog.Document, new FakeFormFile(Array.Empty<byte>()));
+            RecipeFileCatalog.Document, new FakeFormFile(Array.Empty<byte>()), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(RecipeFileUploadOutcome.Empty, result.Outcome);
         Assert.Equal("Выберите PDF-файл.", result.Error);
@@ -42,7 +42,7 @@ public sealed class RecipeFileUploadTests
         // Длины достаточно для отказа: содержимое не читается.
         var file = new FakeFormFile(Array.Empty<byte>(), length: RecipeCatalog.PhotoMaxBytes + 1);
 
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, file);
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, file, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(RecipeFileUploadOutcome.TooLarge, result.Outcome);
         Assert.Equal("Размер фото не должен превышать 5 МБ.", result.Error);
@@ -54,7 +54,7 @@ public sealed class RecipeFileUploadTests
     {
         var file = new FakeFormFile(Array.Empty<byte>(), length: RecipeCatalog.DocumentMaxBytes + 1);
 
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Document, file);
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Document, file, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(RecipeFileUploadOutcome.TooLarge, result.Outcome);
         Assert.Equal("Размер PDF не должен превышать 20 МБ.", result.Error);
@@ -65,7 +65,7 @@ public sealed class RecipeFileUploadTests
     {
         var file = new FakeFormFile(Encoding.UTF8.GetBytes("это просто текст, а не изображение"));
 
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, file);
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, file, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(RecipeFileUploadOutcome.InvalidContent, result.Outcome);
         Assert.Equal(RecipeImageValidator.NotImageError, result.Error);
@@ -77,7 +77,7 @@ public sealed class RecipeFileUploadTests
     {
         var file = new FakeFormFile(Encoding.ASCII.GetBytes("это не pdf"));
 
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Document, file);
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Document, file, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(RecipeFileUploadOutcome.InvalidContent, result.Outcome);
         Assert.Equal(RecipePdfValidator.NotPdfError, result.Error);
@@ -90,7 +90,7 @@ public sealed class RecipeFileUploadTests
         var valid = TestImages.Png(32, 32);
         var corrupted = valid.AsSpan(0, valid.Length / 2).ToArray();
 
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, new FakeFormFile(corrupted));
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, new FakeFormFile(corrupted), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(RecipeFileUploadOutcome.InvalidContent, result.Outcome);
         Assert.Equal(RecipeImageValidator.NotImageError, result.Error);
@@ -101,7 +101,7 @@ public sealed class RecipeFileUploadTests
     {
         var bytes = TestImages.Png();
 
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, new FakeFormFile(bytes));
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, new FakeFormFile(bytes), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.Succeeded);
         Assert.Equal(".png", result.Extension);
@@ -116,7 +116,7 @@ public sealed class RecipeFileUploadTests
     {
         var bytes = Encoding.ASCII.GetBytes("%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n%%EOF");
 
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Document, new FakeFormFile(bytes));
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Document, new FakeFormFile(bytes), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.Succeeded);
         Assert.Equal(".pdf", result.Extension);
@@ -130,7 +130,7 @@ public sealed class RecipeFileUploadTests
         var file = new FakeFormFile(
             TestImages.Png(), fileName: "photo.jpg", contentType: "image/jpeg");
 
-        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, file);
+        var result = await RecipeFileUpload.ReadAsync(RecipeFileCatalog.Photo, file, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(result.Succeeded);
         Assert.Equal(".png", result.Extension);

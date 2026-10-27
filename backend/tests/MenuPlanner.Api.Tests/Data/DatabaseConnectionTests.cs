@@ -53,9 +53,9 @@ public sealed class DatabaseConnectionTests
                 "Host=localhost;Database=menu_planner;Username=menu;Password=menu";
 
             using var process = Process.Start(start)!;
-            var output = await process.StandardOutput.ReadToEndAsync();
-            var error = await process.StandardError.ReadToEndAsync();
-            await process.WaitForExitAsync();
+            var output = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+            var error = await process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+            await process.WaitForExitAsync(TestContext.Current.CancellationToken);
             Assert.Equal(0, process.ExitCode);
             Assert.Equal("", error);
 

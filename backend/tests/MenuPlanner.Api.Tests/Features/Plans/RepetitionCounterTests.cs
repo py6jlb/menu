@@ -20,9 +20,9 @@ public sealed class RepetitionCounterTests
         await using var db = NewDb();
         var userId = Guid.NewGuid();
         db.UserSettings.Add(new UserSettings { UserId = userId, RepetitionWindowWeeks = 7 });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(7, await NewCounter(db).ResolveWindowWeeksAsync(userId));
+        Assert.Equal(7, await NewCounter(db).ResolveWindowWeeksAsync(userId, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public sealed class RepetitionCounterTests
 
         Assert.Equal(
             SettingsCatalog.DefaultRepetitionWindowWeeks,
-            await NewCounter(db).ResolveWindowWeeksAsync(Guid.NewGuid()));
+            await NewCounter(db).ResolveWindowWeeksAsync(Guid.NewGuid(), cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -42,7 +42,7 @@ public sealed class RepetitionCounterTests
 
         Assert.Equal(
             SettingsCatalog.DefaultRepetitionWindowWeeks,
-            await NewCounter(db).ResolveWindowWeeksAsync(null));
+            await NewCounter(db).ResolveWindowWeeksAsync(null, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>Показатель несёт то же окно, что прочитано из настроек.</summary>
@@ -52,9 +52,9 @@ public sealed class RepetitionCounterTests
         await using var db = NewDb();
         var userId = Guid.NewGuid();
         db.UserSettings.Add(new UserSettings { UserId = userId, RepetitionWindowWeeks = 5 });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var result = await NewCounter(db).CountWindowForUserAsync(userId, Guid.NewGuid());
+        var result = await NewCounter(db).CountWindowForUserAsync(userId, Guid.NewGuid(), cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(5, result.WindowWeeks);
     }

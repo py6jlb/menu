@@ -203,15 +203,15 @@ public sealed class AuthRateLimitFlowTests
         factory.Settings["AUTH_RATE_LIMIT_LOGIN_PER_EMAIL_PER_MINUTE"] = "2";
         using var client = factory.CreateClient();
         var email = $"login-rate-{Guid.NewGuid():N}@example.com";
-        await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" });
+        await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" }, TestContext.Current.CancellationToken);
 
         for (var i = 0; i < 2; i++)
         {
-            var attempt = await client.PostAsJsonAsync("/api/auth/login", new { email, password = "wrong" });
+            var attempt = await client.PostAsJsonAsync("/api/auth/login", new { email, password = "wrong" }, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.Unauthorized, attempt.StatusCode);
         }
 
-        var third = await client.PostAsJsonAsync("/api/auth/login", new { email, password = "wrong" });
+        var third = await client.PostAsJsonAsync("/api/auth/login", new { email, password = "wrong" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.TooManyRequests, third.StatusCode);
         Assert.True(third.Headers.TryGetValues("Retry-After", out var values));
         Assert.True(int.Parse(values!.First()) >= 1);
@@ -228,12 +228,12 @@ public sealed class AuthRateLimitFlowTests
         for (var i = 0; i < 2; i++)
         {
             var created = await client.PostAsJsonAsync("/api/auth/register",
-                new { email = $"reg-rate-{i}-{Guid.NewGuid():N}@example.com", password = "secret1" });
+                new { email = $"reg-rate-{i}-{Guid.NewGuid():N}@example.com", password = "secret1" }, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         }
 
         var third = await client.PostAsJsonAsync("/api/auth/register",
-            new { email = $"reg-rate-3-{Guid.NewGuid():N}@example.com", password = "secret1" });
+            new { email = $"reg-rate-3-{Guid.NewGuid():N}@example.com", password = "secret1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.TooManyRequests, third.StatusCode);
     }
 
@@ -250,14 +250,14 @@ public sealed class AuthRateLimitFlowTests
             using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/forgot");
             request.Headers.Add("X-Forwarded-For", $"203.0.113.{i + 1}");
             request.Content = JsonContent.Create(new { email = $"forged-{i}@example.com" });
-            var response = await client.SendAsync(request);
+            var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
         using var sixth = new HttpRequestMessage(HttpMethod.Post, "/api/auth/forgot");
         sixth.Headers.Add("X-Forwarded-For", "203.0.113.200");
         sixth.Content = JsonContent.Create(new { email = $"forged-99@example.com" });
-        var blocked = await client.SendAsync(sixth);
+        var blocked = await client.SendAsync(sixth, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.TooManyRequests, blocked.StatusCode);
         Assert.True(blocked.Headers.TryGetValues("Retry-After", out _));
@@ -279,7 +279,7 @@ public sealed class AuthRateLimitFlowTests
                 code = "000000",
                 newPassword = "newsecret1",
                 newPasswordConfirm = "newsecret1"
-            });
+            }, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.BadRequest, attempt.StatusCode);
         }
 
@@ -289,7 +289,7 @@ public sealed class AuthRateLimitFlowTests
             code = "000000",
             newPassword = "newsecret1",
             newPasswordConfirm = "newsecret1"
-        });
+        }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.TooManyRequests, third.StatusCode);
     }
 }

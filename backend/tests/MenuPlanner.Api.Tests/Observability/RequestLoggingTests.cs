@@ -19,7 +19,7 @@ public sealed class RequestLoggingTests
             services.AddSingleton<ILoggerProvider>(capture);
         using var client = factory.CreateClient();
 
-        await client.GetAsync($"/api/shared/{token}");
+        await client.GetAsync($"/api/shared/{token}", TestContext.Current.CancellationToken);
 
         var entry = capture.Logs.LastOrDefault(l =>
             l.Properties.ContainsKey("Operation")
@@ -43,7 +43,7 @@ public sealed class RequestLoggingTests
             services.AddSingleton<ILoggerProvider>(capture);
         using var client = factory.CreateClient();
 
-        await client.GetAsync("/health");
+        await client.GetAsync("/health", TestContext.Current.CancellationToken);
 
         var entry = Assert.Single(capture.Logs, l => l.Properties.ContainsKey("Operation"));
         Assert.Equal(MenuPlanner.Infrastructure.Observability.ReleaseIdentity.UnknownId, entry.Properties["ReleaseId"]);
@@ -61,8 +61,8 @@ public sealed class RequestLoggingTests
             services.AddSingleton<ILoggerProvider>(capture);
         using var client = factory.CreateClient();
 
-        await client.PostAsJsonAsync("/api/auth/login", new { email, password });
-        await client.PostAsJsonAsync("/api/auth/verify", new { code });
+        await client.PostAsJsonAsync("/api/auth/login", new { email, password }, cancellationToken: TestContext.Current.CancellationToken);
+        await client.PostAsJsonAsync("/api/auth/verify", new { code }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain(capture.Logs, l => l.Message.Contains(password));
         Assert.DoesNotContain(capture.Logs, l => l.Message.Contains(email));

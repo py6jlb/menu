@@ -179,7 +179,7 @@ public sealed class ProductionConfigurationTests
         factory.Settings["JWT_SECRET"] = StrongJwt;
 
         using var client = factory.CreateClient();
-        var response = await client.GetAsync("/health");
+        var response = await client.GetAsync("/health", TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
     }
 

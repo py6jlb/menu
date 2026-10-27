@@ -115,7 +115,7 @@ public sealed class RecipeValidationFlowTests
 
         var localPart = new string('a', 310);
         var response = await client.PostAsJsonAsync("/api/auth/register",
-            new { email = $"{localPart}@example.com", password = "secret1" });
+            new { email = $"{localPart}@example.com", password = "secret1" }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -160,10 +160,10 @@ public sealed class RecipeValidationFlowTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/recipes");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", owner.Token);
         request.Content = new StringContent("{ не json", Encoding.UTF8, "application/json");
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.DoesNotContain("System.", body);
         Assert.DoesNotContain("Npgsql", body);
     }

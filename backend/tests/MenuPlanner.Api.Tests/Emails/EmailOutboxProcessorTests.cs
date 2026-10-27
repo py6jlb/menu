@@ -39,12 +39,12 @@ public sealed class EmailOutboxProcessorTests
         var transport = new SwitchableEmailTransport();
         var processor = NewProcessor(db, transport, clock, new EmailOutboxOptions());
 
-        var result = await processor.DispatchDueAsync();
+        var result = await processor.DispatchDueAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, result.Delivered);
         var message = Assert.Single(transport.Sent);
         Assert.Contains("111111", message.HtmlBody);
-        Assert.Empty(await db.EmailOutboxMessages.ToListAsync());
+        Assert.Empty(await db.EmailOutboxMessages.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public sealed class EmailOutboxProcessorTests
         await using (var first = new AppDbContext(store))
         {
             await EnqueueAsync(first, clock, AuthCodeType.Verify, "654321", Start.UtcDateTime);
-            var stored = await first.EmailOutboxMessages.AsNoTracking().SingleAsync();
+            var stored = await first.EmailOutboxMessages.AsNoTracking().SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.DoesNotContain("654321", stored.ProtectedPayload);
         }
 
@@ -65,7 +65,7 @@ public sealed class EmailOutboxProcessorTests
         await using (var second = new AppDbContext(store))
         {
             var processor = NewProcessor(second, transport, clock, new EmailOutboxOptions());
-            Assert.Equal(1, (await processor.DispatchDueAsync()).Delivered);
+            Assert.Equal(1, (await processor.DispatchDueAsync(TestContext.Current.CancellationToken)).Delivered);
         }
 
         Assert.Contains("654321", Assert.Single(transport.Sent).HtmlBody);
@@ -84,9 +84,9 @@ public sealed class EmailOutboxProcessorTests
         var options = new EmailOutboxOptions { RetryBaseDelaySeconds = 1 };
         var processor = NewProcessor(db, transport, clock, options);
 
-        var first = await processor.DispatchDueAsync();
+        var first = await processor.DispatchDueAsync(TestContext.Current.CancellationToken);
         Assert.Equal(1, first.Rescheduled);
-        var pending = await db.EmailOutboxMessages.SingleAsync();
+        var pending = await db.EmailOutboxMessages.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(EmailOutboxStatus.Pending, pending.Status);
         Assert.Equal(1, pending.Attempts);
         Assert.True(pending.NextAttemptAt > Start.UtcDateTime);
@@ -94,11 +94,11 @@ public sealed class EmailOutboxProcessorTests
 
         transport.FailureFactory = null;
         clock.Advance(TimeSpan.FromSeconds(2));
-        Assert.Equal(1, (await processor.DispatchDueAsync()).Delivered);
+        Assert.Equal(1, (await processor.DispatchDueAsync(TestContext.Current.CancellationToken)).Delivered);
 
         // Тот же challenge, а не новый код.
         Assert.Contains("222222", Assert.Single(transport.Sent).HtmlBody);
-        Assert.Equal(1, await db.AuthCodes.CountAsync());
+        Assert.Equal(1, await db.AuthCodes.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -116,17 +116,17 @@ public sealed class EmailOutboxProcessorTests
 
         for (var i = 0; i < 3; i++)
         {
-            await processor.DispatchDueAsync();
+            await processor.DispatchDueAsync(TestContext.Current.CancellationToken);
             clock.Advance(TimeSpan.FromHours(1));
         }
 
-        var stored = await db.EmailOutboxMessages.SingleAsync();
+        var stored = await db.EmailOutboxMessages.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(EmailOutboxStatus.Failed, stored.Status);
         Assert.Equal(3, stored.Attempts);
 
         // Окончательно проваленное не отправляется даже при рабочем транспорте.
         transport.FailureFactory = null;
-        Assert.Equal(0, (await processor.DispatchDueAsync()).Claimed);
+        Assert.Equal(0, (await processor.DispatchDueAsync(TestContext.Current.CancellationToken)).Claimed);
         Assert.Empty(transport.Sent);
     }
 
@@ -140,11 +140,11 @@ public sealed class EmailOutboxProcessorTests
         var processor = NewProcessor(db, transport, clock, new EmailOutboxOptions());
 
         clock.Advance(AuthCodePolicy.VerifyLifetime + TimeSpan.FromMinutes(1));
-        var result = await processor.DispatchDueAsync();
+        var result = await processor.DispatchDueAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, result.Abandoned);
         Assert.Empty(transport.Sent);
-        Assert.Empty(await db.EmailOutboxMessages.ToListAsync());
+        Assert.Empty(await db.EmailOutboxMessages.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public sealed class EmailOutboxProcessorTests
         var transport = new SwitchableEmailTransport();
         var processor = NewProcessor(db, transport, clock, new EmailOutboxOptions());
 
-        var result = await processor.DispatchDueAsync();
+        var result = await processor.DispatchDueAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, result.Abandoned);
         Assert.Empty(transport.Sent);
@@ -171,7 +171,7 @@ public sealed class EmailOutboxProcessorTests
         var transport = new SwitchableEmailTransport();
         var processor = NewProcessor(db, transport, clock, new EmailOutboxOptions());
 
-        await processor.DispatchDueAsync();
+        await processor.DispatchDueAsync(TestContext.Current.CancellationToken);
 
         Assert.Empty(transport.Sent);
     }
@@ -182,17 +182,17 @@ public sealed class EmailOutboxProcessorTests
         var clock = new FakeTimeProvider(Start);
         await using var db = NewContext();
         await EnqueueAsync(db, clock, AuthCodeType.Verify, "777777", Start.UtcDateTime);
-        var queued = await db.EmailOutboxMessages.SingleAsync();
+        var queued = await db.EmailOutboxMessages.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         queued.Status = EmailOutboxStatus.InProgress;
         queued.ClaimToken = Guid.NewGuid();
         queued.ClaimedAt = Start.UtcDateTime - TimeSpan.FromMinutes(10);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var transport = new SwitchableEmailTransport();
         var options = new EmailOutboxOptions { LeaseSeconds = 60 };
         var processor = NewProcessor(db, transport, clock, options);
 
-        Assert.Equal(1, (await processor.DispatchDueAsync()).Delivered);
+        Assert.Equal(1, (await processor.DispatchDueAsync(TestContext.Current.CancellationToken)).Delivered);
         Assert.Contains("777777", Assert.Single(transport.Sent).HtmlBody);
     }
 
@@ -202,19 +202,19 @@ public sealed class EmailOutboxProcessorTests
         var clock = new FakeTimeProvider(Start);
         await using var db = NewContext();
         await EnqueueAsync(db, clock, AuthCodeType.Verify, "888888", Start.UtcDateTime);
-        var queued = await db.EmailOutboxMessages.SingleAsync();
+        var queued = await db.EmailOutboxMessages.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         queued.Status = EmailOutboxStatus.Failed;
         queued.Attempts = 3;
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var transport = new SwitchableEmailTransport();
         var options = new EmailOutboxOptions { RetentionDays = 7 };
         var processor = NewProcessor(db, transport, clock, options);
 
         clock.Advance(TimeSpan.FromDays(8));
-        await processor.DispatchDueAsync();
+        await processor.DispatchDueAsync(TestContext.Current.CancellationToken);
 
-        Assert.Empty(await db.EmailOutboxMessages.ToListAsync());
+        Assert.Empty(await db.EmailOutboxMessages.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Empty(transport.Sent);
     }
 

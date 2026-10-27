@@ -21,15 +21,15 @@ public sealed class PasswordResetServiceTests
         var (service, db, _, _) = NewService("111111", "222222");
         var user = await SeedVerifiedUserAsync(db);
 
-        var first = await service.RequestAsync(user);
+        var first = await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetRequestOutcome.Sent, first.Outcome);
         Assert.Equal("111111", first.Code);
 
-        var second = await service.RequestAsync(user);
+        var second = await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetRequestOutcome.TooSoon, second.Outcome);
         Assert.InRange(second.RetryAfterSeconds, 1, 5 * 60);
 
-        Assert.Single(await db.AuthCodes.ToListAsync());
+        Assert.Single(await db.AuthCodes.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -37,19 +37,19 @@ public sealed class PasswordResetServiceTests
     {
         var (service, db, clock, _) = NewService("111111", "222222");
         var user = await SeedVerifiedUserAsync(db);
-        await service.RequestAsync(user);
+        await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
 
         clock.Advance(TimeSpan.FromMinutes(new AuthCodeOptions().ResendCooldownMinutes + 1));
-        var resend = await service.RequestAsync(user);
+        var resend = await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(PasswordResetRequestOutcome.Sent, resend.Outcome);
         Assert.Equal("222222", resend.Code);
-        Assert.Single(await db.AuthCodes.Where(c => !c.Used).ToListAsync());
+        Assert.Single(await db.AuthCodes.Where(c => !c.Used).ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
 
-        var oldCode = await service.ResetAsync(user, "111111", "newsecret1");
+        var oldCode = await service.ResetAsync(user, "111111", "newsecret1", ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetOutcome.InvalidCode, oldCode.Outcome);
 
-        var newCode = await service.ResetAsync(user, "222222", "newsecret1");
+        var newCode = await service.ResetAsync(user, "222222", "newsecret1", ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetOutcome.Reset, newCode.Outcome);
     }
 
@@ -59,10 +59,10 @@ public sealed class PasswordResetServiceTests
         var (service, db, _, _) = NewService("111111");
         var user = await SeedVerifiedUserAsync(db, verified: false);
 
-        var result = await service.RequestAsync(user);
+        var result = await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(PasswordResetRequestOutcome.NotEligible, result.Outcome);
-        Assert.Empty(await db.AuthCodes.ToListAsync());
+        Assert.Empty(await db.AuthCodes.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -72,9 +72,9 @@ public sealed class PasswordResetServiceTests
         var user = await SeedVerifiedUserAsync(db);
         user.VerificationAttempts = AuthCodePolicy.MaxAttempts;
         user.LockedUntil = Start.UtcDateTime.AddDays(3);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var result = await service.RequestAsync(user);
+        var result = await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(PasswordResetRequestOutcome.Sent, result.Outcome);
         Assert.Equal(AuthCodePolicy.MaxAttempts, user.VerificationAttempts);
@@ -86,9 +86,9 @@ public sealed class PasswordResetServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedVerifiedUserAsync(db, password: "secret1");
-        await service.RequestAsync(user);
+        await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
 
-        var result = await service.ResetAsync(user, "111111", "newsecret1");
+        var result = await service.ResetAsync(user, "111111", "newsecret1", ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(PasswordResetOutcome.Reset, result.Outcome);
         Assert.Equal(1, user.TokenVersion);
@@ -99,7 +99,7 @@ public sealed class PasswordResetServiceTests
             PasswordVerificationResult.Failed,
             Hasher.VerifyHashedPassword(user, user.PasswordHash, "secret1"));
 
-        var stored = await db.AuthCodes.SingleAsync();
+        var stored = await db.AuthCodes.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(stored.Used);
     }
 
@@ -108,16 +108,16 @@ public sealed class PasswordResetServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedVerifiedUserAsync(db);
-        await service.RequestAsync(user);
+        await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
 
-        var result = await service.ResetAsync(user, "000000", "newsecret1");
+        var result = await service.ResetAsync(user, "000000", "newsecret1", ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(PasswordResetOutcome.InvalidCode, result.Outcome);
         Assert.Equal(0, user.VerificationAttempts);
         Assert.Null(user.LockedUntil);
         Assert.Equal(0, user.TokenVersion);
 
-        var stored = await db.AuthCodes.SingleAsync();
+        var stored = await db.AuthCodes.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(stored.Used);
         Assert.Equal(1, stored.Attempts);
     }
@@ -127,21 +127,21 @@ public sealed class PasswordResetServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedVerifiedUserAsync(db);
-        await service.RequestAsync(user);
+        await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
 
         PasswordResetResult result = default;
         for (var i = 0; i < 5; i++)
-            result = await service.ResetAsync(user, "000000", "newsecret1");
+            result = await service.ResetAsync(user, "000000", "newsecret1", ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(PasswordResetOutcome.ChallengeClosed, result.Outcome);
         Assert.Equal(0, user.VerificationAttempts);
         Assert.Null(user.LockedUntil);
 
-        var stored = await db.AuthCodes.SingleAsync();
+        var stored = await db.AuthCodes.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(stored.Used);
         Assert.Equal(5, stored.Attempts);
 
-        var correctAfterClose = await service.ResetAsync(user, "111111", "newsecret1");
+        var correctAfterClose = await service.ResetAsync(user, "111111", "newsecret1", ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetOutcome.ChallengeClosed, correctAfterClose.Outcome);
         Assert.Equal(0, user.TokenVersion);
     }
@@ -151,15 +151,15 @@ public sealed class PasswordResetServiceTests
     {
         var (service, db, clock, _) = NewService("111111", "222222");
         var user = await SeedVerifiedUserAsync(db);
-        await service.RequestAsync(user);
+        await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
         for (var i = 0; i < 5; i++)
-            await service.ResetAsync(user, "000000", "newsecret1");
+            await service.ResetAsync(user, "000000", "newsecret1", ct: TestContext.Current.CancellationToken);
 
         clock.Advance(TimeSpan.FromMinutes(new AuthCodeOptions().ResendCooldownMinutes + 1));
-        var resend = await service.RequestAsync(user);
+        var resend = await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetRequestOutcome.Sent, resend.Outcome);
 
-        var result = await service.ResetAsync(user, "222222", "newsecret1");
+        var result = await service.ResetAsync(user, "222222", "newsecret1", ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetOutcome.Reset, result.Outcome);
         Assert.Equal(1, user.TokenVersion);
     }
@@ -172,15 +172,15 @@ public sealed class PasswordResetServiceTests
 
         for (var i = 0; i < 5; i++)
         {
-            var result = await service.ResetAsync(user, "000000", "newsecret1");
+            var result = await service.ResetAsync(user, "000000", "newsecret1", ct: TestContext.Current.CancellationToken);
             Assert.Equal(PasswordResetOutcome.InvalidCode, result.Outcome);
         }
 
         Assert.Equal(0, user.VerificationAttempts);
         Assert.Null(user.LockedUntil);
-        Assert.Empty(await db.AuthCodes.ToListAsync());
+        Assert.Empty(await db.AuthCodes.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
 
-        var request = await service.RequestAsync(user);
+        var request = await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetRequestOutcome.Sent, request.Outcome);
     }
 
@@ -189,13 +189,13 @@ public sealed class PasswordResetServiceTests
     {
         var (service, db, clock, _) = NewService("111111");
         var user = await SeedVerifiedUserAsync(db);
-        await service.RequestAsync(user);
+        await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
 
         clock.Advance(AuthCodePolicy.ResetLifetime + TimeSpan.FromMinutes(1));
-        var expired = await service.ResetAsync(user, "000000", "newsecret1");
+        var expired = await service.ResetAsync(user, "000000", "newsecret1", ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetOutcome.ExpiredCode, expired.Outcome);
 
-        var stored = await db.AuthCodes.SingleAsync();
+        var stored = await db.AuthCodes.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, stored.Attempts);
         Assert.Equal(0, user.VerificationAttempts);
         Assert.Null(user.LockedUntil);
@@ -207,14 +207,14 @@ public sealed class PasswordResetServiceTests
         var (service, db, clock, _) = NewService("111111", "222222", "333333");
         var user = await SeedVerifiedUserAsync(db);
 
-        await service.RequestAsync(user);
+        await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetOutcome.Reset,
-            (await service.ResetAsync(user, "111111", "newsecret1")).Outcome);
+            (await service.ResetAsync(user, "111111", "newsecret1", ct: TestContext.Current.CancellationToken)).Outcome);
 
         clock.Advance(TimeSpan.FromMinutes(new AuthCodeOptions().ResendCooldownMinutes + 1));
-        await service.RequestAsync(user);
+        await service.RequestAsync(user, ct: TestContext.Current.CancellationToken);
         Assert.Equal(PasswordResetOutcome.Reset,
-            (await service.ResetAsync(user, "222222", "newsecret2")).Outcome);
+            (await service.ResetAsync(user, "222222", "newsecret2", ct: TestContext.Current.CancellationToken)).Outcome);
 
         Assert.Equal(2, user.TokenVersion);
         Assert.Equal(

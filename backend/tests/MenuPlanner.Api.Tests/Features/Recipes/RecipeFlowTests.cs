@@ -201,10 +201,10 @@ public sealed class RecipeFlowTests
     {
         using var client = new ApiFactory().CreateClient();
 
-        var list = await client.GetAsync("/api/recipes");
+        var list = await client.GetAsync("/api/recipes", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, list.StatusCode);
 
-        var create = await client.PostAsJsonAsync("/api/recipes", FullRequest());
+        var create = await client.PostAsJsonAsync("/api/recipes", FullRequest(), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, create.StatusCode);
     }
 

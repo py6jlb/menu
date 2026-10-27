@@ -63,7 +63,7 @@ public sealed class AdminUnlockTests
         using var client = factory.CreateClient();
         var target = await RegisterAsync(client, "locked");
 
-        var response = await client.PostAsJsonAsync("/api/admin/unlock", new { email = target.User.Email });
+        var response = await client.PostAsJsonAsync("/api/admin/unlock", new { email = target.User.Email }, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

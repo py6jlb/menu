@@ -37,7 +37,7 @@ public sealed class EmailSenderTests
         var transport = new RecordingTransport();
         var sender = new EmailSender(TestOptions, transport);
 
-        await sender.SendVerificationCodeAsync("user@example.com", "123456");
+        await sender.SendVerificationCodeAsync("user@example.com", "123456", TestContext.Current.CancellationToken);
 
         var message = Assert.Single(transport.Sent);
         Assert.Equal("user@example.com", message.To);
@@ -55,7 +55,7 @@ public sealed class EmailSenderTests
         var transport = new RecordingTransport();
         var sender = new EmailSender(TestOptions, transport);
 
-        await sender.SendPasswordResetCodeAsync("user@example.com", "654321");
+        await sender.SendPasswordResetCodeAsync("user@example.com", "654321", TestContext.Current.CancellationToken);
 
         var message = Assert.Single(transport.Sent);
         Assert.Equal("user@example.com", message.To);
@@ -70,7 +70,7 @@ public sealed class EmailSenderTests
         var sender = new EmailSender(TestOptions, new FailingTransport());
 
         var error = await Assert.ThrowsAsync<EmailDeliveryException>(
-            () => sender.SendVerificationCodeAsync("user@example.com", "123456"));
+            () => sender.SendVerificationCodeAsync("user@example.com", "123456", TestContext.Current.CancellationToken));
 
         Assert.Equal(EmailFailureReason.Connection, error.Reason);
         Assert.DoesNotContain("123456", error.Message);

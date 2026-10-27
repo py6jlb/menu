@@ -34,7 +34,7 @@ public sealed class SharedRecipeImportServiceTests
         var recipient = SeedFamily(db, "Семья получателя");
         var source = SeedRecipe(db, sourceFamily.Id, "Борщ");
         SeedShare(db, source.Id, "revoked", revoked: true);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var result = await Import(db, "revoked", recipient.Id);
 
@@ -48,7 +48,7 @@ public sealed class SharedRecipeImportServiceTests
         var recipient = SeedFamily(db, "Семья получателя");
         // Ссылка есть, но рецепта-источника в БД нет.
         SeedShare(db, Guid.NewGuid(), "orphan");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var result = await Import(db, "orphan", recipient.Id);
 
@@ -62,7 +62,7 @@ public sealed class SharedRecipeImportServiceTests
         var family = SeedFamily(db, "Семья");
         var source = SeedRecipe(db, family.Id, "Свой борщ");
         SeedShare(db, source.Id, "own");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var result = await Import(db, "own", family.Id);
 
@@ -81,7 +81,7 @@ public sealed class SharedRecipeImportServiceTests
         wrapper.SourceRecipeId = source.Id;
         wrapper.SourceFamilyId = sourceFamily.Id;
         wrapper.SourceToken = "tok";
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var result = await Import(db, "tok", recipient.Id);
 
@@ -97,12 +97,12 @@ public sealed class SharedRecipeImportServiceTests
         var recipient = SeedFamily(db, "Семья получателя");
         var source = SeedRecipe(db, sourceFamily.Id, "Борщ");
         SeedShare(db, source.Id, "tok");
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var result = await Import(db, "tok", recipient.Id);
 
         Assert.Equal(SharedRecipeImportOutcome.Created, result.Outcome);
-        var wrapper = await db.Recipes.SingleAsync(r => r.Id == result.RecipeId);
+        var wrapper = await db.Recipes.SingleAsync(r => r.Id == result.RecipeId, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(recipient.Id, wrapper.FamilyId);
         Assert.Equal("Борщ", wrapper.Name);
         Assert.Equal(source.Id, wrapper.SourceRecipeId);

@@ -49,7 +49,7 @@ public sealed class EmailWiringTests
         Assert.IsType<LoggingEmailTransport>(transport);
 
         var sender = factory.Services.GetRequiredService<EmailSender>();
-        await sender.SendVerificationCodeAsync("user@example.com", "123456");
+        await sender.SendVerificationCodeAsync("user@example.com", "123456", cancellationToken: TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -83,18 +83,18 @@ public sealed class EmailWiringTests
         var email = $"fail-{Guid.NewGuid():N}@example.com";
 
         var response = await client.PostAsJsonAsync(
-            "/api/auth/register", new { email, password = "secret1" });
+            "/api/auth/register", new { email, password = "secret1" }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Временный отказ SMTP не маскирует создание аккаунта: сессия выдана,
         // а принятая доставка осталась в очереди на повтор.
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(auth);
         Assert.False(string.IsNullOrWhiteSpace(auth.Token));
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var queued = await db.EmailOutboxMessages.SingleAsync();
+        var queued = await db.EmailOutboxMessages.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(EmailOutboxStatus.Pending, queued.Status);
         Assert.Equal(1, queued.Attempts);
     }
@@ -108,13 +108,13 @@ public sealed class EmailWiringTests
         using var client = factory.CreateClient();
         var email = $"forgot-fail-{Guid.NewGuid():N}@example.com";
 
-        var register = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" });
+        var register = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, register.StatusCode);
 
-        var response = await client.PostAsJsonAsync("/api/auth/forgot", new { email });
+        var response = await client.PostAsJsonAsync("/api/auth/forgot", new { email }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<MessageDto>();
+        var body = await response.Content.ReadFromJsonAsync<MessageDto>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotNull(body);
         Assert.False(string.IsNullOrWhiteSpace(body.Message));
     }

@@ -4,7 +4,6 @@ using System.Net.Http.Json;
 using Xunit;
 using MenuPlanner.Api.Features.Auth;
 using MenuPlanner.Api.Tests.Support;
-using MenuPlanner.Domain.Accounts;
 
 namespace MenuPlanner.Api.Tests.Features.Auth;
 
@@ -17,25 +16,25 @@ public sealed class AuthFlowTests
         var email = $"roundtrip-{Guid.NewGuid():N}@example.com";
         const string password = "secret1";
 
-        var register = await client.PostAsJsonAsync("/api/auth/register", new { email, password });
+        var register = await client.PostAsJsonAsync("/api/auth/register", new { email, password }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, register.StatusCode);
-        var registered = await register.Content.ReadFromJsonAsync<AuthResponse>();
+        var registered = await register.Content.ReadFromJsonAsync<AuthResponse>(TestContext.Current.CancellationToken);
         Assert.NotNull(registered);
         Assert.Equal(email, registered.User.Email);
         Assert.False(string.IsNullOrWhiteSpace(registered.Token));
 
-        var login = await client.PostAsJsonAsync("/api/auth/login", new { email, password });
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { email, password }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
-        var loggedIn = await login.Content.ReadFromJsonAsync<AuthResponse>();
+        var loggedIn = await login.Content.ReadFromJsonAsync<AuthResponse>(TestContext.Current.CancellationToken);
         Assert.NotNull(loggedIn);
         Assert.Equal(email, loggedIn.User.Email);
         Assert.False(string.IsNullOrWhiteSpace(loggedIn.Token));
 
         using var meRequest = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
         meRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", loggedIn.Token);
-        using var me = await client.SendAsync(meRequest);
+        using var me = await client.SendAsync(meRequest, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
-        var meUser = await me.Content.ReadFromJsonAsync<UserDto>();
+        var meUser = await me.Content.ReadFromJsonAsync<UserDto>(TestContext.Current.CancellationToken);
         Assert.NotNull(meUser);
         Assert.Equal(email, meUser.Email);
     }
@@ -46,10 +45,10 @@ public sealed class AuthFlowTests
         using var client = new ApiFactory().CreateClient();
         var email = $"duplicate-{Guid.NewGuid():N}@example.com";
 
-        var first = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" });
+        var first = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
-        var second = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" });
+        var second = await client.PostAsJsonAsync("/api/auth/register", new { email, password = "secret1" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
@@ -75,7 +74,7 @@ public sealed class AuthFlowTests
 
         await RegisterAsync(client, email);
 
-        var login = await client.PostAsJsonAsync("/api/auth/login", new { email, password = "wrong-password" });
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { email, password = "wrong-password" }, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, login.StatusCode);
     }
 
@@ -84,7 +83,7 @@ public sealed class AuthFlowTests
     {
         using var client = new ApiFactory().CreateClient();
 
-        using var me = await client.GetAsync("/api/auth/me");
+        using var me = await client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
     }
 

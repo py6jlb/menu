@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using MenuPlanner.Api.Features.Auth;
 using MenuPlanner.Api.Features.Auth.Codes;
 using MenuPlanner.Api.Features.Auth.Verification;
 using MenuPlanner.Infrastructure.Data;
@@ -19,14 +18,14 @@ public sealed class EmailVerificationServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedUserAsync(db);
-        await service.IssueInitialCodeAsync(user);
+        await service.IssueInitialCodeAsync(user, TestContext.Current.CancellationToken);
 
-        var first = await service.VerifyAsync(user, "111111");
+        var first = await service.VerifyAsync(user, "111111", TestContext.Current.CancellationToken);
         Assert.Equal(VerifyEmailOutcome.Verified, first.Outcome);
         Assert.True(user.IsEmailVerified);
-        Assert.All(await db.AuthCodes.ToListAsync(), code => Assert.True(code.Used));
+        Assert.All(await db.AuthCodes.ToListAsync(cancellationToken: TestContext.Current.CancellationToken), code => Assert.True(code.Used));
 
-        var repeat = await service.VerifyAsync(user, "111111");
+        var repeat = await service.VerifyAsync(user, "111111", TestContext.Current.CancellationToken);
         Assert.Equal(VerifyEmailOutcome.AlreadyVerified, repeat.Outcome);
     }
 
@@ -35,14 +34,14 @@ public sealed class EmailVerificationServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedUserAsync(db);
-        await service.IssueInitialCodeAsync(user);
+        await service.IssueInitialCodeAsync(user, TestContext.Current.CancellationToken);
 
-        var result = await service.VerifyAsync(user, "000000");
+        var result = await service.VerifyAsync(user, "000000", TestContext.Current.CancellationToken);
 
         Assert.Equal(VerifyEmailOutcome.InvalidCode, result.Outcome);
         Assert.Equal(1, user.VerificationAttempts);
         Assert.False(user.IsEmailVerified);
-        Assert.All(await db.AuthCodes.ToListAsync(), code => Assert.False(code.Used));
+        Assert.All(await db.AuthCodes.ToListAsync(cancellationToken: TestContext.Current.CancellationToken), code => Assert.False(code.Used));
     }
 
     [Fact]
@@ -50,10 +49,10 @@ public sealed class EmailVerificationServiceTests
     {
         var (service, db, clock, _) = NewService("111111");
         var user = await SeedUserAsync(db);
-        await service.IssueInitialCodeAsync(user);
+        await service.IssueInitialCodeAsync(user, ct: TestContext.Current.CancellationToken);
 
         clock.Advance(AuthCodePolicy.VerifyLifetime + TimeSpan.FromSeconds(1));
-        var result = await service.VerifyAsync(user, "111111");
+        var result = await service.VerifyAsync(user, "111111", ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(VerifyEmailOutcome.ExpiredCode, result.Outcome);
         Assert.False(user.IsEmailVerified);
@@ -64,13 +63,13 @@ public sealed class EmailVerificationServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedUserAsync(db);
-        await service.IssueInitialCodeAsync(user);
+        await service.IssueInitialCodeAsync(user, ct: TestContext.Current.CancellationToken);
 
-        var code = await db.AuthCodes.SingleAsync();
+        var code = await db.AuthCodes.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         code.Used = true;
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        var result = await service.VerifyAsync(user, "111111");
+        var result = await service.VerifyAsync(user, "111111", ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(VerifyEmailOutcome.CodeAlreadyUsed, result.Outcome);
     }
@@ -80,17 +79,17 @@ public sealed class EmailVerificationServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedUserAsync(db);
-        await service.IssueInitialCodeAsync(user);
+        await service.IssueInitialCodeAsync(user, ct: TestContext.Current.CancellationToken);
 
         VerifyEmailResult result = default;
         for (var i = 0; i < 5; i++)
-            result = await service.VerifyAsync(user, "000000");
+            result = await service.VerifyAsync(user, "000000", ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(VerifyEmailOutcome.Locked, result.Outcome);
         Assert.Equal(5, user.VerificationAttempts);
         Assert.NotNull(user.LockedUntil);
 
-        var correctWhileLocked = await service.VerifyAsync(user, "111111");
+        var correctWhileLocked = await service.VerifyAsync(user, "111111", ct: TestContext.Current.CancellationToken);
         Assert.Equal(VerifyEmailOutcome.Locked, correctWhileLocked.Outcome);
     }
 
@@ -99,9 +98,9 @@ public sealed class EmailVerificationServiceTests
     {
         var (service, db, _, _) = NewService("111111", "222222");
         var user = await SeedUserAsync(db);
-        await service.IssueInitialCodeAsync(user);
+        await service.IssueInitialCodeAsync(user, ct: TestContext.Current.CancellationToken);
 
-        var result = await service.ResendAsync(user);
+        var result = await service.ResendAsync(user, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(ResendEmailOutcome.TooSoon, result.Outcome);
         Assert.InRange(result.RetryAfterSeconds, 1, 5 * 60);
@@ -112,18 +111,18 @@ public sealed class EmailVerificationServiceTests
     {
         var (service, db, clock, _) = NewService("111111", "222222");
         var user = await SeedUserAsync(db);
-        await service.IssueInitialCodeAsync(user);
+        await service.IssueInitialCodeAsync(user, ct: TestContext.Current.CancellationToken);
 
         clock.Advance(TimeSpan.FromMinutes(new AuthCodeOptions().ResendCooldownMinutes + 1));
-        var resend = await service.ResendAsync(user);
+        var resend = await service.ResendAsync(user, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(ResendEmailOutcome.Sent, resend.Outcome);
         Assert.Equal("222222", resend.Code);
 
-        var oldCode = await service.VerifyAsync(user, "111111");
+        var oldCode = await service.VerifyAsync(user, "111111", ct: TestContext.Current.CancellationToken);
         Assert.Equal(VerifyEmailOutcome.InvalidCode, oldCode.Outcome);
 
-        var newCode = await service.VerifyAsync(user, "222222");
+        var newCode = await service.VerifyAsync(user, "222222", ct: TestContext.Current.CancellationToken);
         Assert.Equal(VerifyEmailOutcome.Verified, newCode.Outcome);
     }
 
@@ -132,12 +131,12 @@ public sealed class EmailVerificationServiceTests
     {
         var (service, db, _, _) = NewService("111111");
         var user = await SeedUserAsync(db);
-        await service.IssueInitialCodeAsync(user);
+        await service.IssueInitialCodeAsync(user, ct: TestContext.Current.CancellationToken);
         for (var i = 0; i < 5; i++)
-            await service.VerifyAsync(user, "000000");
+            await service.VerifyAsync(user, "000000", ct: TestContext.Current.CancellationToken);
         Assert.NotNull(user.LockedUntil);
 
-        await service.UnlockAsync(user);
+        await service.UnlockAsync(user, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, user.VerificationAttempts);
         Assert.Null(user.LockedUntil);

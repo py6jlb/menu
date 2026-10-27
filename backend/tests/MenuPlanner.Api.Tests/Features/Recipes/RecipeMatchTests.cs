@@ -338,7 +338,7 @@ public sealed class RecipeMatchTests
     public async Task Match_WithoutToken_ReturnsUnauthorized()
     {
         using var client = new ApiFactory().CreateClient();
-        var response = await client.PostAsJsonAsync("/api/recipes/match", new RecipeMatchRequest());
+        var response = await client.PostAsJsonAsync("/api/recipes/match", new RecipeMatchRequest(), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 

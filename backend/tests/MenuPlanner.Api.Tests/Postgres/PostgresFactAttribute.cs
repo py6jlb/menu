@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Xunit;
 
 namespace MenuPlanner.Api.Tests.Postgres;
@@ -9,7 +10,9 @@ namespace MenuPlanner.Api.Tests.Postgres;
 /// </summary>
 public sealed class PostgresFactAttribute : FactAttribute
 {
-    public PostgresFactAttribute()
+    public PostgresFactAttribute([CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!PostgresTestEnvironment.IsConfigured)
             Skip = SkipReason;
@@ -23,7 +26,9 @@ public sealed class PostgresFactAttribute : FactAttribute
 /// <summary>Теоретический аналог <see cref="PostgresFactAttribute"/>.</summary>
 public sealed class PostgresTheoryAttribute : TheoryAttribute
 {
-    public PostgresTheoryAttribute()
+    public PostgresTheoryAttribute([CallerFilePath] string? sourceFilePath = null,
+        [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
     {
         if (!PostgresTestEnvironment.IsConfigured)
             Skip = PostgresFactAttribute.SkipReason;

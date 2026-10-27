@@ -128,9 +128,9 @@ public sealed class RecipeDietTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var recipe = await db.Recipes.SingleAsync(r => r.Id == created.Id);
+            var recipe = await db.Recipes.SingleAsync(r => r.Id == created.Id, cancellationToken: TestContext.Current.CancellationToken);
             recipe.Diet = new List<string> { "вегетарианское" };
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
         }
 
         var (_, match) = await PostMatchAsync<RecipeMatchResponse>(client, owner.Token,
@@ -176,9 +176,9 @@ public sealed class RecipeDietTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var recipe = await db.Recipes.SingleAsync(r => r.Id == liked.Id);
+            var recipe = await db.Recipes.SingleAsync(r => r.Id == liked.Id, cancellationToken: TestContext.Current.CancellationToken);
             recipe.Diet = new List<string> { "Вегетарианское" };
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
         }
 
         var (_, match) = await PostMatchAsync<RecipeMatchResponse>(client, owner.Token,

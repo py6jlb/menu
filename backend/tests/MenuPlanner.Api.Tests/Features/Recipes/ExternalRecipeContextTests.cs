@@ -44,7 +44,7 @@ public sealed class ExternalRecipeContextTests
         wrapper.SourceToken = "tok";
         stateDb.Recipes.Add(wrapper);
         stateDb.RecipeShares.Add(NewShare(source.Id, "tok"));
-        await stateDb.SaveChangesAsync();
+        await stateDb.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // До гонки разрешение состояния считает ссылку здоровой — значит, тест именно
         // про источник, исчезнувший уже после этого шага.
@@ -60,7 +60,7 @@ public sealed class ExternalRecipeContextTests
             new SourceFamilyNameResolver(stateDb));
 
         var resolved = await context.ResolveAsync(
-            new[] { new ExternalRecipeLink(wrapper) }, ExternalRecipeProjection.Full);
+            new[] { new ExternalRecipeLink(wrapper) }, ExternalRecipeProjection.Full, cancellationToken: TestContext.Current.CancellationToken);
 
         var result = resolved[wrapper.Id];
         Assert.False(result.SourceAlive);
@@ -93,7 +93,7 @@ public sealed class ExternalRecipeContextTests
         wrapper.SourceToken = "tok";
         db.Recipes.Add(wrapper);
         db.RecipeShares.Add(NewShare(source.Id, "tok"));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         var context = new ExternalRecipeContext(
             new ExternalRecipeStateResolver(db),
@@ -102,7 +102,7 @@ public sealed class ExternalRecipeContextTests
             new SourceFamilyNameResolver(db));
 
         var resolved = await context.ResolveAsync(
-            new[] { new ExternalRecipeLink(wrapper) }, ExternalRecipeProjection.Summary);
+            new[] { new ExternalRecipeLink(wrapper) }, ExternalRecipeProjection.Summary, cancellationToken: TestContext.Current.CancellationToken);
 
         var result = resolved[wrapper.Id];
         Assert.True(result.SourceAlive);
@@ -112,7 +112,7 @@ public sealed class ExternalRecipeContextTests
         Assert.Equal(5, result.Content.Difficulty);
         Assert.Equal(8, result.Content.Servings);
 
-        var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id);
+        var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Свежее имя", stored.Name);
     }
 

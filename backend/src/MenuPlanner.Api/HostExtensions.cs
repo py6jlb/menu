@@ -12,6 +12,7 @@ using MenuPlanner.Api.Features.ShoppingList;
 using MenuPlanner.Infrastructure.Configuration;
 using MenuPlanner.Infrastructure.Health;
 using MenuPlanner.Infrastructure.Observability;
+using Microsoft.AspNetCore.Mvc;
 
 namespace MenuPlanner.Api;
 
@@ -45,7 +46,14 @@ public static class HostExtensions
         app.MapGet("/health", () => Results.Json(
             new { status = "ok", service = "menu-planner-api", release = releaseId }));
 
-        app.MapGet("/ready", ReadinessEndpoint.GetReadinessAsync);
+        app.MapGet("/ready", GetReadinessAsync);
+
+        static Task<IResult> GetReadinessAsync(
+            [FromServices] IDatabaseReadinessProbe probe,
+            [FromServices] ReadinessOptions options,
+            [FromServices] ILoggerFactory loggerFactory,
+            CancellationToken requestToken)
+    => ReadinessEndpoint.GetReadinessAsync(probe, options, loggerFactory, requestToken);
 
         app.MapAuthEndpoints();
         app.MapEmailVerificationEndpoints();

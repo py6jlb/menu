@@ -41,10 +41,10 @@ public sealed class RecipeDocumentTests
         var storedFile = Path.Combine(factory.DocumentsDir, Path.GetFileName(dto.DocumentUrl!));
         Assert.True(File.Exists(storedFile));
 
-        var getResponse = await client.GetAsync(dto.DocumentUrl!);
+        var getResponse = await client.GetAsync(dto.DocumentUrl!, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
         Assert.Equal("application/pdf", getResponse.Content.Headers.ContentType?.MediaType);
-        Assert.Equal(bytes, await getResponse.Content.ReadAsByteArrayAsync());
+        Assert.Equal(bytes, await getResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]

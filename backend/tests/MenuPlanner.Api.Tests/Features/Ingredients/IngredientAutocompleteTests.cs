@@ -145,7 +145,7 @@ public sealed class IngredientAutocompleteTests
     public async Task Autocomplete_WithoutToken_ReturnsUnauthorized()
     {
         using var client = new ApiFactory().CreateClient();
-        var response = await client.GetAsync("/api/ingredients/autocomplete?q=");
+        var response = await client.GetAsync("/api/ingredients/autocomplete?q=", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 

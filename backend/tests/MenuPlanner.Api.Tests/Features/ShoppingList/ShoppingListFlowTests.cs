@@ -199,7 +199,7 @@ public sealed class ShoppingListFlowTests
     {
         using var client = new ApiFactory().CreateClient();
 
-        var response = await client.GetAsync($"/api/shopping-list?weekStart={Monday}");
+        var response = await client.GetAsync($"/api/shopping-list?weekStart={Monday}", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 

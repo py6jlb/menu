@@ -34,7 +34,7 @@ public sealed class DbServicesTests
             UserId = member.Id,
             JoinedAt = DateTime.UtcNow
         });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var context = new CurrentUserContext(db);
         Assert.Equal(family.Id, await context.FamilyIdAsync(Principal(member.Id)));
@@ -47,7 +47,7 @@ public sealed class DbServicesTests
         await using var db = NewDb();
         var family = NewFamily(Guid.NewGuid());
         db.Families.Add(family);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var resolver = new SourceFamilyNameResolver(db);
         Assert.Equal(family.Name, await resolver.ResolveAsync(family.Id));
@@ -73,10 +73,10 @@ public sealed class DbServicesTests
             Unit = "l"
         });
         db.Recipes.Add(source);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var loader = new ExternalRecipeSourceLoader(db);
-        var loaded = await loader.LoadSourcesAsync(new[] { source.Id, Guid.NewGuid() });
+        var loaded = await loader.LoadSourcesAsync(new[] { source.Id, Guid.NewGuid() }, TestContext.Current.CancellationToken);
 
         Assert.True(loaded.ContainsKey(source.Id));
         Assert.Single(loaded[source.Id].Ingredients);
@@ -101,7 +101,7 @@ public sealed class DbServicesTests
             Token = "tok",
             CreatedAt = DateTime.UtcNow
         });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var resolver = new ExternalRecipeStateResolver(db);
         var ok = await resolver.ResolveManyAsync(new[]
@@ -167,7 +167,7 @@ public sealed class DbServicesTests
             RecipeId = recipe.Id,
             Portions = 2
         });
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var counter = new RepetitionCounter(db, new SettingsService(db));
         var counts = await counter.CountForFamilyAsync(
@@ -185,12 +185,12 @@ public sealed class DbServicesTests
         var recipe = NewRecipe(family.Id, "Борщ");
         recipe.Revision = 3;
         db.Recipes.Add(recipe);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var reader = new RecipeRevisionReader(db);
-        Assert.Equal(3, await reader.CurrentAsync(recipe.Id));
+        Assert.Equal(3, await reader.CurrentAsync(recipe.Id, TestContext.Current.CancellationToken));
         // Отсутствующий рецепт — 0, маркер «записи нет», вне диапазона реальных ревизий.
-        Assert.Equal(0, await reader.CurrentAsync(Guid.NewGuid()));
+        Assert.Equal(0, await reader.CurrentAsync(Guid.NewGuid(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -204,14 +204,14 @@ public sealed class DbServicesTests
         var wrapper = NewRecipe(family.Id, "Устаревшее имя");
         wrapper.SourceRecipeId = source.Id;
         db.Recipes.Add(wrapper);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var cache = new ExternalRecipeNameCache(db);
         await cache.RefreshAsync(
             new[] { wrapper.Id },
-            new Dictionary<Guid, string> { [source.Id] = source.Name });
+            new Dictionary<Guid, string> { [source.Id] = source.Name }, TestContext.Current.CancellationToken);
 
-        var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id);
+        var stored = await db.Recipes.SingleAsync(r => r.Id == wrapper.Id, TestContext.Current.CancellationToken);
         Assert.Equal("Свежее имя", stored.Name);
     }
 
