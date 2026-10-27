@@ -61,6 +61,6 @@ docker run --rm \
   -e MENU_PLANNER_TEST_POSTGRES="Host=$CONTAINER;Port=5432;Database=$DB_NAME;Username=$DB_USER;Password=$DB_PASSWORD" \
   -v "$ROOT":/app -w /app \
   mcr.microsoft.com/dotnet/sdk:10.0 \
-  dotnet test --filter "FullyQualifiedName~MenuPlanner.Api.Tests.Postgres"
+  dotnet test -- --filter-namespace MenuPlanner.Api.Tests.Postgres
 
 log "Готово"

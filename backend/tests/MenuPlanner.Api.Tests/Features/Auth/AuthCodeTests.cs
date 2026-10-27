@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Identity;
-using Xunit;
 using MenuPlanner.Api.Features.Auth.Codes;
 using MenuPlanner.Domain.Accounts;
+using Xunit;
 
 namespace MenuPlanner.Api.Tests.Features.Auth;
 

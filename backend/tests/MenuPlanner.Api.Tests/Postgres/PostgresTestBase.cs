@@ -16,7 +16,7 @@ public abstract class PostgresTestBase : IAsyncLifetime
 
     protected virtual bool MigrateOnInitialize => true;
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         Database = await PostgresDatabase.CreateAsync();
 
@@ -27,7 +27,7 @@ public abstract class PostgresTestBase : IAsyncLifetime
         }
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (Database is null)
             return;
