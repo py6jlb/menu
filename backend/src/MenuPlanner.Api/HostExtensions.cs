@@ -53,7 +53,7 @@ public static class HostExtensions
             [FromServices] ReadinessOptions options,
             [FromServices] ILoggerFactory loggerFactory,
             CancellationToken requestToken)
-    => ReadinessEndpoint.GetReadinessAsync(probe, options, loggerFactory, requestToken);
+            => ReadinessEndpoint.GetReadinessAsync(probe, options, loggerFactory, requestToken);
 
         app.MapAuthEndpoints();
         app.MapEmailVerificationEndpoints();

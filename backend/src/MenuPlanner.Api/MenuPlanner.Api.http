@@ -1,0 +1,21 @@
+@MenuPlanner_Api_HostAddress = http://localhost:5000
+
+### verify
+POST {{MenuPlanner_Api_HostAddress}}/api/auth/verify
+Accept: application/json
+Content-Type: application/json
+
+{
+    "code": 437427
+}
+
+###
+
+POST {{MenuPlanner_Api_HostAddress}}/api/auth/login
+Accept: application/json
+Content-Type: application/json
+
+{
+}
+
+###
